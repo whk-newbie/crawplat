@@ -5,6 +5,7 @@ use (
 	./apps/agent
 	./apps/datasource-service
 	./apps/execution-service
+	./apps/gateway
 	./apps/iam-service
 	./apps/node-service
 	./apps/spider-service
