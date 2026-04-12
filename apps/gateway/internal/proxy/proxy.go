@@ -18,9 +18,9 @@ func ResolveServiceURL(name string) string {
 	case "spider-service":
 		return "http://spider-service:8083"
 	case "execution-service":
-		return "http://execution-service:8084"
+		return "http://execution-service:8085"
 	case "node-service":
-		return "http://node-service:8085"
+		return "http://node-service:8084"
 	case "datasource-service":
 		return "http://datasource-service:8086"
 	default:
