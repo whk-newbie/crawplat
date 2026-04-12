@@ -8,3 +8,4 @@ test:
 	for mod in $(NESTED_GO_MODULES); do \
 		( cd "$$mod" && go test ./... ); \
 	done
+	( cd apps/web && npm test )
