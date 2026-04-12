@@ -22,10 +22,10 @@ Completed:
 - [x] Task 4: Implement Project Service CRUD Slice
 - [x] Task 5: Implement Spider Service CRUD Slice
 - [x] Task 6: Implement Node Service and Agent Heartbeat Loop
+- [x] Task 7: Implement Manual Execution and Log Ingest
 
 Pending:
 
-- [ ] Task 7: Implement Manual Execution and Log Ingest
 - [ ] Task 8: Implement Datasource Service MVP
 - [ ] Task 9: Build Gateway Service and Route Wiring
 - [ ] Task 10: Build Vue Web MVP Shell

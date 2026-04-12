@@ -14,6 +14,7 @@ The MVP foundation is in progress. Core repository scaffolding and the first six
 - project-service CRUD slice
 - spider-service create/list slice
 - node-service and agent heartbeat loop
+- execution-service manual execution and log ingest slice
 
 This leaves the execution path, datasource slice, gateway, frontend shell, stack wiring, and final onboarding docs still to be completed.
 
@@ -68,9 +69,18 @@ This leaves the execution path, datasource slice, gateway, frontend shell, stack
 - graceful signal-driven shutdown
 - router and agent heartbeat tests
 
+### Execution Service
+
+- `POST /api/v1/executions`
+- `POST /api/v1/executions/:id/logs`
+- `GET /api/v1/executions/:id`
+- `GET /api/v1/executions/:id/logs`
+- manual execution record bootstrap with `pending` state
+- in-memory execution and log storage
+- service and router happy-path coverage
+
 ## Remaining Tasks
 
-- Task 7: execution-service manual execution and log ingest
 - Task 8: datasource-service MVP
 - Task 9: gateway routing
 - Task 10: Vue web shell
@@ -80,5 +90,5 @@ This leaves the execution path, datasource slice, gateway, frontend shell, stack
 ## Current Notes
 
 - The codebase is being developed in an isolated git worktree and has not yet been merged back to the project root branch.
-- The current stopping point is clean: Task 6 is complete and reviewed with no open Important/Critical issues.
-- The next implementation step is Task 7, which will build the first execution record lifecycle on top of the completed node heartbeat foundation.
+- The current stopping point is clean: Task 7 is complete and reviewed with no open Important/Critical issues.
+- The next implementation step is Task 8, which will build the datasource-service MVP on top of the current service and test foundation.
