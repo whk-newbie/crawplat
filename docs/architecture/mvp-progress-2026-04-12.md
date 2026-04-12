@@ -6,7 +6,7 @@ Worktree: `/home/iambaby/goland_projects/crawler-platform/.worktrees/mvp-foundat
 
 ## Summary
 
-The MVP foundation is in progress. Core repository scaffolding and the first six implementation tasks are complete and reviewed:
+The MVP foundation implementation is complete at the code and documentation level. All twelve planned tasks are now implemented and reviewed:
 
 - repository skeleton
 - shared Go foundation package
@@ -15,8 +15,11 @@ The MVP foundation is in progress. Core repository scaffolding and the first six
 - spider-service create/list slice
 - node-service and agent heartbeat loop
 - execution-service manual execution and log ingest slice
-
-This leaves the execution path, datasource slice, gateway, frontend shell, stack wiring, and final onboarding docs still to be completed.
+- datasource-service CRUD, connection test, and preview slice
+- gateway routing and auth passthrough
+- Vue web MVP shell
+- Docker Compose stack wiring and smoke flow
+- onboarding and architecture docs
 
 ## Completed Components
 
@@ -79,16 +82,60 @@ This leaves the execution path, datasource slice, gateway, frontend shell, stack
 - in-memory execution and log storage
 - service and router happy-path coverage
 
-## Remaining Tasks
+### Datasource Service
 
-- Task 8: datasource-service MVP
-- Task 9: gateway routing
-- Task 10: Vue web shell
-- Task 11: Docker Compose full wiring and smoke flow
-- Task 12: onboarding and architecture docs
+- `POST /api/v1/datasources`
+- `GET /api/v1/datasources`
+- `POST /api/v1/datasources/:id/test`
+- `POST /api/v1/datasources/:id/preview`
+- datasource type validation for `mongodb`, `redis`, and `postgresql`
+- read-only preview behavior with bounded in-memory responses
+- service and router coverage
+
+### Gateway
+
+- `ANY /api/v1/auth`
+- `ANY /api/v1/auth/*path`
+- `ANY /api/v1/projects`
+- `ANY /api/v1/projects/:projectId/spiders`
+- `ANY /api/v1/executions`
+- `ANY /api/v1/executions/*path`
+- `ANY /api/v1/nodes`
+- `ANY /api/v1/nodes/*path`
+- `ANY /api/v1/datasources`
+- `ANY /api/v1/datasources/*path`
+- JWT passthrough for protected routes
+- route-level proxy coverage
+
+### Web MVP Shell
+
+- Vue 3 + TypeScript + Vite shell
+- login page and token persistence
+- dashboard summary
+- projects view
+- spiders view
+- executions view
+- datasources view
+- Vitest coverage and inclusion in root `make test`
+
+### Compose and Smoke Flow
+
+- service Dockerfiles for the Go services and web shell
+- `deploy/docker-compose/docker-compose.mcp.yml` with datastores and service containers
+- `make up` build-and-start workflow
+- `make down` teardown workflow
+- `deploy/scripts/smoke-mvp.sh`
+- `docs/product/mvp-smoke-checklist.md`
+
+### Onboarding and Architecture Docs
+
+- root `README.md`
+- `docs/architecture/mvp-overview.md`
+- `docs/api/mvp-service-map.md`
 
 ## Current Notes
 
 - The codebase is being developed in an isolated git worktree and has not yet been merged back to the project root branch.
-- The current stopping point is clean: Task 7 is complete and reviewed with no open Important/Critical issues.
-- The next implementation step is Task 8, which will build the datasource-service MVP on top of the current service and test foundation.
+- The current stopping point is clean at the repository level after Task 12.
+- `make test` passes for the implemented MVP slice.
+- Full `make up` verification is blocked in this environment because Docker bridge networking is not supported here (`failed to add the host <=> sandbox pair interfaces: operation not supported`).

@@ -23,14 +23,16 @@ Completed:
 - [x] Task 5: Implement Spider Service CRUD Slice
 - [x] Task 6: Implement Node Service and Agent Heartbeat Loop
 - [x] Task 7: Implement Manual Execution and Log Ingest
+- [x] Task 8: Implement Datasource Service MVP
+- [x] Task 9: Build Gateway Service and Route Wiring
+- [x] Task 10: Build Vue Web MVP Shell
+- [x] Task 11: Wire Docker Compose and End-to-End Smoke Flow
+- [x] Task 12: Documentation and Developer Onboarding
 
-Pending:
+Verification notes:
 
-- [ ] Task 8: Implement Datasource Service MVP
-- [ ] Task 9: Build Gateway Service and Route Wiring
-- [ ] Task 10: Build Vue Web MVP Shell
-- [ ] Task 11: Wire Docker Compose and End-to-End Smoke Flow
-- [ ] Task 12: Documentation and Developer Onboarding
+- `make test` passes across the Go services, shared packages, and `apps/web`.
+- `make up` is wired for a normal Docker host and the Compose stack is ready, but full runtime verification is blocked in this sandbox because Docker bridge networking cannot be created (`failed to add the host <=> sandbox pair interfaces: operation not supported`).
 
 ## Scope Split
 

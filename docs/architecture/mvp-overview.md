@@ -7,13 +7,13 @@ The MVP foundation is implemented as a small control plane plus execution-plane 
 - `gateway` provides the single public API entry point.
 - `iam-service` handles login and JWT issuance.
 - `project-service` owns project creation and listing.
-- `spider-service` owns spider registration within a project.
+- `spider-service` owns project-scoped spider creation and listing.
 - `execution-service` owns manual execution records and execution logs.
 - `node-service` tracks node heartbeats and current node inventory.
 - `datasource-service` owns datasource configuration, connection checks, and previews.
-- `agent` runs on a node, sends heartbeats, and can later pull execution work.
+- `agent` runs on a node and sends heartbeats.
 
-The stack is designed for Docker Compose first. PostgreSQL, Redis, and MongoDB are the backing datastores used by the services and are started together with the API services and the web shell.
+The stack is designed for Docker Compose first. PostgreSQL, Redis, and MongoDB are started together with the API services and the web shell so the MVP environment matches the planned platform shape. The current service implementations still use in-memory stores for the vertical slice, so the datastores are provisioned but not yet wired into the request path.
 
 ## Runtime Shape
 
@@ -24,8 +24,8 @@ The agent talks directly to the node service for heartbeat updates. That keeps n
 ## What Is Implemented
 
 - login via `POST /api/v1/auth/login`
-- project CRUD slice for create/list
-- spider CRUD slice for project-scoped create/list
+- project create/list slice
+- project-scoped spider create/list slice
 - execution lifecycle slice for create, fetch, and logs
 - node heartbeat tracking and node listing
 - datasource create, list, test, and preview

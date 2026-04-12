@@ -4,12 +4,12 @@
 
 - `gateway` -> public entry and request proxying
 - `iam-service` -> auth
-- `project-service` -> project CRUD
-- `spider-service` -> spider CRUD
+- `project-service` -> project create/list
+- `spider-service` -> spider create/list
 - `execution-service` -> manual execution and logs
 - `node-service` -> node heartbeat
 - `datasource-service` -> datasource config and preview
-- `agent` -> heartbeat and execution pull
+- `agent` -> heartbeat
 
 ## Key Routes
 
