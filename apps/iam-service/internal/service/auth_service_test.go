@@ -1,14 +1,35 @@
 package service
 
-import "testing"
+import (
+	"errors"
+	"testing"
+)
 
 func TestLoginReturnsTokenForSeedUser(t *testing.T) {
-	svc := NewAuthService("secret")
+	svc := NewAuthService("secret", true)
 	token, err := svc.Login("admin", "admin123")
 	if err != nil {
 		t.Fatalf("expected login success, got error: %v", err)
 	}
 	if token == "" {
 		t.Fatal("expected non-empty token")
+	}
+}
+
+func TestLoginRejectsWrongPassword(t *testing.T) {
+	svc := NewAuthService("secret", true)
+
+	_, err := svc.Login("admin", "wrong-password")
+	if !errors.Is(err, ErrInvalidCredentials) {
+		t.Fatalf("expected invalid credentials error, got: %v", err)
+	}
+}
+
+func TestLoginRejectsSeedAdminWhenDisabled(t *testing.T) {
+	svc := NewAuthService("secret", false)
+
+	_, err := svc.Login("admin", "admin123")
+	if !errors.Is(err, ErrInvalidCredentials) {
+		t.Fatalf("expected invalid credentials error, got: %v", err)
 	}
 }

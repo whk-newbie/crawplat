@@ -12,15 +12,16 @@ type UserRepo struct {
 	users map[string]model.User
 }
 
-func NewUserRepo() *UserRepo {
-	return &UserRepo{
-		users: map[string]model.User{
-			"admin": {
-				Username: "admin",
-				Password: "admin123",
-			},
-		},
+func NewUserRepo(enableSeedAdmin bool) *UserRepo {
+	users := make(map[string]model.User)
+	if enableSeedAdmin {
+		users["admin"] = model.User{
+			Username: "admin",
+			Password: "admin123",
+		}
 	}
+
+	return &UserRepo{users: users}
 }
 
 func (r *UserRepo) FindByUsername(username string) (model.User, error) {

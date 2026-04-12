@@ -14,10 +14,10 @@ type AuthService struct {
 	users  *repo.UserRepo
 }
 
-func NewAuthService(secret string) *AuthService {
+func NewAuthService(secret string, enableSeedAdmin bool) *AuthService {
 	return &AuthService{
 		secret: secret,
-		users:  repo.NewUserRepo(),
+		users:  repo.NewUserRepo(enableSeedAdmin),
 	}
 }
 

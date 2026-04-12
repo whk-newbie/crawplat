@@ -12,8 +12,8 @@ func NewRouter(authService *service.AuthService) *gin.Engine {
 
 	router.POST("/api/v1/auth/login", func(c *gin.Context) {
 		var req struct {
-			Username string `json:"username"`
-			Password string `json:"password"`
+			Username string `json:"username" binding:"required"`
+			Password string `json:"password" binding:"required"`
 		}
 		if err := c.ShouldBindJSON(&req); err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
