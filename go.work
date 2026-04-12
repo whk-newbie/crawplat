@@ -3,6 +3,7 @@ go 1.24.0
 use (
 	.
 	./apps/agent
+	./apps/execution-service
 	./apps/iam-service
 	./apps/node-service
 	./apps/spider-service
