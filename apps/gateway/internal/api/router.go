@@ -13,10 +13,8 @@ func NewRouter() *gin.Engine {
 	router.Any("/api/v1/auth/*path", proxy.ProxyTo("iam-service"))
 
 	router.Any("/api/v1/projects", proxy.ProxyTo("project-service"))
-	router.Any("/api/v1/projects/*path", proxy.ProxyTo("project-service"))
 
 	router.Any("/api/v1/projects/:projectId/spiders", proxy.ProxyTo("spider-service"))
-	router.Any("/api/v1/projects/:projectId/spiders/*path", proxy.ProxyTo("spider-service"))
 
 	router.Any("/api/v1/executions", proxy.ProxyTo("execution-service"))
 	router.Any("/api/v1/executions/*path", proxy.ProxyTo("execution-service"))
