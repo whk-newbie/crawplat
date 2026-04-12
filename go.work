@@ -3,6 +3,7 @@ go 1.24.0
 use (
 	.
 	./apps/iam-service
+	./apps/spider-service
 	./apps/project-service
 	./packages/go-common
 )
