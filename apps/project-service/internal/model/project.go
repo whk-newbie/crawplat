@@ -1,7 +1,7 @@
 package model
 
 type Project struct {
-	ID   string
-	Code string
-	Name string
+	ID   string `json:"id"`
+	Code string `json:"code"`
+	Name string `json:"name"`
 }
