@@ -10,6 +10,28 @@
 
 ---
 
+## Progress Status
+
+Last updated: 2026-04-12
+
+Completed:
+
+- [x] Task 1: Initialize Monorepo Skeleton
+- [x] Task 2: Create Shared Go Foundation Package
+- [x] Task 3: Implement IAM Service Login Slice
+- [x] Task 4: Implement Project Service CRUD Slice
+- [x] Task 5: Implement Spider Service CRUD Slice
+- [x] Task 6: Implement Node Service and Agent Heartbeat Loop
+
+Pending:
+
+- [ ] Task 7: Implement Manual Execution and Log Ingest
+- [ ] Task 8: Implement Datasource Service MVP
+- [ ] Task 9: Build Gateway Service and Route Wiring
+- [ ] Task 10: Build Vue Web MVP Shell
+- [ ] Task 11: Wire Docker Compose and End-to-End Smoke Flow
+- [ ] Task 12: Documentation and Developer Onboarding
+
 ## Scope Split
 
 The approved spec covers multiple independent subsystems. This plan only covers the MVP foundation needed for a testable first release. Follow-up plans should be written separately for:
@@ -976,4 +998,3 @@ Core names are kept consistent across tasks:
 - `NodeService`
 - `DatasourceService`
 - `RuntimeSpec`
-
