@@ -1,4 +1,4 @@
-.PHONY: test docker-binaries up down
+.PHONY: test docker-binaries web-assets up down
 
 COMPOSE_FILE := deploy/docker-compose/docker-compose.mcp.yml
 DOCKER_BIN_DIR := .docker-bin
@@ -24,8 +24,11 @@ docker-binaries:
 	CGO_ENABLED=0 GOOS=linux go build -o $(DOCKER_BIN_DIR)/datasource-service ./apps/datasource-service/cmd/server
 	CGO_ENABLED=0 GOOS=linux go build -o $(DOCKER_BIN_DIR)/agent ./apps/agent/cmd/agent
 
-up: docker-binaries
+web-assets:
+	npm --prefix apps/web run build
+
+up: docker-binaries web-assets
 	docker compose -f $(COMPOSE_FILE) up --build -d
 
 down:
-	docker compose -f $(COMPOSE_FILE) down --remove-orphans
+	docker compose -f $(COMPOSE_FILE) down -v --remove-orphans

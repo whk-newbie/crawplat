@@ -9,7 +9,8 @@ make up
 ```
 
 `make up` first compiles Linux binaries into `.docker-bin/` and then builds the Compose images from those artifacts.
-The Compose file uses host networking so each service binds directly to its existing Go port on the local machine, including the gateway on `:8080`.
+It also runs `npm --prefix apps/web run build` so the web container serves freshly built static assets.
+The Compose stack uses normal service networking, with the gateway exposed on `http://localhost:8080` and the web shell exposed on `http://localhost:3000`.
 
 Stop and clean up the stack when finished:
 
@@ -29,8 +30,10 @@ The script waits for the gateway to begin serving traffic on `http://localhost:8
 
 - `GET /api/v1/projects` succeeds through the gateway and returns the empty project list from the fresh MVP stack
 - `POST /api/v1/auth/login` succeeds through the gateway using the seeded admin credentials `admin` / `admin123`
+- `GET /api/v1/datasources` succeeds through the gateway and returns the empty datasource list from the fresh MVP stack
+- `GET /` on the web container succeeds and serves the `Crawler Platform` HTML shell
 
 ## Notes
 
 - The Compose stack enables `IAM_ENABLE_SEED_ADMIN=true` and provides a development `JWT_SECRET` so the seeded login is available without extra setup.
-- The agent uses `NODE_SERVICE_URL=http://127.0.0.1:8084` and `NODE_NAME=mvp-node` so it can start alongside the node service inside Compose without relying on Docker bridge DNS.
+- The agent uses `NODE_SERVICE_URL=http://node-service:8084` and `NODE_NAME=mvp-node` so it can resolve the node service over normal Compose DNS.
