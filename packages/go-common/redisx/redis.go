@@ -1,7 +1,15 @@
 package redisx
 
-import "github.com/redis/go-redis/v9"
+import (
+	"errors"
+	"strings"
 
-func NewClient(addr string) *redis.Client {
-	return redis.NewClient(&redis.Options{Addr: addr})
+	"github.com/redis/go-redis/v9"
+)
+
+func NewClient(addr string) (*redis.Client, error) {
+	if strings.TrimSpace(addr) == "" {
+		return nil, errors.New("redis addr is required")
+	}
+	return redis.NewClient(&redis.Options{Addr: addr}), nil
 }
