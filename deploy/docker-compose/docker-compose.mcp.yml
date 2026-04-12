@@ -1,11 +1,102 @@
 services:
   postgres:
     image: postgres:16
+    network_mode: host
     environment:
       POSTGRES_USER: crawler
       POSTGRES_PASSWORD: crawler
       POSTGRES_DB: crawler
+
   redis:
     image: redis:7
+    network_mode: host
+
   mongo:
     image: mongo:7
+    network_mode: host
+
+  gateway:
+    build:
+      context: ../..
+      dockerfile: apps/gateway/Dockerfile
+    network_mode: host
+    depends_on:
+      - iam-service
+      - project-service
+      - spider-service
+      - execution-service
+      - node-service
+      - datasource-service
+    extra_hosts:
+      - "iam-service:127.0.0.1"
+      - "project-service:127.0.0.1"
+      - "spider-service:127.0.0.1"
+      - "execution-service:127.0.0.1"
+      - "node-service:127.0.0.1"
+      - "datasource-service:127.0.0.1"
+
+  iam-service:
+    build:
+      context: ../..
+      dockerfile: apps/iam-service/Dockerfile
+    network_mode: host
+    depends_on:
+      - postgres
+    environment:
+      JWT_SECRET: dev-secret
+      IAM_ENABLE_SEED_ADMIN: "true"
+
+  project-service:
+    build:
+      context: ../..
+      dockerfile: apps/project-service/Dockerfile
+    network_mode: host
+    depends_on:
+      - postgres
+
+  spider-service:
+    build:
+      context: ../..
+      dockerfile: apps/spider-service/Dockerfile
+    network_mode: host
+    depends_on:
+      - postgres
+
+  execution-service:
+    build:
+      context: ../..
+      dockerfile: apps/execution-service/Dockerfile
+    network_mode: host
+    depends_on:
+      - postgres
+      - redis
+      - mongo
+
+  node-service:
+    build:
+      context: ../..
+      dockerfile: apps/node-service/Dockerfile
+    network_mode: host
+    depends_on:
+      - redis
+
+  datasource-service:
+    build:
+      context: ../..
+      dockerfile: apps/datasource-service/Dockerfile
+    network_mode: host
+    depends_on:
+      - postgres
+      - redis
+      - mongo
+
+  agent:
+    build:
+      context: ../..
+      dockerfile: apps/agent/Dockerfile
+    network_mode: host
+    depends_on:
+      - node-service
+    environment:
+      NODE_SERVICE_URL: http://127.0.0.1:8084
+      NODE_NAME: mvp-node
