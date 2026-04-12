@@ -42,3 +42,18 @@ func TestLoginHandlerRejectsMissingUsername(t *testing.T) {
 		t.Fatalf("expected status 400, got %d", w.Code)
 	}
 }
+
+func TestLoginHandlerRejectsSeedAdminWhenDisabled(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	router := NewRouter(service.NewAuthService("secret", false))
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/login", strings.NewReader(`{"username":"admin","password":"admin123"}`))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+
+	router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusUnauthorized {
+		t.Fatalf("expected status 401, got %d", w.Code)
+	}
+}
