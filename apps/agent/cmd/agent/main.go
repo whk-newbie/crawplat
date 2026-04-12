@@ -4,12 +4,17 @@ import (
 	"context"
 	"log"
 	"os"
+	"os/signal"
 	"strings"
+	"syscall"
 
 	"crawler-platform/apps/agent/internal/heartbeat"
 )
 
 func main() {
+	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+	defer stop()
+
 	baseURL := strings.TrimSpace(os.Getenv("NODE_SERVICE_URL"))
 	if baseURL == "" {
 		baseURL = "http://localhost:8084"
@@ -20,7 +25,7 @@ func main() {
 		nodeName = "node-a"
 	}
 
-	if err := heartbeat.Run(context.Background(), baseURL, nodeName); err != nil {
+	if err := heartbeat.Run(ctx, baseURL, nodeName); err != nil {
 		log.Fatal(err)
 	}
 }
