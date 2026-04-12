@@ -1,0 +1,14 @@
+go 1.24.0
+
+use (
+	.
+	./apps/agent
+	./apps/datasource-service
+	./apps/execution-service
+	./apps/gateway
+	./apps/iam-service
+	./apps/node-service
+	./apps/spider-service
+	./apps/project-service
+	./packages/go-common
+)

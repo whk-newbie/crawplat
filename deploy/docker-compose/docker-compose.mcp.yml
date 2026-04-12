@@ -1,0 +1,95 @@
+services:
+  postgres:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: crawler
+      POSTGRES_PASSWORD: crawler
+      POSTGRES_DB: crawler
+
+  redis:
+    image: redis:7
+
+  mongo:
+    image: mongo:7
+
+  gateway:
+    build:
+      context: ../..
+      dockerfile: apps/gateway/Dockerfile
+    depends_on:
+      - iam-service
+      - project-service
+      - spider-service
+      - execution-service
+      - node-service
+      - datasource-service
+    ports:
+      - "8080:8080"
+
+  iam-service:
+    build:
+      context: ../..
+      dockerfile: apps/iam-service/Dockerfile
+    depends_on:
+      - postgres
+    environment:
+      JWT_SECRET: dev-secret
+      IAM_ENABLE_SEED_ADMIN: "true"
+
+  project-service:
+    build:
+      context: ../..
+      dockerfile: apps/project-service/Dockerfile
+    depends_on:
+      - postgres
+
+  spider-service:
+    build:
+      context: ../..
+      dockerfile: apps/spider-service/Dockerfile
+    depends_on:
+      - postgres
+
+  execution-service:
+    build:
+      context: ../..
+      dockerfile: apps/execution-service/Dockerfile
+    depends_on:
+      - postgres
+      - redis
+      - mongo
+
+  node-service:
+    build:
+      context: ../..
+      dockerfile: apps/node-service/Dockerfile
+    depends_on:
+      - redis
+
+  datasource-service:
+    build:
+      context: ../..
+      dockerfile: apps/datasource-service/Dockerfile
+    depends_on:
+      - postgres
+      - redis
+      - mongo
+
+  agent:
+    build:
+      context: ../..
+      dockerfile: apps/agent/Dockerfile
+    depends_on:
+      - node-service
+    environment:
+      NODE_SERVICE_URL: http://node-service:8084
+      NODE_NAME: mvp-node
+
+  web:
+    build:
+      context: ../..
+      dockerfile: apps/web/Dockerfile
+    depends_on:
+      - gateway
+    ports:
+      - "3000:80"
