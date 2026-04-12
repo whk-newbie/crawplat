@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"log"
 	"os"
 	"os/signal"
@@ -25,7 +26,14 @@ func main() {
 		nodeName = "node-a"
 	}
 
-	if err := heartbeat.Run(ctx, baseURL, nodeName); err != nil {
+	if err := run(ctx, baseURL, nodeName, heartbeat.Run); err != nil {
 		log.Fatal(err)
 	}
+}
+
+func run(ctx context.Context, baseURL, nodeName string, runner func(context.Context, string, string) error) error {
+	if err := runner(ctx, baseURL, nodeName); err != nil && !errors.Is(err, context.Canceled) {
+		return err
+	}
+	return nil
 }
