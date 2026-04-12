@@ -1,6 +1,7 @@
 package api
 
 import (
+	"fmt"
 	"net/http"
 
 	"crawler-platform/apps/node-service/internal/service"
@@ -19,7 +20,13 @@ func NewRouter(nodeService *service.NodeService) *gin.Engine {
 			return
 		}
 
-		node := nodeService.Heartbeat(c.Param("id"), req.Capabilities)
+		id := c.Param("id")
+		if err := validateNodeID(id); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
+
+		node := nodeService.Heartbeat(id, req.Capabilities)
 		c.JSON(http.StatusOK, node)
 	})
 
@@ -28,4 +35,20 @@ func NewRouter(nodeService *service.NodeService) *gin.Engine {
 	})
 
 	return router
+}
+
+func validateNodeID(id string) error {
+	if id == "" {
+		return fmt.Errorf("node id is required")
+	}
+	for _, r := range id {
+		if (r >= 'a' && r <= 'z') ||
+			(r >= 'A' && r <= 'Z') ||
+			(r >= '0' && r <= '9') ||
+			r == '-' || r == '_' || r == '.' {
+			continue
+		}
+		return fmt.Errorf("invalid node id %q: use only letters, numbers, dash, underscore, or dot", id)
+	}
+	return nil
 }

@@ -75,3 +75,22 @@ func TestListRouteReturnsPersistedNodes(t *testing.T) {
 		t.Fatalf("expected capabilities [docker python go], got %+v", nodes[0].Capabilities)
 	}
 }
+
+func TestHeartbeatRouteRejectsInvalidNodeID(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	router := NewRouter(service.NewNodeService())
+
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/nodes/node!a/heartbeat", strings.NewReader(`{"capabilities":["docker"]}`))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+
+	router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("expected status 400, got %d", w.Code)
+	}
+	if !strings.Contains(w.Body.String(), "invalid node id") {
+		t.Fatalf("expected invalid node id error, got %s", w.Body.String())
+	}
+}

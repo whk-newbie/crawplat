@@ -4,10 +4,10 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
 	"net/http"
-	"net/url"
 	"strings"
 	"time"
 )
@@ -17,7 +17,7 @@ type heartbeatRequest struct {
 }
 
 func Run(ctx context.Context, baseURL, nodeName string) error {
-	if err := postHeartbeat(baseURL, nodeName); err != nil {
+	if err := postHeartbeat(ctx, baseURL, nodeName); err != nil {
 		return fmt.Errorf("initial heartbeat: %w", err)
 	}
 
@@ -29,14 +29,18 @@ func Run(ctx context.Context, baseURL, nodeName string) error {
 		case <-ctx.Done():
 			return ctx.Err()
 		case <-ticker.C:
-			if err := postHeartbeat(baseURL, nodeName); err != nil {
+			if err := postHeartbeat(ctx, baseURL, nodeName); err != nil {
 				log.Printf("heartbeat failed: %v", err)
 			}
 		}
 	}
 }
 
-func postHeartbeat(baseURL, nodeName string) error {
+func postHeartbeat(ctx context.Context, baseURL, nodeName string) error {
+	if err := validateNodeName(nodeName); err != nil {
+		return err
+	}
+
 	payload, err := json.Marshal(heartbeatRequest{
 		Capabilities: []string{"docker", "python", "go"},
 	})
@@ -44,8 +48,8 @@ func postHeartbeat(baseURL, nodeName string) error {
 		return err
 	}
 
-	endpoint := strings.TrimRight(baseURL, "/") + "/api/v1/nodes/" + url.PathEscape(nodeName) + "/heartbeat"
-	req, err := http.NewRequest(http.MethodPost, endpoint, bytes.NewReader(payload))
+	endpoint := strings.TrimRight(baseURL, "/") + "/api/v1/nodes/" + nodeName + "/heartbeat"
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, bytes.NewReader(payload))
 	if err != nil {
 		return err
 	}
@@ -62,5 +66,21 @@ func postHeartbeat(baseURL, nodeName string) error {
 		return fmt.Errorf("unexpected heartbeat status: %s", resp.Status)
 	}
 
+	return nil
+}
+
+func validateNodeName(nodeName string) error {
+	if nodeName == "" {
+		return errors.New("node name is required")
+	}
+	for _, r := range nodeName {
+		if (r >= 'a' && r <= 'z') ||
+			(r >= 'A' && r <= 'Z') ||
+			(r >= '0' && r <= '9') ||
+			r == '-' || r == '_' || r == '.' {
+			continue
+		}
+		return fmt.Errorf("invalid node name %q: use only letters, numbers, dash, underscore, or dot", nodeName)
+	}
 	return nil
 }
