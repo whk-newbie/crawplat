@@ -2,7 +2,11 @@ module crawler-platform/apps/node-service
 
 go 1.24.0
 
-require github.com/gin-gonic/gin v1.10.1
+require (
+	github.com/alicebob/miniredis/v2 v2.35.0
+	github.com/gin-gonic/gin v1.10.1
+	github.com/redis/go-redis/v9 v9.7.1
+)
 
 require (
 	github.com/bytedance/sonic v1.11.6 // indirect
