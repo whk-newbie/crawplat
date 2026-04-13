@@ -1,6 +1,7 @@
 package service
 
 import (
+	"context"
 	"sync"
 	"time"
 )
@@ -14,17 +15,20 @@ type Node struct {
 }
 
 type NodeService struct {
+	repo Repository
+}
+
+type Repository interface {
+	UpsertHeartbeat(ctx context.Context, name string, capabilities []string) (Node, error)
+	ListOnline(ctx context.Context) ([]Node, error)
+}
+
+type memoryRepository struct {
 	mu    sync.Mutex
 	nodes map[string]Node
 }
 
-func NewNodeService() *NodeService {
-	return &NodeService{
-		nodes: make(map[string]Node),
-	}
-}
-
-func (s *NodeService) Heartbeat(name string, capabilities []string) Node {
+func (r *memoryRepository) UpsertHeartbeat(_ context.Context, name string, capabilities []string) (Node, error) {
 	node := Node{
 		ID:           name,
 		Name:         name,
@@ -33,20 +37,38 @@ func (s *NodeService) Heartbeat(name string, capabilities []string) Node {
 		LastSeenAt:   time.Now(),
 	}
 
-	s.mu.Lock()
-	s.nodes[name] = node
-	s.mu.Unlock()
+	r.mu.Lock()
+	defer r.mu.Unlock()
 
-	return node
+	if r.nodes == nil {
+		r.nodes = make(map[string]Node)
+	}
+	r.nodes[name] = node
+	return node, nil
 }
 
-func (s *NodeService) List() []Node {
-	s.mu.Lock()
-	defer s.mu.Unlock()
+func (r *memoryRepository) ListOnline(_ context.Context) ([]Node, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
 
-	nodes := make([]Node, 0, len(s.nodes))
-	for _, node := range s.nodes {
+	nodes := make([]Node, 0, len(r.nodes))
+	for _, node := range r.nodes {
 		nodes = append(nodes, node)
 	}
-	return nodes
+	return nodes, nil
+}
+
+func NewNodeService(repos ...Repository) *NodeService {
+	if len(repos) > 0 && repos[0] != nil {
+		return &NodeService{repo: repos[0]}
+	}
+	return &NodeService{repo: &memoryRepository{nodes: make(map[string]Node)}}
+}
+
+func (s *NodeService) Heartbeat(name string, capabilities []string) (Node, error) {
+	return s.repo.UpsertHeartbeat(context.Background(), name, capabilities)
+}
+
+func (s *NodeService) List() ([]Node, error) {
+	return s.repo.ListOnline(context.Background())
 }

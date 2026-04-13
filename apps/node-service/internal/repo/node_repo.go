@@ -1,0 +1,74 @@
+package repo
+
+import (
+	"context"
+	"encoding/json"
+	"time"
+
+	"crawler-platform/apps/node-service/internal/service"
+	"github.com/redis/go-redis/v9"
+)
+
+const (
+	nodeKeyPrefix = "nodes:"
+	nodeIndexKey  = "nodes:online"
+)
+
+type RedisRepository struct {
+	client *redis.Client
+	ttl    time.Duration
+}
+
+func NewRedisRepository(client *redis.Client, ttl time.Duration) *RedisRepository {
+	return &RedisRepository{client: client, ttl: ttl}
+}
+
+func (r *RedisRepository) UpsertHeartbeat(ctx context.Context, name string, capabilities []string) (service.Node, error) {
+	node := service.Node{
+		ID:           name,
+		Name:         name,
+		Status:       "online",
+		Capabilities: append([]string(nil), capabilities...),
+		LastSeenAt:   time.Now(),
+	}
+
+	payload, err := json.Marshal(node)
+	if err != nil {
+		return service.Node{}, err
+	}
+
+	key := nodeKeyPrefix + name
+	if err := r.client.Set(ctx, key, payload, r.ttl).Err(); err != nil {
+		return service.Node{}, err
+	}
+	if err := r.client.SAdd(ctx, nodeIndexKey, name).Err(); err != nil {
+		return service.Node{}, err
+	}
+	return node, nil
+}
+
+func (r *RedisRepository) ListOnline(ctx context.Context) ([]service.Node, error) {
+	ids, err := r.client.SMembers(ctx, nodeIndexKey).Result()
+	if err != nil {
+		return nil, err
+	}
+
+	nodes := make([]service.Node, 0, len(ids))
+	for _, id := range ids {
+		payload, err := r.client.Get(ctx, nodeKeyPrefix+id).Result()
+		if err == redis.Nil {
+			_ = r.client.SRem(ctx, nodeIndexKey, id).Err()
+			continue
+		}
+		if err != nil {
+			return nil, err
+		}
+
+		var node service.Node
+		if err := json.Unmarshal([]byte(payload), &node); err != nil {
+			return nil, err
+		}
+		nodes = append(nodes, node)
+	}
+	return nodes, nil
+}

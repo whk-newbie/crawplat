@@ -26,12 +26,21 @@ func NewRouter(nodeService *service.NodeService) *gin.Engine {
 			return
 		}
 
-		node := nodeService.Heartbeat(id, req.Capabilities)
+		node, err := nodeService.Heartbeat(id, req.Capabilities)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
 		c.JSON(http.StatusOK, node)
 	})
 
 	router.GET("/api/v1/nodes", func(c *gin.Context) {
-		c.JSON(http.StatusOK, nodeService.List())
+		nodes, err := nodeService.List()
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+		c.JSON(http.StatusOK, nodes)
 	})
 
 	return router
