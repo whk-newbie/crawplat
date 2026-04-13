@@ -6,4 +6,6 @@ type Spider struct {
 	Name      string `json:"name"`
 	Language  string `json:"language"`
 	Runtime   string `json:"runtime"`
+	Image     string   `json:"image,omitempty"`
+	Command   []string `json:"command,omitempty"`
 }

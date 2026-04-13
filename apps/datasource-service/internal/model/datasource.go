@@ -1,11 +1,12 @@
 package model
 
 type Datasource struct {
-	ID        string `json:"id"`
-	ProjectID string `json:"projectId"`
-	Name      string `json:"name"`
-	Type      string `json:"type"`
-	Readonly  bool   `json:"readonly"`
+	ID        string            `json:"id"`
+	ProjectID string            `json:"projectId"`
+	Name      string            `json:"name"`
+	Type      string            `json:"type"`
+	Readonly  bool              `json:"readonly"`
+	Config    map[string]string `json:"config,omitempty"`
 }
 
 type TestResult struct {

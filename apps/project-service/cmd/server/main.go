@@ -4,11 +4,21 @@ import (
 	"log"
 
 	"crawler-platform/apps/project-service/internal/api"
+	projectrepo "crawler-platform/apps/project-service/internal/repo"
 	"crawler-platform/apps/project-service/internal/service"
+	commonconfig "crawler-platform/packages/go-common/config"
+	commonpostgres "crawler-platform/packages/go-common/postgres"
 )
 
 func main() {
-	router := api.NewRouter(service.NewProjectService())
+	cfg := commonconfig.Load()
+	db, err := commonpostgres.Open(cfg.PostgresDSN)
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer db.Close()
+
+	router := api.NewRouter(service.NewProjectService(projectrepo.NewPostgresRepository(db)))
 	if err := router.Run(":8082"); err != nil {
 		log.Fatal(err)
 	}
