@@ -49,7 +49,9 @@ func TestListProjectsReturnsLowerCaseJSON(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
 	svc := service.NewProjectService()
-	svc.Create("core-crawlers", "Core Crawlers")
+	if _, err := svc.Create("core-crawlers", "Core Crawlers"); err != nil {
+		t.Fatalf("Create returned error: %v", err)
+	}
 	router := NewRouter(svc)
 
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/projects", nil)

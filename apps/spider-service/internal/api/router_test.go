@@ -16,7 +16,7 @@ func TestCreateSpiderReturnsCreatedSpider(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
 	router := NewRouter(service.NewSpiderService())
-	req := httptest.NewRequest(http.MethodPost, "/api/v1/projects/p1/spiders", strings.NewReader(`{"name":"crawler","language":"go","runtime":"docker"}`))
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/projects/p1/spiders", strings.NewReader(`{"name":"crawler","language":"go","runtime":"docker","image":"crawler/go:latest","command":["./crawler"]}`))
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
 
@@ -37,7 +37,13 @@ func TestCreateSpiderReturnsCreatedSpider(t *testing.T) {
 	if spider.ProjectID != "p1" || spider.Name != "crawler" || spider.Language != "go" || spider.Runtime != "docker" {
 		t.Fatalf("unexpected spider contents: %+v", spider)
 	}
-	if !strings.Contains(w.Body.String(), `"id":`) || !strings.Contains(w.Body.String(), `"projectId":`) || !strings.Contains(w.Body.String(), `"name":`) || !strings.Contains(w.Body.String(), `"language":`) || !strings.Contains(w.Body.String(), `"runtime":`) {
+	if spider.Image != "crawler/go:latest" {
+		t.Fatalf("expected image crawler/go:latest, got %s", spider.Image)
+	}
+	if len(spider.Command) != 1 || spider.Command[0] != "./crawler" {
+		t.Fatalf("expected command to round-trip, got %#v", spider.Command)
+	}
+	if !strings.Contains(w.Body.String(), `"id":`) || !strings.Contains(w.Body.String(), `"projectId":`) || !strings.Contains(w.Body.String(), `"name":`) || !strings.Contains(w.Body.String(), `"language":`) || !strings.Contains(w.Body.String(), `"runtime":`) || !strings.Contains(w.Body.String(), `"image":`) {
 		t.Fatalf("expected lower-case JSON keys, got %s", w.Body.String())
 	}
 }
@@ -52,6 +58,7 @@ func TestCreateSpiderRejectsInvalidInput(t *testing.T) {
 	}{
 		{name: "invalid language", body: `{"name":"crawler","language":"ruby","runtime":"docker"}`},
 		{name: "invalid runtime", body: `{"name":"crawler","language":"go","runtime":"vm"}`},
+		{name: "missing image", body: `{"name":"crawler","language":"go","runtime":"docker"}`},
 	}
 
 	for _, tc := range cases {
@@ -76,11 +83,11 @@ func TestListSpidersReturnsOnlyRequestedProject(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
 	svc := service.NewSpiderService()
-	spiderP1, err := svc.Create("p1", "crawler-a", "go", "docker")
+	spiderP1, err := svc.Create("p1", "crawler-a", "go", "docker", "crawler/go-a:latest", []string{"./crawler-a"})
 	if err != nil {
 		t.Fatalf("expected create success, got error: %v", err)
 	}
-	spiderP2, err := svc.Create("p2", "crawler-b", "python", "host")
+	spiderP2, err := svc.Create("p2", "crawler-b", "python", "host", "", []string{"python", "main.py"})
 	if err != nil {
 		t.Fatalf("expected create success, got error: %v", err)
 	}
@@ -103,10 +110,10 @@ func TestListSpidersReturnsOnlyRequestedProject(t *testing.T) {
 	if len(spiders) != 1 {
 		t.Fatalf("expected 1 spider, got %d", len(spiders))
 	}
-	if spiders[0] != spiderP1 {
+	if spiders[0].ID != spiderP1.ID {
 		t.Fatalf("expected p1 spider %+v, got %+v", spiderP1, spiders[0])
 	}
-	if spiders[0] == spiderP2 {
+	if spiders[0].ID == spiderP2.ID {
 		t.Fatalf("expected response to exclude p2 spider %+v", spiderP2)
 	}
 	if !strings.Contains(w.Body.String(), `"projectId":"p1"`) || strings.Contains(w.Body.String(), `"projectId":"p2"`) {

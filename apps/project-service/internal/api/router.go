@@ -20,12 +20,21 @@ func NewRouter(projectService *service.ProjectService) *gin.Engine {
 			return
 		}
 
-		project := projectService.Create(req.Code, req.Name)
+		project, err := projectService.Create(req.Code, req.Name)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
 		c.JSON(http.StatusCreated, project)
 	})
 
 	router.GET("/api/v1/projects", func(c *gin.Context) {
-		c.JSON(http.StatusOK, projectService.List())
+		projects, err := projectService.List()
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+		c.JSON(http.StatusOK, projects)
 	})
 
 	return router
