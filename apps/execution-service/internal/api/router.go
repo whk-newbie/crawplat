@@ -1,6 +1,8 @@
 package api
 
 import (
+	"context"
+	"errors"
 	"net/http"
 
 	"crawler-platform/apps/execution-service/internal/service"
@@ -12,15 +14,26 @@ func NewRouter(executionService *service.ExecutionService) *gin.Engine {
 
 	router.POST("/api/v1/executions", func(c *gin.Context) {
 		var req struct {
-			TaskID          string `json:"taskId" binding:"required"`
-			SpiderVersionID string `json:"spiderVersionId" binding:"required"`
+			ProjectID string   `json:"projectId" binding:"required"`
+			SpiderID  string   `json:"spiderId" binding:"required"`
+			Image     string   `json:"image" binding:"required"`
+			Command   []string `json:"command"`
 		}
 		if err := c.ShouldBindJSON(&req); err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 			return
 		}
 
-		exec := executionService.CreateManual(req.TaskID, req.SpiderVersionID)
+		exec, err := executionService.CreateManual(context.Background(), service.CreateManualInput{
+			ProjectID: req.ProjectID,
+			SpiderID:  req.SpiderID,
+			Image:     req.Image,
+			Command:   req.Command,
+		})
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
 		c.JSON(http.StatusCreated, exec)
 	})
 
@@ -33,9 +46,13 @@ func NewRouter(executionService *service.ExecutionService) *gin.Engine {
 			return
 		}
 
-		entry, err := executionService.AppendLog(c.Param("id"), req.Message)
+		entry, err := executionService.AppendLog(context.Background(), c.Param("id"), req.Message)
 		if err != nil {
-			c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
+			if errors.Is(err, service.ErrExecutionNotFound) {
+				c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
+			} else {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			}
 			return
 		}
 
@@ -43,9 +60,13 @@ func NewRouter(executionService *service.ExecutionService) *gin.Engine {
 	})
 
 	router.GET("/api/v1/executions/:id", func(c *gin.Context) {
-		exec, ok := executionService.Get(c.Param("id"))
-		if !ok {
-			c.JSON(http.StatusNotFound, gin.H{"error": "execution not found"})
+		exec, err := executionService.Get(context.Background(), c.Param("id"))
+		if err != nil {
+			if errors.Is(err, service.ErrExecutionNotFound) {
+				c.JSON(http.StatusNotFound, gin.H{"error": "execution not found"})
+			} else {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			}
 			return
 		}
 
@@ -53,9 +74,13 @@ func NewRouter(executionService *service.ExecutionService) *gin.Engine {
 	})
 
 	router.GET("/api/v1/executions/:id/logs", func(c *gin.Context) {
-		logs, ok := executionService.GetLogs(c.Param("id"))
-		if !ok {
-			c.JSON(http.StatusNotFound, gin.H{"error": "execution not found"})
+		logs, err := executionService.GetLogs(context.Background(), c.Param("id"))
+		if err != nil {
+			if errors.Is(err, service.ErrExecutionNotFound) {
+				c.JSON(http.StatusNotFound, gin.H{"error": "execution not found"})
+			} else {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			}
 			return
 		}
 

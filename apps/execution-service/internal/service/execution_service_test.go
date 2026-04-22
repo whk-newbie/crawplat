@@ -1,48 +1,306 @@
 package service
 
-import "testing"
+import (
+	"context"
+	"errors"
+	"strings"
+	"testing"
+	"time"
 
-func TestCreateManualExecutionStartsPending(t *testing.T) {
-	svc := NewExecutionService()
-	exec := svc.CreateManual("task-1", "spider-v1")
-	if exec.Status != "pending" {
-		t.Fatalf("expected pending, got %s", exec.Status)
-	}
+	"crawler-platform/apps/execution-service/internal/model"
+)
+
+type fakeExecutionRepo struct {
+	created    []model.Execution
+	executions map[string]model.Execution
+	deleted    []string
+	deleteErr  error
 }
 
-func TestCreateManualExecutionPersistsExecution(t *testing.T) {
-	svc := NewExecutionService()
-	created := svc.CreateManual("task-1", "spider-v1")
+func newFakeExecutionRepo() *fakeExecutionRepo {
+	return &fakeExecutionRepo{executions: map[string]model.Execution{}}
+}
 
-	listed, ok := svc.Get(created.ID)
+func (r *fakeExecutionRepo) Create(_ context.Context, exec model.Execution) (model.Execution, error) {
+	r.created = append(r.created, exec)
+	r.executions[exec.ID] = exec
+	return exec, nil
+}
+
+func (r *fakeExecutionRepo) Get(_ context.Context, id string) (model.Execution, error) {
+	exec, ok := r.executions[id]
 	if !ok {
-		t.Fatal("expected execution to be stored")
+		return model.Execution{}, ErrExecutionNotFound
 	}
-	if listed.ID != created.ID || listed.TaskID != created.TaskID || listed.SpiderVersionID != created.SpiderVersionID || listed.Status != created.Status || listed.TriggerSource != created.TriggerSource {
-		t.Fatalf("expected stored execution to match created execution, got %+v want %+v", listed, created)
+	return exec, nil
+}
+
+func (r *fakeExecutionRepo) Delete(_ context.Context, id string) error {
+	r.deleted = append(r.deleted, id)
+	if r.deleteErr != nil {
+		return r.deleteErr
+	}
+	delete(r.executions, id)
+	return nil
+}
+
+type fakeLogRepo struct {
+	initialized []string
+	appended    []model.ExecutionLog
+	logs        map[string][]model.ExecutionLog
+	initErr     error
+	listErr     error
+}
+
+func newFakeLogRepo() *fakeLogRepo {
+	return &fakeLogRepo{logs: map[string][]model.ExecutionLog{}}
+}
+
+func (r *fakeLogRepo) Init(_ context.Context, executionID string) error {
+	if r.initErr != nil {
+		return r.initErr
+	}
+	r.initialized = append(r.initialized, executionID)
+	if _, ok := r.logs[executionID]; !ok {
+		r.logs[executionID] = nil
+	}
+	return nil
+}
+
+func (r *fakeLogRepo) Append(_ context.Context, entry model.ExecutionLog) error {
+	r.appended = append(r.appended, entry)
+	r.logs[entry.ExecutionID] = append(r.logs[entry.ExecutionID], entry)
+	return nil
+}
+
+func (r *fakeLogRepo) List(_ context.Context, executionID string) ([]model.ExecutionLog, error) {
+	if r.listErr != nil {
+		return nil, r.listErr
+	}
+	logs := append([]model.ExecutionLog(nil), r.logs[executionID]...)
+	return logs, nil
+}
+
+type fakeQueue struct {
+	lastEnqueued string
+	err          error
+}
+
+func (q *fakeQueue) Enqueue(_ context.Context, executionID string) error {
+	q.lastEnqueued = executionID
+	return q.err
+}
+
+func TestCreateManualEnqueuesPendingExecution(t *testing.T) {
+	execRepo := newFakeExecutionRepo()
+	logRepo := newFakeLogRepo()
+	queue := &fakeQueue{}
+	svc := NewExecutionService(execRepo, logRepo, queue)
+
+	exec, err := svc.CreateManual(context.Background(), CreateManualInput{
+		ProjectID: "project-1",
+		SpiderID:  "spider-1",
+		Image:     "crawler/go-echo:latest",
+		Command:   []string{"./go-echo"},
+	})
+	if err != nil {
+		t.Fatalf("CreateManual returned error: %v", err)
+	}
+
+	if exec.Status != "pending" {
+		t.Fatalf("expected pending status, got %s", exec.Status)
+	}
+	if exec.TriggerSource != "manual" {
+		t.Fatalf("expected manual trigger source, got %s", exec.TriggerSource)
+	}
+	if execRepo.created == nil || len(execRepo.created) != 1 {
+		t.Fatalf("expected execution to be persisted once, got %+v", execRepo.created)
+	}
+	if logRepo.initialized == nil || len(logRepo.initialized) != 1 || logRepo.initialized[0] != exec.ID {
+		t.Fatalf("expected log storage to be initialized for %s, got %+v", exec.ID, logRepo.initialized)
+	}
+	if queue.lastEnqueued != exec.ID {
+		t.Fatalf("expected execution %s to be enqueued, got %s", exec.ID, queue.lastEnqueued)
+	}
+	if exec.ProjectID != "project-1" || exec.SpiderID != "spider-1" || exec.Image != "crawler/go-echo:latest" {
+		t.Fatalf("unexpected execution fields: %+v", exec)
+	}
+	if got := exec.Command; len(got) != 1 || got[0] != "./go-echo" {
+		t.Fatalf("unexpected command: %+v", got)
 	}
 }
 
-func TestAppendLogPersistsExecutionLog(t *testing.T) {
-	svc := NewExecutionService()
-	created := svc.CreateManual("task-1", "spider-v1")
+func TestCreateManualRollsBackWhenLogInitFails(t *testing.T) {
+	execRepo := newFakeExecutionRepo()
+	logRepo := newFakeLogRepo()
+	logRepo.initErr = errors.New("mongo unavailable")
+	queue := &fakeQueue{}
+	svc := NewExecutionService(execRepo, logRepo, queue)
 
-	entry, err := svc.AppendLog(created.ID, "started")
+	_, err := svc.CreateManual(context.Background(), CreateManualInput{
+		ProjectID: "project-1",
+		SpiderID:  "spider-1",
+		Image:     "crawler/go-echo:latest",
+		Command:   []string{"./go-echo"},
+	})
+	if err == nil {
+		t.Fatal("expected CreateManual to fail")
+	}
+	if len(execRepo.deleted) != 1 {
+		t.Fatalf("expected persisted execution to be rolled back, got %+v", execRepo.deleted)
+	}
+	if queue.lastEnqueued != "" {
+		t.Fatalf("expected queue not to be used, got %s", queue.lastEnqueued)
+	}
+}
+
+func TestCreateManualRollsBackWhenQueueEnqueueFails(t *testing.T) {
+	execRepo := newFakeExecutionRepo()
+	logRepo := newFakeLogRepo()
+	queue := &fakeQueue{err: errors.New("redis unavailable")}
+	svc := NewExecutionService(execRepo, logRepo, queue)
+
+	_, err := svc.CreateManual(context.Background(), CreateManualInput{
+		ProjectID: "project-1",
+		SpiderID:  "spider-1",
+		Image:     "crawler/go-echo:latest",
+		Command:   []string{"./go-echo"},
+	})
+	if err == nil {
+		t.Fatal("expected CreateManual to fail")
+	}
+	if len(execRepo.deleted) != 1 {
+		t.Fatalf("expected persisted execution to be rolled back, got %+v", execRepo.deleted)
+	}
+}
+
+func TestCreateManualReturnsJoinedErrorWhenRollbackFails(t *testing.T) {
+	execRepo := newFakeExecutionRepo()
+	execRepo.deleteErr = errors.New("delete failed")
+	logRepo := newFakeLogRepo()
+	logRepo.initErr = errors.New("mongo unavailable")
+	queue := &fakeQueue{}
+	svc := NewExecutionService(execRepo, logRepo, queue)
+
+	_, err := svc.CreateManual(context.Background(), CreateManualInput{
+		ProjectID: "project-1",
+		SpiderID:  "spider-1",
+		Image:     "crawler/go-echo:latest",
+		Command:   []string{"./go-echo"},
+	})
+	if err == nil {
+		t.Fatal("expected CreateManual to fail")
+	}
+	if !errors.Is(err, logRepo.initErr) {
+		t.Fatalf("expected joined error to include init error, got %v", err)
+	}
+	if !strings.Contains(err.Error(), "rollback execution") || !strings.Contains(err.Error(), "delete failed") {
+		t.Fatalf("expected rollback delete failure to be surfaced, got %v", err)
+	}
+}
+
+func TestAppendLogPersistsThroughLogRepo(t *testing.T) {
+	execRepo := newFakeExecutionRepo()
+	logRepo := newFakeLogRepo()
+	queue := &fakeQueue{}
+	svc := NewExecutionService(execRepo, logRepo, queue)
+
+	exec, err := svc.CreateManual(context.Background(), CreateManualInput{
+		ProjectID: "project-1",
+		SpiderID:  "spider-1",
+		Image:     "crawler/go-echo:latest",
+		Command:   []string{"./go-echo"},
+	})
 	if err != nil {
-		t.Fatalf("expected append log success, got error: %v", err)
+		t.Fatalf("CreateManual returned error: %v", err)
+	}
+
+	entry, err := svc.AppendLog(context.Background(), exec.ID, "started")
+	if err != nil {
+		t.Fatalf("AppendLog returned error: %v", err)
 	}
 	if entry.Message != "started" {
 		t.Fatalf("expected log message started, got %s", entry.Message)
 	}
+	if len(logRepo.appended) != 1 || logRepo.appended[0].ExecutionID != exec.ID {
+		t.Fatalf("expected log repo append for %s, got %+v", exec.ID, logRepo.appended)
+	}
+}
 
-	logs, ok := svc.GetLogs(created.ID)
-	if !ok {
-		t.Fatal("expected logs to exist for execution")
+func TestGetAndGetLogsReadThroughRepos(t *testing.T) {
+	execRepo := newFakeExecutionRepo()
+	logRepo := newFakeLogRepo()
+	queue := &fakeQueue{}
+	svc := NewExecutionService(execRepo, logRepo, queue)
+
+	exec, err := svc.CreateManual(context.Background(), CreateManualInput{
+		ProjectID: "project-1",
+		SpiderID:  "spider-1",
+		Image:     "crawler/go-echo:latest",
+		Command:   []string{"./go-echo"},
+	})
+	if err != nil {
+		t.Fatalf("CreateManual returned error: %v", err)
 	}
-	if len(logs) != 1 {
-		t.Fatalf("expected 1 log, got %d", len(logs))
+
+	createdAt := time.Now().UTC()
+	extra := model.ExecutionLog{ID: "log-1", ExecutionID: exec.ID, Message: "started", CreatedAt: createdAt}
+	logRepo.logs[exec.ID] = []model.ExecutionLog{extra}
+
+	got, err := svc.Get(context.Background(), exec.ID)
+	if err != nil {
+		t.Fatalf("Get returned error: %v", err)
 	}
-	if logs[0] != entry {
-		t.Fatalf("expected stored log to match appended log, got %+v want %+v", logs[0], entry)
+	if len(got.Logs) != 1 || got.Logs[0].Message != "started" {
+		t.Fatalf("unexpected execution logs: %+v", got.Logs)
+	}
+
+	logs, err := svc.GetLogs(context.Background(), exec.ID)
+	if err != nil {
+		t.Fatalf("GetLogs returned error: %v", err)
+	}
+	if len(logs) != 1 || logs[0].Message != "started" {
+		t.Fatalf("unexpected logs: %+v", logs)
+	}
+}
+
+func TestAppendLogReturnsNotFoundForMissingExecution(t *testing.T) {
+	svc := NewExecutionService(newFakeExecutionRepo(), newFakeLogRepo(), &fakeQueue{})
+
+	_, err := svc.AppendLog(context.Background(), "missing", "started")
+	if !errors.Is(err, ErrExecutionNotFound) {
+		t.Fatalf("expected ErrExecutionNotFound, got %v", err)
+	}
+}
+
+func TestGetReturnsBackendError(t *testing.T) {
+	execRepo := newFakeExecutionRepo()
+	logRepo := newFakeLogRepo()
+	queue := &fakeQueue{}
+	svc := NewExecutionService(execRepo, logRepo, queue)
+
+	exec, err := svc.CreateManual(context.Background(), CreateManualInput{
+		ProjectID: "project-1",
+		SpiderID:  "spider-1",
+		Image:     "crawler/go-echo:latest",
+		Command:   []string{"./go-echo"},
+	})
+	if err != nil {
+		t.Fatalf("CreateManual returned error: %v", err)
+	}
+
+	logRepo.listErr = errors.New("mongo unavailable")
+	_, err = svc.Get(context.Background(), exec.ID)
+	if err == nil || err.Error() != "mongo unavailable" {
+		t.Fatalf("expected backend error, got %v", err)
+	}
+}
+
+func TestGetReturnsNotFound(t *testing.T) {
+	svc := NewExecutionService(newFakeExecutionRepo(), newFakeLogRepo(), &fakeQueue{})
+
+	_, err := svc.Get(context.Background(), "missing")
+	if !errors.Is(err, ErrExecutionNotFound) {
+		t.Fatalf("expected ErrExecutionNotFound, got %v", err)
 	}
 }
