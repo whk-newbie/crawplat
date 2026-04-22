@@ -8,6 +8,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"crawler-platform/apps/execution-service/internal/model"
 	"crawler-platform/apps/execution-service/internal/service"
@@ -32,6 +33,50 @@ func (r *apiFakeExecutionRepo) Get(_ context.Context, id string) (model.Executio
 	if !ok {
 		return model.Execution{}, service.ErrExecutionNotFound
 	}
+	return exec, nil
+}
+
+func (r *apiFakeExecutionRepo) MarkRunning(_ context.Context, id, nodeID string, startedAt time.Time) (model.Execution, error) {
+	exec, ok := r.executions[id]
+	if !ok {
+		return model.Execution{}, service.ErrExecutionNotFound
+	}
+	if exec.Status != "pending" && exec.Status != "running" {
+		return model.Execution{}, service.ErrInvalidExecutionState
+	}
+	exec.NodeID = nodeID
+	exec.Status = "running"
+	exec.StartedAt = &startedAt
+	r.executions[id] = exec
+	return exec, nil
+}
+
+func (r *apiFakeExecutionRepo) Complete(_ context.Context, id string, finishedAt time.Time) (model.Execution, error) {
+	exec, ok := r.executions[id]
+	if !ok {
+		return model.Execution{}, service.ErrExecutionNotFound
+	}
+	if exec.Status != "running" {
+		return model.Execution{}, service.ErrInvalidExecutionState
+	}
+	exec.Status = "succeeded"
+	exec.FinishedAt = &finishedAt
+	r.executions[id] = exec
+	return exec, nil
+}
+
+func (r *apiFakeExecutionRepo) Fail(_ context.Context, id, errorMessage string, finishedAt time.Time) (model.Execution, error) {
+	exec, ok := r.executions[id]
+	if !ok {
+		return model.Execution{}, service.ErrExecutionNotFound
+	}
+	if exec.Status != "running" {
+		return model.Execution{}, service.ErrInvalidExecutionState
+	}
+	exec.Status = "failed"
+	exec.ErrorMessage = errorMessage
+	exec.FinishedAt = &finishedAt
+	r.executions[id] = exec
 	return exec, nil
 }
 
@@ -73,11 +118,36 @@ func (r *apiFakeLogRepo) List(_ context.Context, executionID string) ([]model.Ex
 
 type apiFakeQueue struct {
 	lastEnqueued string
+	nextClaimed  []string
+	acked        []string
+	released     []string
 	err          error
 }
 
 func (q *apiFakeQueue) Enqueue(_ context.Context, executionID string) error {
 	q.lastEnqueued = executionID
+	return q.err
+}
+
+func (q *apiFakeQueue) Claim(_ context.Context) (string, error) {
+	if q.err != nil {
+		return "", q.err
+	}
+	if len(q.nextClaimed) == 0 {
+		return "", nil
+	}
+	id := q.nextClaimed[0]
+	q.nextClaimed = q.nextClaimed[1:]
+	return id, nil
+}
+
+func (q *apiFakeQueue) Ack(_ context.Context, executionID string) error {
+	q.acked = append(q.acked, executionID)
+	return q.err
+}
+
+func (q *apiFakeQueue) Release(_ context.Context, executionID string) error {
+	q.released = append(q.released, executionID)
 	return q.err
 }
 
@@ -120,6 +190,40 @@ func TestCreateExecutionReturnsPendingExecution(t *testing.T) {
 	}
 	if len(exec.Command) != 1 || exec.Command[0] != "./go-echo" {
 		t.Fatalf("unexpected command: %+v", exec.Command)
+	}
+}
+
+func TestClaimNextExecutionMarksRunning(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	t.Setenv("JWT_SECRET", "test-token")
+
+	svc, _, _, queue := newAPITestService()
+	exec, err := svc.CreateManual(context.Background(), service.CreateManualInput{
+		ProjectID: "project-1",
+		SpiderID:  "spider-1",
+		Image:     "crawler/go-echo:latest",
+		Command:   []string{"./go-echo"},
+	})
+	if err != nil {
+		t.Fatalf("CreateManual returned error: %v", err)
+	}
+	queue.nextClaimed = []string{exec.ID}
+	router := NewRouter(svc)
+
+	req := newInternalJSONRequest(http.MethodPost, "/internal/v1/executions/claim", `{"nodeId":"node-1"}`)
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d", w.Code)
+	}
+
+	var claimed model.Execution
+	if err := json.Unmarshal(w.Body.Bytes(), &claimed); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+	if claimed.Status != "running" || claimed.NodeID != "node-1" {
+		t.Fatalf("unexpected claimed execution: %+v", claimed)
 	}
 }
 
@@ -254,4 +358,165 @@ func TestAppendLogReturnsNotFoundForMissingExecution(t *testing.T) {
 	if w.Code != http.StatusNotFound {
 		t.Fatalf("expected status 404, got %d", w.Code)
 	}
+}
+
+func TestCompleteExecutionMarksSucceeded(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	t.Setenv("JWT_SECRET", "test-token")
+
+	svc, _, _, queue := newAPITestService()
+	exec, err := svc.CreateManual(context.Background(), service.CreateManualInput{
+		ProjectID: "project-1",
+		SpiderID:  "spider-1",
+		Image:     "crawler/go-echo:latest",
+		Command:   []string{"./go-echo"},
+	})
+	if err != nil {
+		t.Fatalf("CreateManual returned error: %v", err)
+	}
+	queue.nextClaimed = []string{exec.ID}
+	if _, ok, err := svc.ClaimNext(context.Background(), "node-1"); err != nil || !ok {
+		t.Fatalf("ClaimNext returned ok=%v err=%v", ok, err)
+	}
+	router := NewRouter(svc)
+
+	req := newInternalJSONRequest(http.MethodPost, "/internal/v1/executions/"+exec.ID+"/complete", "")
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d", w.Code)
+	}
+}
+
+func TestStartExecutionReturnsClaimedExecution(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	t.Setenv("JWT_SECRET", "test-token")
+
+	svc, _, _, queue := newAPITestService()
+	exec, err := svc.CreateManual(context.Background(), service.CreateManualInput{
+		ProjectID: "project-1",
+		SpiderID:  "spider-1",
+		Image:     "crawler/go-echo:latest",
+		Command:   []string{"./go-echo"},
+	})
+	if err != nil {
+		t.Fatalf("CreateManual returned error: %v", err)
+	}
+	queue.nextClaimed = []string{exec.ID}
+	if _, ok, err := svc.ClaimNext(context.Background(), "node-1"); err != nil || !ok {
+		t.Fatalf("ClaimNext returned ok=%v err=%v", ok, err)
+	}
+	router := NewRouter(svc)
+
+	req := newInternalJSONRequest(http.MethodPost, "/internal/v1/executions/"+exec.ID+"/start", `{"nodeId":"node-1"}`)
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d", w.Code)
+	}
+}
+
+func TestStartExecutionRejectsPendingState(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	t.Setenv("JWT_SECRET", "test-token")
+
+	svc, _, _, _ := newAPITestService()
+	exec, err := svc.CreateManual(context.Background(), service.CreateManualInput{
+		ProjectID: "project-1",
+		SpiderID:  "spider-1",
+		Image:     "crawler/go-echo:latest",
+		Command:   []string{"./go-echo"},
+	})
+	if err != nil {
+		t.Fatalf("CreateManual returned error: %v", err)
+	}
+	router := NewRouter(svc)
+
+	req := newInternalJSONRequest(http.MethodPost, "/internal/v1/executions/"+exec.ID+"/start", `{"nodeId":"node-1"}`)
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusConflict {
+		t.Fatalf("expected status 409, got %d", w.Code)
+	}
+}
+
+func TestFailExecutionMarksFailed(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	t.Setenv("JWT_SECRET", "test-token")
+
+	svc, _, _, queue := newAPITestService()
+	exec, err := svc.CreateManual(context.Background(), service.CreateManualInput{
+		ProjectID: "project-1",
+		SpiderID:  "spider-1",
+		Image:     "crawler/go-echo:latest",
+		Command:   []string{"./go-echo"},
+	})
+	if err != nil {
+		t.Fatalf("CreateManual returned error: %v", err)
+	}
+	queue.nextClaimed = []string{exec.ID}
+	if _, ok, err := svc.ClaimNext(context.Background(), "node-1"); err != nil || !ok {
+		t.Fatalf("ClaimNext returned ok=%v err=%v", ok, err)
+	}
+	router := NewRouter(svc)
+
+	req := newInternalJSONRequest(http.MethodPost, "/internal/v1/executions/"+exec.ID+"/fail", `{"error":"exit status 1"}`)
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d", w.Code)
+	}
+}
+
+func TestCompleteExecutionRejectsPendingState(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	t.Setenv("JWT_SECRET", "test-token")
+
+	svc, _, _, _ := newAPITestService()
+	exec, err := svc.CreateManual(context.Background(), service.CreateManualInput{
+		ProjectID: "project-1",
+		SpiderID:  "spider-1",
+		Image:     "crawler/go-echo:latest",
+		Command:   []string{"./go-echo"},
+	})
+	if err != nil {
+		t.Fatalf("CreateManual returned error: %v", err)
+	}
+	router := NewRouter(svc)
+
+	req := newInternalJSONRequest(http.MethodPost, "/internal/v1/executions/"+exec.ID+"/complete", "")
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusConflict {
+		t.Fatalf("expected status 409, got %d", w.Code)
+	}
+}
+
+func TestInternalExecutionRoutesRequireToken(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	t.Setenv("JWT_SECRET", "test-token")
+
+	svc, _, _, _ := newAPITestService()
+	router := NewRouter(svc)
+
+	req := httptest.NewRequest(http.MethodPost, "/internal/v1/executions/claim", strings.NewReader(`{"nodeId":"node-1"}`))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusUnauthorized {
+		t.Fatalf("expected status 401, got %d", w.Code)
+	}
+}
+
+func newInternalJSONRequest(method, target, body string) *http.Request {
+	req := httptest.NewRequest(method, target, strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set(internalTokenHeader, "test-token")
+	return req
 }

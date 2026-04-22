@@ -15,6 +15,7 @@ type fakeExecutionRepo struct {
 	executions map[string]model.Execution
 	deleted    []string
 	deleteErr  error
+	markErr    error
 }
 
 func newFakeExecutionRepo() *fakeExecutionRepo {
@@ -32,6 +33,53 @@ func (r *fakeExecutionRepo) Get(_ context.Context, id string) (model.Execution, 
 	if !ok {
 		return model.Execution{}, ErrExecutionNotFound
 	}
+	return exec, nil
+}
+
+func (r *fakeExecutionRepo) MarkRunning(_ context.Context, id, nodeID string, startedAt time.Time) (model.Execution, error) {
+	if r.markErr != nil {
+		return model.Execution{}, r.markErr
+	}
+	exec, ok := r.executions[id]
+	if !ok {
+		return model.Execution{}, ErrExecutionNotFound
+	}
+	if exec.Status != "pending" && exec.Status != "running" {
+		return model.Execution{}, ErrInvalidExecutionState
+	}
+	exec.NodeID = nodeID
+	exec.Status = "running"
+	exec.StartedAt = &startedAt
+	r.executions[id] = exec
+	return exec, nil
+}
+
+func (r *fakeExecutionRepo) Complete(_ context.Context, id string, finishedAt time.Time) (model.Execution, error) {
+	exec, ok := r.executions[id]
+	if !ok {
+		return model.Execution{}, ErrExecutionNotFound
+	}
+	if exec.Status != "running" {
+		return model.Execution{}, ErrInvalidExecutionState
+	}
+	exec.Status = "succeeded"
+	exec.FinishedAt = &finishedAt
+	r.executions[id] = exec
+	return exec, nil
+}
+
+func (r *fakeExecutionRepo) Fail(_ context.Context, id, errorMessage string, finishedAt time.Time) (model.Execution, error) {
+	exec, ok := r.executions[id]
+	if !ok {
+		return model.Execution{}, ErrExecutionNotFound
+	}
+	if exec.Status != "running" {
+		return model.Execution{}, ErrInvalidExecutionState
+	}
+	exec.Status = "failed"
+	exec.ErrorMessage = errorMessage
+	exec.FinishedAt = &finishedAt
+	r.executions[id] = exec
 	return exec, nil
 }
 
@@ -83,11 +131,36 @@ func (r *fakeLogRepo) List(_ context.Context, executionID string) ([]model.Execu
 
 type fakeQueue struct {
 	lastEnqueued string
+	nextClaimed  []string
+	acked        []string
+	released     []string
 	err          error
 }
 
 func (q *fakeQueue) Enqueue(_ context.Context, executionID string) error {
 	q.lastEnqueued = executionID
+	return q.err
+}
+
+func (q *fakeQueue) Claim(_ context.Context) (string, error) {
+	if q.err != nil {
+		return "", q.err
+	}
+	if len(q.nextClaimed) == 0 {
+		return "", nil
+	}
+	id := q.nextClaimed[0]
+	q.nextClaimed = q.nextClaimed[1:]
+	return id, nil
+}
+
+func (q *fakeQueue) Ack(_ context.Context, executionID string) error {
+	q.acked = append(q.acked, executionID)
+	return q.err
+}
+
+func (q *fakeQueue) Release(_ context.Context, executionID string) error {
+	q.released = append(q.released, executionID)
 	return q.err
 }
 
@@ -127,6 +200,68 @@ func TestCreateManualEnqueuesPendingExecution(t *testing.T) {
 	}
 	if got := exec.Command; len(got) != 1 || got[0] != "./go-echo" {
 		t.Fatalf("unexpected command: %+v", got)
+	}
+}
+
+func TestClaimNextExecutionMarksRunning(t *testing.T) {
+	execRepo := newFakeExecutionRepo()
+	logRepo := newFakeLogRepo()
+	queue := &fakeQueue{}
+	svc := NewExecutionService(execRepo, logRepo, queue)
+
+	exec, err := svc.CreateManual(context.Background(), CreateManualInput{
+		ProjectID: "project-1",
+		SpiderID:  "spider-1",
+		Image:     "crawler/go-echo:latest",
+		Command:   []string{"./go-echo"},
+	})
+	if err != nil {
+		t.Fatalf("CreateManual returned error: %v", err)
+	}
+	queue.nextClaimed = []string{exec.ID}
+
+	claimed, ok, err := svc.ClaimNext(context.Background(), "node-1")
+	if err != nil {
+		t.Fatalf("ClaimNext returned error: %v", err)
+	}
+	if !ok {
+		t.Fatal("expected ClaimNext to return a claimed execution")
+	}
+	if claimed.Status != "running" || claimed.NodeID != "node-1" || claimed.StartedAt == nil {
+		t.Fatalf("expected running claimed execution, got %+v", claimed)
+	}
+	if len(queue.acked) != 0 {
+		t.Fatalf("expected claimed execution to remain inflight until completion, got %+v", queue.acked)
+	}
+}
+
+func TestClaimNextRequeuesExecutionWhenMarkRunningFails(t *testing.T) {
+	execRepo := newFakeExecutionRepo()
+	logRepo := newFakeLogRepo()
+	queue := &fakeQueue{}
+	svc := NewExecutionService(execRepo, logRepo, queue)
+
+	exec, err := svc.CreateManual(context.Background(), CreateManualInput{
+		ProjectID: "project-1",
+		SpiderID:  "spider-1",
+		Image:     "crawler/go-echo:latest",
+		Command:   []string{"./go-echo"},
+	})
+	if err != nil {
+		t.Fatalf("CreateManual returned error: %v", err)
+	}
+	execRepo.markErr = errors.New("postgres unavailable")
+	queue.nextClaimed = []string{exec.ID}
+
+	_, ok, err := svc.ClaimNext(context.Background(), "node-1")
+	if err == nil || err.Error() != "postgres unavailable" {
+		t.Fatalf("expected mark running error, got %v", err)
+	}
+	if ok {
+		t.Fatal("expected no claimed execution on failure")
+	}
+	if len(queue.released) != 1 || queue.released[0] != exec.ID {
+		t.Fatalf("expected failed claim to be released, got %+v", queue.released)
 	}
 }
 
@@ -302,5 +437,245 @@ func TestGetReturnsNotFound(t *testing.T) {
 	_, err := svc.Get(context.Background(), "missing")
 	if !errors.Is(err, ErrExecutionNotFound) {
 		t.Fatalf("expected ErrExecutionNotFound, got %v", err)
+	}
+}
+
+func TestCompleteMarksExecutionSucceeded(t *testing.T) {
+	execRepo := newFakeExecutionRepo()
+	logRepo := newFakeLogRepo()
+	queue := &fakeQueue{}
+	svc := NewExecutionService(execRepo, logRepo, queue)
+
+	exec, err := svc.CreateManual(context.Background(), CreateManualInput{
+		ProjectID: "project-1",
+		SpiderID:  "spider-1",
+		Image:     "crawler/go-echo:latest",
+		Command:   []string{"./go-echo"},
+	})
+	if err != nil {
+		t.Fatalf("CreateManual returned error: %v", err)
+	}
+	queue.nextClaimed = []string{exec.ID}
+	if _, ok, err := svc.ClaimNext(context.Background(), "node-1"); err != nil || !ok {
+		t.Fatalf("ClaimNext returned ok=%v err=%v", ok, err)
+	}
+
+	got, err := svc.Complete(context.Background(), exec.ID)
+	if err != nil {
+		t.Fatalf("Complete returned error: %v", err)
+	}
+	if got.Status != "succeeded" || got.FinishedAt == nil {
+		t.Fatalf("expected succeeded execution, got %+v", got)
+	}
+	if len(queue.acked) != 1 || queue.acked[0] != exec.ID {
+		t.Fatalf("expected completed execution to be acked, got %+v", queue.acked)
+	}
+}
+
+func TestStartReturnsClaimedExecution(t *testing.T) {
+	execRepo := newFakeExecutionRepo()
+	logRepo := newFakeLogRepo()
+	queue := &fakeQueue{}
+	svc := NewExecutionService(execRepo, logRepo, queue)
+
+	exec, err := svc.CreateManual(context.Background(), CreateManualInput{
+		ProjectID: "project-1",
+		SpiderID:  "spider-1",
+		Image:     "crawler/go-echo:latest",
+		Command:   []string{"./go-echo"},
+	})
+	if err != nil {
+		t.Fatalf("CreateManual returned error: %v", err)
+	}
+	queue.nextClaimed = []string{exec.ID}
+	if _, ok, err := svc.ClaimNext(context.Background(), "node-1"); err != nil || !ok {
+		t.Fatalf("ClaimNext returned ok=%v err=%v", ok, err)
+	}
+
+	got, err := svc.Start(context.Background(), exec.ID, "node-1")
+	if err != nil {
+		t.Fatalf("Start returned error: %v", err)
+	}
+	if got.Status != "running" || got.NodeID != "node-1" || got.StartedAt == nil {
+		t.Fatalf("expected running execution, got %+v", got)
+	}
+}
+
+func TestStartRejectsPendingExecution(t *testing.T) {
+	execRepo := newFakeExecutionRepo()
+	logRepo := newFakeLogRepo()
+	queue := &fakeQueue{}
+	svc := NewExecutionService(execRepo, logRepo, queue)
+
+	exec, err := svc.CreateManual(context.Background(), CreateManualInput{
+		ProjectID: "project-1",
+		SpiderID:  "spider-1",
+		Image:     "crawler/go-echo:latest",
+		Command:   []string{"./go-echo"},
+	})
+	if err != nil {
+		t.Fatalf("CreateManual returned error: %v", err)
+	}
+
+	_, err = svc.Start(context.Background(), exec.ID, "node-1")
+	if !errors.Is(err, ErrInvalidExecutionState) {
+		t.Fatalf("expected ErrInvalidExecutionState, got %v", err)
+	}
+}
+
+func TestStartRejectsFinishedExecution(t *testing.T) {
+	execRepo := newFakeExecutionRepo()
+	logRepo := newFakeLogRepo()
+	queue := &fakeQueue{}
+	svc := NewExecutionService(execRepo, logRepo, queue)
+
+	exec, err := svc.CreateManual(context.Background(), CreateManualInput{
+		ProjectID: "project-1",
+		SpiderID:  "spider-1",
+		Image:     "crawler/go-echo:latest",
+		Command:   []string{"./go-echo"},
+	})
+	if err != nil {
+		t.Fatalf("CreateManual returned error: %v", err)
+	}
+	finished := time.Now().UTC()
+	stored := execRepo.executions[exec.ID]
+	stored.Status = "succeeded"
+	stored.FinishedAt = &finished
+	execRepo.executions[exec.ID] = stored
+
+	_, err = svc.Start(context.Background(), exec.ID, "node-1")
+	if !errors.Is(err, ErrInvalidExecutionState) {
+		t.Fatalf("expected ErrInvalidExecutionState, got %v", err)
+	}
+}
+
+func TestFailMarksExecutionFailed(t *testing.T) {
+	execRepo := newFakeExecutionRepo()
+	logRepo := newFakeLogRepo()
+	queue := &fakeQueue{}
+	svc := NewExecutionService(execRepo, logRepo, queue)
+
+	exec, err := svc.CreateManual(context.Background(), CreateManualInput{
+		ProjectID: "project-1",
+		SpiderID:  "spider-1",
+		Image:     "crawler/go-echo:latest",
+		Command:   []string{"./go-echo"},
+	})
+	if err != nil {
+		t.Fatalf("CreateManual returned error: %v", err)
+	}
+	queue.nextClaimed = []string{exec.ID}
+	if _, ok, err := svc.ClaimNext(context.Background(), "node-1"); err != nil || !ok {
+		t.Fatalf("ClaimNext returned ok=%v err=%v", ok, err)
+	}
+
+	got, err := svc.Fail(context.Background(), exec.ID, "exit status 1")
+	if err != nil {
+		t.Fatalf("Fail returned error: %v", err)
+	}
+	if got.Status != "failed" || got.ErrorMessage != "exit status 1" || got.FinishedAt == nil {
+		t.Fatalf("expected failed execution, got %+v", got)
+	}
+	if len(queue.acked) != 1 || queue.acked[0] != exec.ID {
+		t.Fatalf("expected failed execution to be acked, got %+v", queue.acked)
+	}
+}
+
+func TestCompleteRetriesAckForAlreadySucceededExecution(t *testing.T) {
+	execRepo := newFakeExecutionRepo()
+	logRepo := newFakeLogRepo()
+	queue := &fakeQueue{}
+	svc := NewExecutionService(execRepo, logRepo, queue)
+
+	exec, err := svc.CreateManual(context.Background(), CreateManualInput{
+		ProjectID: "project-1",
+		SpiderID:  "spider-1",
+		Image:     "crawler/go-echo:latest",
+		Command:   []string{"./go-echo"},
+	})
+	if err != nil {
+		t.Fatalf("CreateManual returned error: %v", err)
+	}
+	queue.nextClaimed = []string{exec.ID}
+	if _, ok, err := svc.ClaimNext(context.Background(), "node-1"); err != nil || !ok {
+		t.Fatalf("ClaimNext returned ok=%v err=%v", ok, err)
+	}
+
+	queue.err = errors.New("ack failed")
+	if _, err := svc.Complete(context.Background(), exec.ID); err == nil {
+		t.Fatal("expected Complete to surface ack failure")
+	}
+
+	queue.err = nil
+	got, err := svc.Complete(context.Background(), exec.ID)
+	if err != nil {
+		t.Fatalf("retry Complete returned error: %v", err)
+	}
+	if got.Status != "succeeded" {
+		t.Fatalf("expected succeeded execution on retry, got %+v", got)
+	}
+	if len(queue.acked) != 2 || queue.acked[0] != exec.ID || queue.acked[1] != exec.ID {
+		t.Fatalf("expected ack retried for succeeded execution, got %+v", queue.acked)
+	}
+}
+
+func TestFailRetriesAckForAlreadyFailedExecution(t *testing.T) {
+	execRepo := newFakeExecutionRepo()
+	logRepo := newFakeLogRepo()
+	queue := &fakeQueue{}
+	svc := NewExecutionService(execRepo, logRepo, queue)
+
+	exec, err := svc.CreateManual(context.Background(), CreateManualInput{
+		ProjectID: "project-1",
+		SpiderID:  "spider-1",
+		Image:     "crawler/go-echo:latest",
+		Command:   []string{"./go-echo"},
+	})
+	if err != nil {
+		t.Fatalf("CreateManual returned error: %v", err)
+	}
+	queue.nextClaimed = []string{exec.ID}
+	if _, ok, err := svc.ClaimNext(context.Background(), "node-1"); err != nil || !ok {
+		t.Fatalf("ClaimNext returned ok=%v err=%v", ok, err)
+	}
+
+	queue.err = errors.New("ack failed")
+	if _, err := svc.Fail(context.Background(), exec.ID, "exit status 1"); err == nil {
+		t.Fatal("expected Fail to surface ack failure")
+	}
+
+	queue.err = nil
+	got, err := svc.Fail(context.Background(), exec.ID, "exit status 1")
+	if err != nil {
+		t.Fatalf("retry Fail returned error: %v", err)
+	}
+	if got.Status != "failed" {
+		t.Fatalf("expected failed execution on retry, got %+v", got)
+	}
+	if len(queue.acked) != 2 || queue.acked[0] != exec.ID || queue.acked[1] != exec.ID {
+		t.Fatalf("expected ack retried for failed execution, got %+v", queue.acked)
+	}
+}
+
+func TestCompleteRejectsPendingExecution(t *testing.T) {
+	execRepo := newFakeExecutionRepo()
+	logRepo := newFakeLogRepo()
+	queue := &fakeQueue{}
+	svc := NewExecutionService(execRepo, logRepo, queue)
+
+	exec, err := svc.CreateManual(context.Background(), CreateManualInput{
+		ProjectID: "project-1",
+		SpiderID:  "spider-1",
+		Image:     "crawler/go-echo:latest",
+		Command:   []string{"./go-echo"},
+	})
+	if err != nil {
+		t.Fatalf("CreateManual returned error: %v", err)
+	}
+
+	_, err = svc.Complete(context.Background(), exec.ID)
+	if !errors.Is(err, ErrInvalidExecutionState) {
+		t.Fatalf("expected ErrInvalidExecutionState, got %v", err)
 	}
 }

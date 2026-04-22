@@ -4,6 +4,8 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"errors"
+	"time"
 
 	"crawler-platform/apps/execution-service/internal/model"
 	"crawler-platform/apps/execution-service/internal/service"
@@ -90,11 +92,67 @@ func (r *ExecutionRepository) Get(ctx context.Context, id string) (model.Executi
 	return exec, nil
 }
 
+func (r *ExecutionRepository) MarkRunning(ctx context.Context, id, nodeID string, startedAt time.Time) (model.Execution, error) {
+	result, err := r.db.ExecContext(ctx, `
+		UPDATE executions
+		SET node_id = $2, status = 'running', started_at = $3, finished_at = NULL, error_message = NULL
+		WHERE id = $1 AND status = 'pending'
+	`, id, nodeID, startedAt)
+	if err != nil {
+		return model.Execution{}, err
+	}
+	if err := r.ensureTransitionRowsAffected(ctx, result, id); err != nil {
+		return model.Execution{}, err
+	}
+	return r.Get(ctx, id)
+}
+
+func (r *ExecutionRepository) Complete(ctx context.Context, id string, finishedAt time.Time) (model.Execution, error) {
+	result, err := r.db.ExecContext(ctx, `
+		UPDATE executions
+		SET status = 'succeeded', finished_at = $2, error_message = NULL
+		WHERE id = $1 AND status = 'running'
+	`, id, finishedAt)
+	if err != nil {
+		return model.Execution{}, err
+	}
+	if err := r.ensureTransitionRowsAffected(ctx, result, id); err != nil {
+		return model.Execution{}, err
+	}
+	return r.Get(ctx, id)
+}
+
+func (r *ExecutionRepository) Fail(ctx context.Context, id, errorMessage string, finishedAt time.Time) (model.Execution, error) {
+	result, err := r.db.ExecContext(ctx, `
+		UPDATE executions
+		SET status = 'failed', finished_at = $2, error_message = $3
+		WHERE id = $1 AND status = 'running'
+	`, id, finishedAt, errorMessage)
+	if err != nil {
+		return model.Execution{}, err
+	}
+	if err := r.ensureTransitionRowsAffected(ctx, result, id); err != nil {
+		return model.Execution{}, err
+	}
+	return r.Get(ctx, id)
+}
+
 func (r *ExecutionRepository) Delete(ctx context.Context, id string) error {
 	result, err := r.db.ExecContext(ctx, `DELETE FROM executions WHERE id = $1`, id)
 	if err != nil {
 		return err
 	}
+	return ensureRowsAffected(result)
+}
+
+func nullableString(value string) any {
+	if value == "" {
+		return nil
+	}
+	return value
+}
+
+func ensureRowsAffected(result sql.Result) error {
 	rowsAffected, err := result.RowsAffected()
 	if err != nil {
 		return err
@@ -105,9 +163,21 @@ func (r *ExecutionRepository) Delete(ctx context.Context, id string) error {
 	return nil
 }
 
-func nullableString(value string) any {
-	if value == "" {
+func (r *ExecutionRepository) ensureTransitionRowsAffected(ctx context.Context, result sql.Result, executionID string) error {
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rowsAffected > 0 {
 		return nil
 	}
-	return value
+
+	if _, err := r.Get(ctx, executionID); err != nil {
+		if errors.Is(err, service.ErrExecutionNotFound) {
+			return service.ErrExecutionNotFound
+		}
+		return err
+	}
+
+	return service.ErrInvalidExecutionState
 }
