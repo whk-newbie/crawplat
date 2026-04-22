@@ -99,3 +99,160 @@ func TestExecutionRepositoryGetMapsNoRowsToNotFound(t *testing.T) {
 		t.Fatalf("ExpectationsWereMet returned error: %v", err)
 	}
 }
+
+func TestExecutionRepositoryMarkRunning(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	if err != nil {
+		t.Fatalf("sqlmock.New returned error: %v", err)
+	}
+	defer db.Close()
+
+	repo := NewExecutionRepository(db)
+	startedAt := time.Now().UTC()
+
+	mock.ExpectExec(regexp.QuoteMeta(`
+		UPDATE executions
+		SET node_id = $2, status = 'running', started_at = $3, finished_at = NULL, error_message = NULL
+		WHERE id = $1 AND status = 'pending'
+	`)).
+		WithArgs("e1", "node-1", startedAt).
+		WillReturnResult(sqlmock.NewResult(0, 1))
+
+	rows := sqlmock.NewRows([]string{"id", "project_id", "spider_id", "node_id", "status", "trigger_source", "image", "command", "error_message", "created_at", "started_at", "finished_at"}).
+		AddRow("e1", "p1", "s1", "node-1", "running", "manual", "crawler/go:latest", `["./crawler"]`, nil, startedAt, startedAt, nil)
+	mock.ExpectQuery(regexp.QuoteMeta(`
+		SELECT id, project_id, spider_id, node_id, status, trigger_source, image, command, error_message, created_at, started_at, finished_at
+		FROM executions
+		WHERE id = $1
+	`)).
+		WithArgs("e1").
+		WillReturnRows(rows)
+
+	exec, err := repo.MarkRunning(context.Background(), "e1", "node-1", startedAt)
+	if err != nil {
+		t.Fatalf("MarkRunning returned error: %v", err)
+	}
+	if exec.Status != "running" || exec.NodeID != "node-1" || exec.StartedAt == nil {
+		t.Fatalf("unexpected running execution: %+v", exec)
+	}
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Fatalf("ExpectationsWereMet returned error: %v", err)
+	}
+}
+
+func TestExecutionRepositoryComplete(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	if err != nil {
+		t.Fatalf("sqlmock.New returned error: %v", err)
+	}
+	defer db.Close()
+
+	repo := NewExecutionRepository(db)
+	finishedAt := time.Now().UTC()
+
+	mock.ExpectExec(regexp.QuoteMeta(`
+		UPDATE executions
+		SET status = 'succeeded', finished_at = $2, error_message = NULL
+		WHERE id = $1 AND status = 'running'
+	`)).
+		WithArgs("e1", finishedAt).
+		WillReturnResult(sqlmock.NewResult(0, 1))
+
+	rows := sqlmock.NewRows([]string{"id", "project_id", "spider_id", "node_id", "status", "trigger_source", "image", "command", "error_message", "created_at", "started_at", "finished_at"}).
+		AddRow("e1", "p1", "s1", "node-1", "succeeded", "manual", "crawler/go:latest", `["./crawler"]`, nil, finishedAt, nil, finishedAt)
+	mock.ExpectQuery(regexp.QuoteMeta(`
+		SELECT id, project_id, spider_id, node_id, status, trigger_source, image, command, error_message, created_at, started_at, finished_at
+		FROM executions
+		WHERE id = $1
+	`)).
+		WithArgs("e1").
+		WillReturnRows(rows)
+
+	exec, err := repo.Complete(context.Background(), "e1", finishedAt)
+	if err != nil {
+		t.Fatalf("Complete returned error: %v", err)
+	}
+	if exec.Status != "succeeded" || exec.FinishedAt == nil {
+		t.Fatalf("unexpected completed execution: %+v", exec)
+	}
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Fatalf("ExpectationsWereMet returned error: %v", err)
+	}
+}
+
+func TestExecutionRepositoryFail(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	if err != nil {
+		t.Fatalf("sqlmock.New returned error: %v", err)
+	}
+	defer db.Close()
+
+	repo := NewExecutionRepository(db)
+	finishedAt := time.Now().UTC()
+
+	mock.ExpectExec(regexp.QuoteMeta(`
+		UPDATE executions
+		SET status = 'failed', finished_at = $2, error_message = $3
+		WHERE id = $1 AND status = 'running'
+	`)).
+		WithArgs("e1", finishedAt, "exit status 1").
+		WillReturnResult(sqlmock.NewResult(0, 1))
+
+	rows := sqlmock.NewRows([]string{"id", "project_id", "spider_id", "node_id", "status", "trigger_source", "image", "command", "error_message", "created_at", "started_at", "finished_at"}).
+		AddRow("e1", "p1", "s1", "node-1", "failed", "manual", "crawler/go:latest", `["./crawler"]`, "exit status 1", finishedAt, nil, finishedAt)
+	mock.ExpectQuery(regexp.QuoteMeta(`
+		SELECT id, project_id, spider_id, node_id, status, trigger_source, image, command, error_message, created_at, started_at, finished_at
+		FROM executions
+		WHERE id = $1
+	`)).
+		WithArgs("e1").
+		WillReturnRows(rows)
+
+	exec, err := repo.Fail(context.Background(), "e1", "exit status 1", finishedAt)
+	if err != nil {
+		t.Fatalf("Fail returned error: %v", err)
+	}
+	if exec.Status != "failed" || exec.ErrorMessage != "exit status 1" || exec.FinishedAt == nil {
+		t.Fatalf("unexpected failed execution: %+v", exec)
+	}
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Fatalf("ExpectationsWereMet returned error: %v", err)
+	}
+}
+
+func TestExecutionRepositoryCompleteReturnsInvalidStateWhenNotRunning(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	if err != nil {
+		t.Fatalf("sqlmock.New returned error: %v", err)
+	}
+	defer db.Close()
+
+	repo := NewExecutionRepository(db)
+	finishedAt := time.Now().UTC()
+
+	mock.ExpectExec(regexp.QuoteMeta(`
+		UPDATE executions
+		SET status = 'succeeded', finished_at = $2, error_message = NULL
+		WHERE id = $1 AND status = 'running'
+	`)).
+		WithArgs("e1", finishedAt).
+		WillReturnResult(sqlmock.NewResult(0, 0))
+
+	rows := sqlmock.NewRows([]string{"id", "project_id", "spider_id", "node_id", "status", "trigger_source", "image", "command", "error_message", "created_at", "started_at", "finished_at"}).
+		AddRow("e1", "p1", "s1", "node-1", "pending", "manual", "crawler/go:latest", `["./crawler"]`, nil, finishedAt, nil, nil)
+	mock.ExpectQuery(regexp.QuoteMeta(`
+		SELECT id, project_id, spider_id, node_id, status, trigger_source, image, command, error_message, created_at, started_at, finished_at
+		FROM executions
+		WHERE id = $1
+	`)).
+		WithArgs("e1").
+		WillReturnRows(rows)
+
+	_, err = repo.Complete(context.Background(), "e1", finishedAt)
+	if !errors.Is(err, service.ErrInvalidExecutionState) {
+		t.Fatalf("expected ErrInvalidExecutionState, got %v", err)
+	}
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Fatalf("ExpectationsWereMet returned error: %v", err)
+	}
+}

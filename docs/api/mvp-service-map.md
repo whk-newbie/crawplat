@@ -4,10 +4,10 @@
 
 - `gateway` -> public entry and request proxying
 - `iam-service` -> auth
-- `project-service` -> project create/list
-- `spider-service` -> spider create/list
-- `execution-service` -> manual execution and logs
-- `node-service` -> node heartbeat
+- `project-service` -> project create/list in PostgreSQL
+- `spider-service` -> spider create/list in PostgreSQL
+- `execution-service` -> execution metadata in PostgreSQL, logs in MongoDB, and queue-backed lifecycle transitions
+- `node-service` -> node heartbeat in Redis
 - `datasource-service` -> datasource config and preview
 - `agent` -> heartbeat
 
@@ -25,6 +25,11 @@
 - `ANY /api/v1/nodes/*path`
 - `ANY /api/v1/datasources`
 - `ANY /api/v1/datasources/*path`
+- `ANY /internal/v1/executions/claim`
+- `ANY /internal/v1/executions/:id/start`
+- `ANY /internal/v1/executions/:id/logs`
+- `ANY /internal/v1/executions/:id/complete`
+- `ANY /internal/v1/executions/:id/fail`
 
 ### `iam-service`
 
@@ -46,6 +51,11 @@
 - `POST /api/v1/executions/:id/logs`
 - `GET /api/v1/executions/:id`
 - `GET /api/v1/executions/:id/logs`
+- `POST /internal/v1/executions/claim`
+- `POST /internal/v1/executions/:id/start`
+- `POST /internal/v1/executions/:id/logs`
+- `POST /internal/v1/executions/:id/complete`
+- `POST /internal/v1/executions/:id/fail`
 
 ### `node-service`
 
@@ -62,4 +72,5 @@
 ## Notes
 
 - The gateway is the only public API surface expected by the web app and external callers.
+- Internal execution routes are reserved for execution workers and require `X-Internal-Token`.
 - The agent currently uses the node heartbeat route directly so node liveness stays independent of gateway traffic.

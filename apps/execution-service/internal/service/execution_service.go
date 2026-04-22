@@ -11,6 +11,7 @@ import (
 )
 
 var ErrExecutionNotFound = errors.New("execution not found")
+var ErrInvalidExecutionState = errors.New("invalid execution state transition")
 
 type ExecutionService struct {
 	execRepo ExecutionRepository
@@ -21,6 +22,9 @@ type ExecutionService struct {
 type ExecutionRepository interface {
 	Create(ctx context.Context, exec model.Execution) (model.Execution, error)
 	Get(ctx context.Context, id string) (model.Execution, error)
+	MarkRunning(ctx context.Context, id, nodeID string, startedAt time.Time) (model.Execution, error)
+	Complete(ctx context.Context, id string, finishedAt time.Time) (model.Execution, error)
+	Fail(ctx context.Context, id, errorMessage string, finishedAt time.Time) (model.Execution, error)
 	Delete(ctx context.Context, id string) error
 }
 
@@ -32,6 +36,9 @@ type LogRepository interface {
 
 type Queue interface {
 	Enqueue(ctx context.Context, executionID string) error
+	Claim(ctx context.Context) (string, error)
+	Ack(ctx context.Context, executionID string) error
+	Release(ctx context.Context, executionID string) error
 }
 
 type CreateManualInput struct {
@@ -119,9 +126,141 @@ func (s *ExecutionService) GetLogs(ctx context.Context, executionID string) ([]m
 	return logs, nil
 }
 
+func (s *ExecutionService) ClaimNext(ctx context.Context, nodeID string) (model.Execution, bool, error) {
+	for {
+		executionID, err := s.queue.Claim(ctx)
+		if err != nil {
+			return model.Execution{}, false, err
+		}
+		if executionID == "" {
+			return model.Execution{}, false, nil
+		}
+
+		exec, err := s.transitionToRunning(ctx, executionID, nodeID, time.Now().UTC())
+		if err != nil {
+			if errors.Is(err, ErrExecutionNotFound) || errors.Is(err, ErrInvalidExecutionState) {
+				if ackErr := s.queue.Ack(ctx, executionID); ackErr != nil {
+					return model.Execution{}, false, errors.Join(err, fmt.Errorf("ack claimed execution %s: %w", executionID, ackErr))
+				}
+				continue
+			}
+			if releaseErr := s.queue.Release(ctx, executionID); releaseErr != nil {
+				return model.Execution{}, false, errors.Join(err, fmt.Errorf("release execution %s: %w", executionID, releaseErr))
+			}
+			return model.Execution{}, false, err
+		}
+		return exec, true, nil
+	}
+}
+
+func (s *ExecutionService) Start(ctx context.Context, executionID, nodeID string) (model.Execution, error) {
+	exec, err := s.execRepo.Get(ctx, executionID)
+	if err != nil {
+		if errors.Is(err, ErrExecutionNotFound) {
+			return model.Execution{}, ErrExecutionNotFound
+		}
+		return model.Execution{}, err
+	}
+	if exec.Status != "running" {
+		return model.Execution{}, ErrInvalidExecutionState
+	}
+	if exec.NodeID != "" && exec.NodeID != nodeID {
+		return model.Execution{}, ErrInvalidExecutionState
+	}
+	return exec, nil
+}
+
+func (s *ExecutionService) Complete(ctx context.Context, executionID string) (model.Execution, error) {
+	exec, err := s.execRepo.Complete(ctx, executionID, time.Now().UTC())
+	if err != nil {
+		if errors.Is(err, ErrExecutionNotFound) {
+			return model.Execution{}, ErrExecutionNotFound
+		}
+		if errors.Is(err, ErrInvalidExecutionState) {
+			current, currentErr := s.execRepo.Get(ctx, executionID)
+			if currentErr != nil {
+				if errors.Is(currentErr, ErrExecutionNotFound) {
+					return model.Execution{}, ErrExecutionNotFound
+				}
+				return model.Execution{}, currentErr
+			}
+			if current.Status == "succeeded" {
+				if ackErr := s.queue.Ack(ctx, executionID); ackErr != nil {
+					return model.Execution{}, fmt.Errorf("ack completed execution %s: %w", executionID, ackErr)
+				}
+				return current, nil
+			}
+			return model.Execution{}, ErrInvalidExecutionState
+		}
+		return model.Execution{}, err
+	}
+	if ackErr := s.queue.Ack(ctx, executionID); ackErr != nil {
+		return model.Execution{}, fmt.Errorf("ack completed execution %s: %w", executionID, ackErr)
+	}
+	return exec, nil
+}
+
+func (s *ExecutionService) Fail(ctx context.Context, executionID, errorMessage string) (model.Execution, error) {
+	exec, err := s.execRepo.Fail(ctx, executionID, errorMessage, time.Now().UTC())
+	if err != nil {
+		if errors.Is(err, ErrExecutionNotFound) {
+			return model.Execution{}, ErrExecutionNotFound
+		}
+		if errors.Is(err, ErrInvalidExecutionState) {
+			current, currentErr := s.execRepo.Get(ctx, executionID)
+			if currentErr != nil {
+				if errors.Is(currentErr, ErrExecutionNotFound) {
+					return model.Execution{}, ErrExecutionNotFound
+				}
+				return model.Execution{}, currentErr
+			}
+			if current.Status == "failed" {
+				if ackErr := s.queue.Ack(ctx, executionID); ackErr != nil {
+					return model.Execution{}, fmt.Errorf("ack failed execution %s: %w", executionID, ackErr)
+				}
+				return current, nil
+			}
+			return model.Execution{}, ErrInvalidExecutionState
+		}
+		return model.Execution{}, err
+	}
+	if ackErr := s.queue.Ack(ctx, executionID); ackErr != nil {
+		return model.Execution{}, fmt.Errorf("ack failed execution %s: %w", executionID, ackErr)
+	}
+	return exec, nil
+}
+
 func (s *ExecutionService) rollbackCreate(ctx context.Context, executionID string, cause error) error {
 	if deleteErr := s.execRepo.Delete(ctx, executionID); deleteErr != nil {
 		return errors.Join(cause, fmt.Errorf("rollback execution %s: %w", executionID, deleteErr))
 	}
 	return cause
+}
+
+func (s *ExecutionService) transitionToRunning(ctx context.Context, executionID, nodeID string, startedAt time.Time) (model.Execution, error) {
+	current, err := s.execRepo.Get(ctx, executionID)
+	if err != nil {
+		if errors.Is(err, ErrExecutionNotFound) {
+			return model.Execution{}, ErrExecutionNotFound
+		}
+		return model.Execution{}, err
+	}
+	if current.Status == "running" {
+		return current, nil
+	}
+	if current.Status != "pending" {
+		return model.Execution{}, ErrInvalidExecutionState
+	}
+
+	exec, err := s.execRepo.MarkRunning(ctx, executionID, nodeID, startedAt)
+	if err != nil {
+		if errors.Is(err, ErrExecutionNotFound) {
+			return model.Execution{}, ErrExecutionNotFound
+		}
+		if errors.Is(err, ErrInvalidExecutionState) {
+			return model.Execution{}, ErrInvalidExecutionState
+		}
+		return model.Execution{}, err
+	}
+	return exec, nil
 }

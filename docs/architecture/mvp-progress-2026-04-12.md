@@ -138,4 +138,14 @@ The MVP foundation implementation is complete at the code and documentation leve
 - The codebase is being developed in an isolated git worktree and has not yet been merged back to the project root branch.
 - The current stopping point is clean at the repository level after Task 12.
 - `make test` passes for the implemented MVP slice.
+
+## Phase 2 Addendum
+
+As of 2026-04-22, the MVP foundation has advanced beyond the original 2026-04-12 snapshot:
+
+- `project-service`, `spider-service`, and `datasource-service` now persist core metadata in PostgreSQL.
+- `node-service` stores heartbeat liveness in Redis.
+- `execution-service` stores execution metadata in PostgreSQL, execution logs in MongoDB, and queue state in Redis.
+- internal execution lifecycle routes now cover claim, start, append-log, complete, and fail flows behind `X-Internal-Token`.
+- `make test` still passes after the persistence and execution-lifecycle work.
 - Full `make up` verification is blocked in this environment because Docker bridge networking is not supported here (`failed to add the host <=> sandbox pair interfaces: operation not supported`).

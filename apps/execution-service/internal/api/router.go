@@ -4,15 +4,18 @@ import (
 	"context"
 	"errors"
 	"net/http"
+	"os"
 
 	"crawler-platform/apps/execution-service/internal/service"
 	"github.com/gin-gonic/gin"
 )
 
+const internalTokenHeader = "X-Internal-Token"
+
 func NewRouter(executionService *service.ExecutionService) *gin.Engine {
 	router := gin.Default()
 
-	router.POST("/api/v1/executions", func(c *gin.Context) {
+	createExecutionHandler := func(c *gin.Context) {
 		var req struct {
 			ProjectID string   `json:"projectId" binding:"required"`
 			SpiderID  string   `json:"spiderId" binding:"required"`
@@ -35,9 +38,9 @@ func NewRouter(executionService *service.ExecutionService) *gin.Engine {
 			return
 		}
 		c.JSON(http.StatusCreated, exec)
-	})
+	}
 
-	router.POST("/api/v1/executions/:id/logs", func(c *gin.Context) {
+	appendLogHandler := func(c *gin.Context) {
 		var req struct {
 			Message string `json:"message" binding:"required"`
 		}
@@ -57,9 +60,9 @@ func NewRouter(executionService *service.ExecutionService) *gin.Engine {
 		}
 
 		c.JSON(http.StatusCreated, entry)
-	})
+	}
 
-	router.GET("/api/v1/executions/:id", func(c *gin.Context) {
+	getExecutionHandler := func(c *gin.Context) {
 		exec, err := executionService.Get(context.Background(), c.Param("id"))
 		if err != nil {
 			if errors.Is(err, service.ErrExecutionNotFound) {
@@ -71,9 +74,9 @@ func NewRouter(executionService *service.ExecutionService) *gin.Engine {
 		}
 
 		c.JSON(http.StatusOK, exec)
-	})
+	}
 
-	router.GET("/api/v1/executions/:id/logs", func(c *gin.Context) {
+	getLogsHandler := func(c *gin.Context) {
 		logs, err := executionService.GetLogs(context.Background(), c.Param("id"))
 		if err != nil {
 			if errors.Is(err, service.ErrExecutionNotFound) {
@@ -85,7 +88,123 @@ func NewRouter(executionService *service.ExecutionService) *gin.Engine {
 		}
 
 		c.JSON(http.StatusOK, logs)
+	}
+
+	router.POST("/api/v1/executions", createExecutionHandler)
+	router.POST("/api/v1/executions/:id/logs", appendLogHandler)
+	router.GET("/api/v1/executions/:id", getExecutionHandler)
+	router.GET("/api/v1/executions/:id/logs", getLogsHandler)
+
+	internalExecution := router.Group("/internal/v1/executions", requireInternalToken())
+
+	internalExecution.POST("/claim", func(c *gin.Context) {
+		var req struct {
+			NodeID string `json:"nodeId" binding:"required"`
+		}
+		if err := c.ShouldBindJSON(&req); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
+
+		exec, ok, err := executionService.ClaimNext(context.Background(), req.NodeID)
+		if err != nil {
+			if errors.Is(err, service.ErrExecutionNotFound) {
+				c.JSON(http.StatusNotFound, gin.H{"error": "execution not found"})
+			} else if errors.Is(err, service.ErrInvalidExecutionState) {
+				c.JSON(http.StatusConflict, gin.H{"error": err.Error()})
+			} else {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			}
+			return
+		}
+		if !ok {
+			c.Status(http.StatusNoContent)
+			return
+		}
+
+		c.JSON(http.StatusOK, exec)
+	})
+
+	internalExecution.POST("/:id/start", func(c *gin.Context) {
+		var req struct {
+			NodeID string `json:"nodeId" binding:"required"`
+		}
+		if err := c.ShouldBindJSON(&req); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
+
+		exec, err := executionService.Start(context.Background(), c.Param("id"), req.NodeID)
+		if err != nil {
+			if errors.Is(err, service.ErrExecutionNotFound) {
+				c.JSON(http.StatusNotFound, gin.H{"error": "execution not found"})
+			} else if errors.Is(err, service.ErrInvalidExecutionState) {
+				c.JSON(http.StatusConflict, gin.H{"error": err.Error()})
+			} else {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			}
+			return
+		}
+
+		c.JSON(http.StatusOK, exec)
+	})
+
+	internalExecution.POST("/:id/logs", appendLogHandler)
+
+	internalExecution.POST("/:id/complete", func(c *gin.Context) {
+		exec, err := executionService.Complete(context.Background(), c.Param("id"))
+		if err != nil {
+			if errors.Is(err, service.ErrExecutionNotFound) {
+				c.JSON(http.StatusNotFound, gin.H{"error": "execution not found"})
+			} else if errors.Is(err, service.ErrInvalidExecutionState) {
+				c.JSON(http.StatusConflict, gin.H{"error": err.Error()})
+			} else {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			}
+			return
+		}
+
+		c.JSON(http.StatusOK, exec)
+	})
+
+	internalExecution.POST("/:id/fail", func(c *gin.Context) {
+		var req struct {
+			Error string `json:"error" binding:"required"`
+		}
+		if err := c.ShouldBindJSON(&req); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
+
+		exec, err := executionService.Fail(context.Background(), c.Param("id"), req.Error)
+		if err != nil {
+			if errors.Is(err, service.ErrExecutionNotFound) {
+				c.JSON(http.StatusNotFound, gin.H{"error": "execution not found"})
+			} else if errors.Is(err, service.ErrInvalidExecutionState) {
+				c.JSON(http.StatusConflict, gin.H{"error": err.Error()})
+			} else {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			}
+			return
+		}
+
+		c.JSON(http.StatusOK, exec)
 	})
 
 	return router
+}
+
+func requireInternalToken() gin.HandlerFunc {
+	token := os.Getenv("INTERNAL_API_TOKEN")
+	if token == "" {
+		token = os.Getenv("JWT_SECRET")
+	}
+
+	return func(c *gin.Context) {
+		if token == "" || c.GetHeader(internalTokenHeader) != token {
+			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "unauthorized internal route"})
+			return
+		}
+		c.Next()
+	}
 }
