@@ -9,7 +9,7 @@
 - `execution-service` -> execution metadata in PostgreSQL, logs in MongoDB, and queue-backed lifecycle transitions
 - `node-service` -> node heartbeat in Redis
 - `datasource-service` -> datasource config and preview
-- `agent` -> heartbeat
+- `agent` -> heartbeat, execution polling, Docker runtime execution
 
 ## Key Routes
 
@@ -73,4 +73,4 @@
 
 - The gateway is the only public API surface expected by the web app and external callers.
 - Internal execution routes are reserved for execution workers and require `X-Internal-Token`.
-- The agent currently uses the node heartbeat route directly so node liveness stays independent of gateway traffic.
+- The agent uses the node heartbeat route directly for liveness and the execution-service internal routes for claim/start/log/complete/fail flow.
