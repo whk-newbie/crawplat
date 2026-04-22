@@ -32,7 +32,8 @@ The agent talks directly to the node service for heartbeat updates. That keeps n
 - node heartbeat tracking and node listing backed by Redis
 - datasource create, list, test, and preview
 - gateway routing for the current API surface
-- Compose wiring for the services, datastores, and web shell
+- Compose wiring for the services, datastores, web shell, migration flow, and Docker-capable agent runtime
+- verified Go/Python Docker execution path through the agent poller
 
 ## What This MVP Does Not Yet Cover
 

@@ -1,4 +1,4 @@
-.PHONY: test docker-binaries web-assets up down
+.PHONY: test docker-binaries web-assets migrate up down
 
 COMPOSE_FILE := deploy/docker-compose/docker-compose.mcp.yml
 DOCKER_BIN_DIR := .docker-bin
@@ -27,7 +27,10 @@ docker-binaries:
 web-assets:
 	npm --prefix apps/web run build
 
-up: docker-binaries web-assets
+migrate:
+	./deploy/scripts/migrate-postgres.sh
+
+up: docker-binaries web-assets migrate
 	docker compose -f $(COMPOSE_FILE) up --build -d
 
 down:
