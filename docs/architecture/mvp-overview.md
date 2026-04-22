@@ -11,7 +11,7 @@ The MVP foundation is implemented as a small control plane plus execution-plane 
 - `execution-service` owns manual execution records in PostgreSQL, logs in MongoDB, and execution queue coordination through Redis.
 - `node-service` tracks node heartbeats and current node inventory through Redis.
 - `datasource-service` owns datasource configuration, connection checks, and previews backed by PostgreSQL.
-- `agent` runs on a node and currently sends heartbeats; execution pull is the next planned step.
+- `agent` runs on a node, sends heartbeats, polls executions, and reports lifecycle/log updates back to the control plane.
 
 The stack is designed for Docker Compose first. PostgreSQL, Redis, and MongoDB are started together with the API services and the web shell so the MVP environment matches the planned platform shape. The current slice already uses those datastores on the request path for projects, spiders, datasources, executions, logs, queue state, and node liveness.
 
@@ -21,7 +21,7 @@ The gateway exposes the `/api/v1/*` surface to the outside world and proxies req
 
 The gateway exposes the public `/api/v1/*` surface and selected internal `/internal/v1/executions/*` routes for execution workers. Internal execution routes are protected with `X-Internal-Token`, while user-facing routes continue through the public API surface.
 
-The agent talks directly to the node service for heartbeat updates. That keeps node liveness independent from user-facing API traffic and gives the execution plane a separate lifecycle from the control plane. The execution worker flow now supports queue claim, start, append-log, complete, and fail transitions even though the agent has not yet been wired to consume that path.
+The agent talks directly to the node service for heartbeat updates. That keeps node liveness independent from user-facing API traffic and gives the execution plane a separate lifecycle from the control plane. The execution worker flow now supports queue claim, start, append-log, complete, and fail transitions, and the agent is wired to consume that path through a Docker-based runner.
 
 ## What Is Implemented
 

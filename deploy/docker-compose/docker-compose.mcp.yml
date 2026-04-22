@@ -27,6 +27,8 @@ services:
       - execution-service
       - node-service
       - datasource-service
+    env_file:
+      - ../env/.env.example
     ports:
       - "8080:8080"
 
@@ -96,11 +98,15 @@ services:
       dockerfile: apps/agent/Dockerfile
     depends_on:
       - node-service
+      - execution-service
     env_file:
       - ../env/.env.example
     environment:
       NODE_SERVICE_URL: http://node-service:8084
+      EXECUTION_SERVICE_URL: ${EXECUTION_SERVICE_URL:-http://execution-service:8085}
       NODE_NAME: mvp-node
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
 
   web:
     build:
