@@ -11,6 +11,7 @@ func TestResolveServiceURL(t *testing.T) {
 		"node-service":       "http://node-service:8084",
 		"datasource-service": "http://datasource-service:8086",
 		"scheduler-service":  "http://scheduler-service:8087",
+		"monitor-service":    "http://monitor-service:8088",
 	}
 
 	for serviceName, want := range tests {

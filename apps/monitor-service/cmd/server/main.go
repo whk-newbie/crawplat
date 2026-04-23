@@ -9,7 +9,7 @@ import (
 
 func main() {
 	router := api.NewRouter(service.NewMonitorService())
-	if err := router.Run(":8087"); err != nil {
+	if err := router.Run(":8088"); err != nil {
 		log.Fatal(err)
 	}
 }

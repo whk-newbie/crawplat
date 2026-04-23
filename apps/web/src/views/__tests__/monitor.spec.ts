@@ -22,9 +22,18 @@ describe('monitor view', () => {
       ok: true,
       status: 200,
       json: async () => ({
-        activeExecutions: 3,
-        queuedExecutions: 7,
-        healthyNodes: 2,
+        executions: {
+          total: 12,
+          pending: 7,
+          running: 3,
+          failed: 1,
+          succeeded: 1,
+        },
+        nodes: {
+          total: 4,
+          online: 2,
+          offline: 2,
+        },
         generatedAt: '2026-04-23T08:00:00Z',
       }),
     })
@@ -40,11 +49,13 @@ describe('monitor view', () => {
     await flushPromises()
 
     expect(fetchMock).toHaveBeenCalledWith('/api/v1/monitor/overview', expect.any(Object))
-    expect(container.textContent).toContain('Active executions')
-    expect(container.textContent).toContain('3')
-    expect(container.textContent).toContain('Queued executions')
+    expect(container.textContent).toContain('Total executions')
+    expect(container.textContent).toContain('12')
+    expect(container.textContent).toContain('Pending executions')
     expect(container.textContent).toContain('7')
-    expect(container.textContent).toContain('Healthy nodes')
+    expect(container.textContent).toContain('Running executions')
+    expect(container.textContent).toContain('3')
+    expect(container.textContent).toContain('Nodes online')
     expect(container.textContent).toContain('2')
   })
 

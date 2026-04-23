@@ -37,6 +37,7 @@ func NewRouter() *gin.Engine {
 	router.Any("/api/v1/datasources/*path", proxy.ProxyTo("datasource-service"))
 
 	router.Any("/api/v1/schedules", proxy.ProxyTo("scheduler-service"))
+	router.Any("/api/v1/monitor/*path", proxy.ProxyTo("monitor-service"))
 
 	return router
 }

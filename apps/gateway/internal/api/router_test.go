@@ -49,6 +49,9 @@ func TestNewRouterIncludesInternalExecutionRoutes(t *testing.T) {
 	if !seen["/api/v1/schedules"] {
 		t.Fatal("expected scheduler route to be registered")
 	}
+	if !seen["/api/v1/monitor/*path"] {
+		t.Fatal("expected monitor route to be registered")
+	}
 }
 
 func TestInternalExecutionRoutesRequireToken(t *testing.T) {
