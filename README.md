@@ -15,6 +15,7 @@
 
 - `make test` runs the root Go test suite, then the nested Go module test suites under `packages/` and `apps/`, and finally `apps/web` with `npm test`.
 - `make migrate` starts the PostgreSQL container, waits for readiness, and applies the SQL migrations under `deploy/migrations/postgres`.
-- `make up` builds the Linux service binaries, builds the web assets, runs `make migrate`, and starts the full Compose stack with PostgreSQL, Redis, MongoDB, gateway, iam-service, project-service, spider-service, execution-service, node-service, datasource-service, agent, and web.
+- `make up` builds the Linux service binaries, builds the web assets, runs `make migrate`, and starts the full Compose stack with PostgreSQL, Redis, MongoDB, gateway, iam-service, project-service, spider-service, execution-service, node-service, datasource-service, scheduler-service, monitor-service, agent, and web.
 - On a normal Docker host, the intended smoke flow is: login, create a project, register a Docker spider, create a manual execution, and inspect execution detail plus logs in the web app.
 - This flow was exercised on 2026-04-22 with both `crawler/go-echo:latest` and `crawler/python-echo:latest`; both executions reached `succeeded` and returned logs through `GET /api/v1/executions/:id/logs`.
+- Phase 3 adds scheduled execution materialization, retry-policy orchestration, and a monitor overview route plus web page. The current monitor service is still a scaffold: the route shape is wired end-to-end, but the counters are not yet backed by aggregated execution/node queries.

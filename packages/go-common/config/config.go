@@ -8,6 +8,7 @@ type App struct {
 	RedisAddr           string
 	MongoURI            string
 	JWTSecret           string
+	InternalAPIToken    string
 	ExecutionServiceURL string
 }
 
@@ -18,6 +19,7 @@ func Load() App {
 		RedisAddr:   os.Getenv("REDIS_ADDR"),
 		MongoURI:    os.Getenv("MONGO_URI"),
 		JWTSecret:   os.Getenv("JWT_SECRET"),
+		InternalAPIToken: envOrDefault("INTERNAL_API_TOKEN", os.Getenv("JWT_SECRET")),
 		ExecutionServiceURL: envOrDefault("EXECUTION_SERVICE_URL", "http://execution-service:8085"),
 	}
 }

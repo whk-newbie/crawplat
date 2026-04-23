@@ -27,6 +27,8 @@ services:
       - execution-service
       - node-service
       - datasource-service
+      - scheduler-service
+      - monitor-service
     env_file:
       - ../env/.env.example
     ports:
@@ -91,6 +93,23 @@ services:
       - mongo
     env_file:
       - ../env/.env.example
+
+  scheduler-service:
+    build:
+      context: ../..
+      dockerfile: apps/scheduler-service/Dockerfile
+    depends_on:
+      - postgres
+      - execution-service
+    env_file:
+      - ../env/.env.example
+    environment:
+      EXECUTION_SERVICE_URL: ${EXECUTION_SERVICE_URL:-http://execution-service:8085}
+
+  monitor-service:
+    build:
+      context: ../..
+      dockerfile: apps/monitor-service/Dockerfile
 
   agent:
     build:
