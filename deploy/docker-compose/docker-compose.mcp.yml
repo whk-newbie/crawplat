@@ -110,6 +110,13 @@ services:
     build:
       context: ../..
       dockerfile: apps/monitor-service/Dockerfile
+    depends_on:
+      - postgres
+      - redis
+    env_file:
+      - ../env/.env.example
+    environment:
+      HTTP_ADDR: :8088
 
   agent:
     build:

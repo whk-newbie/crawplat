@@ -11,7 +11,7 @@
 - `node-service` -> node heartbeat in Redis
 - `datasource-service` -> datasource config and preview
 - `scheduler-service` -> schedule persistence, cron polling, scheduled execution creation, retry trigger loop
-- `monitor-service` -> monitor overview route scaffold
+- `monitor-service` -> monitor overview route backed by PostgreSQL and Redis aggregates
 - `agent` -> heartbeat, execution polling, Docker runtime execution
 
 ## Key Routes
@@ -91,4 +91,4 @@
 - Internal execution routes are reserved for execution workers and require `X-Internal-Token`.
 - The agent uses the node heartbeat route directly for liveness and the execution-service internal routes for claim/start/log/complete/fail flow.
 - The scheduler service uses the public execution create route for scheduled executions and the internal retry materialization route for retry orchestration.
-- The monitor service route is wired end-to-end, but its response is still scaffold-level and not yet backed by aggregate persistence queries.
+- The monitor service route returns real execution counts from PostgreSQL and live node counts from Redis. Offline node counts remain `0` until the platform starts persisting historical node inventory outside the live heartbeat set.

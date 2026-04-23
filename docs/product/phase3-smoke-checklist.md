@@ -90,10 +90,12 @@ Expected:
 
 - `200 OK`
 - JSON shape contains `executions` and `nodes`
+- execution counters reflect rows currently stored in `executions`
+- node counters reflect the current Redis heartbeat set
 
 Note:
 
-- the current response is scaffold-level and not yet backed by execution/node aggregate queries
+- offline node count remains `0` in the MVP because only live heartbeats are persisted
 
 ## Web Route
 
