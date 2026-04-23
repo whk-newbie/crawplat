@@ -46,6 +46,9 @@ func TestNewRouterIncludesInternalExecutionRoutes(t *testing.T) {
 	if !seen["/internal/v1/executions/:id/fail"] {
 		t.Fatal("expected internal execution fail route to be registered")
 	}
+	if !seen["/api/v1/schedules"] {
+		t.Fatal("expected scheduler route to be registered")
+	}
 }
 
 func TestInternalExecutionRoutesRequireToken(t *testing.T) {
