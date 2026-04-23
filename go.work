@@ -10,5 +10,6 @@ use (
 	./apps/node-service
 	./apps/spider-service
 	./apps/project-service
+	./apps/scheduler-service
 	./packages/go-common
 )
