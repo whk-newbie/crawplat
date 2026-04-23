@@ -193,6 +193,32 @@ func TestCreateExecutionReturnsPendingExecution(t *testing.T) {
 	}
 }
 
+func TestCreateExecutionAcceptsScheduledTriggerSource(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	router := NewRouter(func() *service.ExecutionService {
+		svc, _, _, _ := newAPITestService()
+		return svc
+	}())
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/executions", strings.NewReader(`{"projectId":"project-1","spiderId":"spider-1","image":"crawler/go-echo:latest","command":["./go-echo"],"triggerSource":"scheduled"}`))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+
+	router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusCreated {
+		t.Fatalf("expected status 201, got %d", w.Code)
+	}
+
+	var exec model.Execution
+	if err := json.Unmarshal(w.Body.Bytes(), &exec); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+	if exec.TriggerSource != "scheduled" {
+		t.Fatalf("expected scheduled trigger source, got %+v", exec)
+	}
+}
+
 func TestClaimNextExecutionMarksRunning(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	t.Setenv("JWT_SECRET", "test-token")

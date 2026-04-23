@@ -48,17 +48,40 @@ type CreateManualInput struct {
 	Command   []string
 }
 
+type CreateExecutionInput struct {
+	ProjectID     string
+	SpiderID      string
+	Image         string
+	Command       []string
+	TriggerSource string
+}
+
 func NewExecutionService(execRepo ExecutionRepository, logRepo LogRepository, queue Queue) *ExecutionService {
 	return &ExecutionService{execRepo: execRepo, logRepo: logRepo, queue: queue}
 }
 
 func (s *ExecutionService) CreateManual(ctx context.Context, input CreateManualInput) (model.Execution, error) {
+	return s.Create(ctx, CreateExecutionInput{
+		ProjectID:     input.ProjectID,
+		SpiderID:      input.SpiderID,
+		Image:         input.Image,
+		Command:       input.Command,
+		TriggerSource: "manual",
+	})
+}
+
+func (s *ExecutionService) Create(ctx context.Context, input CreateExecutionInput) (model.Execution, error) {
+	triggerSource := input.TriggerSource
+	if triggerSource == "" {
+		triggerSource = "manual"
+	}
+
 	exec := model.Execution{
 		ID:            uuid.NewString(),
 		ProjectID:     input.ProjectID,
 		SpiderID:      input.SpiderID,
 		Status:        "pending",
-		TriggerSource: "manual",
+		TriggerSource: triggerSource,
 		Image:         input.Image,
 		Command:       append([]string(nil), input.Command...),
 		CreatedAt:     time.Now().UTC(),

@@ -203,6 +203,31 @@ func TestCreateManualEnqueuesPendingExecution(t *testing.T) {
 	}
 }
 
+func TestCreateExecutionUsesProvidedTriggerSource(t *testing.T) {
+	execRepo := newFakeExecutionRepo()
+	logRepo := newFakeLogRepo()
+	queue := &fakeQueue{}
+	svc := NewExecutionService(execRepo, logRepo, queue)
+
+	exec, err := svc.Create(context.Background(), CreateExecutionInput{
+		ProjectID:     "project-1",
+		SpiderID:      "spider-1",
+		Image:         "crawler/go-echo:latest",
+		Command:       []string{"./go-echo"},
+		TriggerSource: "scheduled",
+	})
+	if err != nil {
+		t.Fatalf("Create returned error: %v", err)
+	}
+
+	if exec.TriggerSource != "scheduled" {
+		t.Fatalf("expected scheduled trigger source, got %+v", exec)
+	}
+	if queue.lastEnqueued != exec.ID {
+		t.Fatalf("expected execution %s to be enqueued, got %s", exec.ID, queue.lastEnqueued)
+	}
+}
+
 func TestClaimNextExecutionMarksRunning(t *testing.T) {
 	execRepo := newFakeExecutionRepo()
 	logRepo := newFakeLogRepo()
