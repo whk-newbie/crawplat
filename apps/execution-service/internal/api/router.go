@@ -17,11 +17,15 @@ func NewRouter(executionService *service.ExecutionService) *gin.Engine {
 
 	createExecutionHandler := func(c *gin.Context) {
 		var req struct {
-			ProjectID     string   `json:"projectId" binding:"required"`
-			SpiderID      string   `json:"spiderId" binding:"required"`
-			Image         string   `json:"image" binding:"required"`
-			Command       []string `json:"command"`
-			TriggerSource string   `json:"triggerSource"`
+			ProjectID         string   `json:"projectId" binding:"required"`
+			SpiderID          string   `json:"spiderId" binding:"required"`
+			Image             string   `json:"image" binding:"required"`
+			Command           []string `json:"command"`
+			TriggerSource     string   `json:"triggerSource"`
+			RetryLimit        int      `json:"retryLimit"`
+			RetryCount        int      `json:"retryCount"`
+			RetryDelaySeconds int      `json:"retryDelaySeconds"`
+			RetryOfExecutionID string  `json:"retryOfExecutionId"`
 		}
 		if err := c.ShouldBindJSON(&req); err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
@@ -29,11 +33,15 @@ func NewRouter(executionService *service.ExecutionService) *gin.Engine {
 		}
 
 		exec, err := executionService.Create(context.Background(), service.CreateExecutionInput{
-			ProjectID:     req.ProjectID,
-			SpiderID:      req.SpiderID,
-			Image:         req.Image,
-			Command:       req.Command,
-			TriggerSource: req.TriggerSource,
+			ProjectID:         req.ProjectID,
+			SpiderID:          req.SpiderID,
+			Image:             req.Image,
+			Command:           req.Command,
+			TriggerSource:     req.TriggerSource,
+			RetryLimit:        req.RetryLimit,
+			RetryCount:        req.RetryCount,
+			RetryDelaySeconds: req.RetryDelaySeconds,
+			RetryOfExecutionID: req.RetryOfExecutionID,
 		})
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
@@ -191,6 +199,19 @@ func NewRouter(executionService *service.ExecutionService) *gin.Engine {
 		}
 
 		c.JSON(http.StatusOK, exec)
+	})
+
+	internalExecution.POST("/retries/materialize", func(c *gin.Context) {
+		exec, ok, err := executionService.MaterializeRetry(context.Background())
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+		if !ok {
+			c.Status(http.StatusNoContent)
+			return
+		}
+		c.JSON(http.StatusCreated, exec)
 	})
 
 	return router

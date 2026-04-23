@@ -25,6 +25,8 @@ type ExecutionRepository interface {
 	MarkRunning(ctx context.Context, id, nodeID string, startedAt time.Time) (model.Execution, error)
 	Complete(ctx context.Context, id string, finishedAt time.Time) (model.Execution, error)
 	Fail(ctx context.Context, id, errorMessage string, finishedAt time.Time) (model.Execution, error)
+	ClaimNextRetryCandidate(ctx context.Context, now time.Time) (model.Execution, bool, error)
+	ResetRetryClaim(ctx context.Context, id string) error
 	Delete(ctx context.Context, id string) error
 }
 
@@ -49,11 +51,15 @@ type CreateManualInput struct {
 }
 
 type CreateExecutionInput struct {
-	ProjectID     string
-	SpiderID      string
-	Image         string
-	Command       []string
-	TriggerSource string
+	ProjectID         string
+	SpiderID          string
+	Image             string
+	Command           []string
+	TriggerSource     string
+	RetryLimit        int
+	RetryCount        int
+	RetryDelaySeconds int
+	RetryOfExecutionID string
 }
 
 func NewExecutionService(execRepo ExecutionRepository, logRepo LogRepository, queue Queue) *ExecutionService {
@@ -77,14 +83,18 @@ func (s *ExecutionService) Create(ctx context.Context, input CreateExecutionInpu
 	}
 
 	exec := model.Execution{
-		ID:            uuid.NewString(),
-		ProjectID:     input.ProjectID,
-		SpiderID:      input.SpiderID,
-		Status:        "pending",
-		TriggerSource: triggerSource,
-		Image:         input.Image,
-		Command:       append([]string(nil), input.Command...),
-		CreatedAt:     time.Now().UTC(),
+		ID:                uuid.NewString(),
+		ProjectID:         input.ProjectID,
+		SpiderID:          input.SpiderID,
+		Status:            "pending",
+		TriggerSource:     triggerSource,
+		Image:             input.Image,
+		Command:           append([]string(nil), input.Command...),
+		RetryLimit:        input.RetryLimit,
+		RetryCount:        input.RetryCount,
+		RetryDelaySeconds: input.RetryDelaySeconds,
+		RetryOfExecutionID: input.RetryOfExecutionID,
+		CreatedAt:         time.Now().UTC(),
 	}
 
 	created, err := s.execRepo.Create(ctx, exec)
@@ -99,6 +109,33 @@ func (s *ExecutionService) Create(ctx context.Context, input CreateExecutionInpu
 	}
 
 	return created, nil
+}
+
+func (s *ExecutionService) MaterializeRetry(ctx context.Context) (model.Execution, bool, error) {
+	candidate, ok, err := s.execRepo.ClaimNextRetryCandidate(ctx, time.Now().UTC())
+	if err != nil || !ok {
+		return model.Execution{}, ok, err
+	}
+
+	created, err := s.Create(ctx, CreateExecutionInput{
+		ProjectID:         candidate.ProjectID,
+		SpiderID:          candidate.SpiderID,
+		Image:             candidate.Image,
+		Command:           candidate.Command,
+		TriggerSource:     "retry",
+		RetryLimit:        candidate.RetryLimit,
+		RetryCount:        candidate.RetryCount + 1,
+		RetryDelaySeconds: candidate.RetryDelaySeconds,
+		RetryOfExecutionID: candidate.ID,
+	})
+	if err != nil {
+		if resetErr := s.execRepo.ResetRetryClaim(ctx, candidate.ID); resetErr != nil {
+			return model.Execution{}, false, errors.Join(err, resetErr)
+		}
+		return model.Execution{}, false, err
+	}
+
+	return created, true, nil
 }
 
 func (s *ExecutionService) Get(ctx context.Context, id string) (model.Execution, error) {

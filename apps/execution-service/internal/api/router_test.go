@@ -16,8 +16,9 @@ import (
 )
 
 type apiFakeExecutionRepo struct {
-	executions map[string]model.Execution
-	deleteErr  error
+	executions      map[string]model.Execution
+	retryCandidates []string
+	deleteErr       error
 }
 
 func (r *apiFakeExecutionRepo) Create(_ context.Context, exec model.Execution) (model.Execution, error) {
@@ -83,6 +84,26 @@ func (r *apiFakeExecutionRepo) Fail(_ context.Context, id, errorMessage string, 
 func (r *apiFakeExecutionRepo) Delete(_ context.Context, id string) error {
 	delete(r.executions, id)
 	return r.deleteErr
+}
+
+func (r *apiFakeExecutionRepo) ClaimNextRetryCandidate(_ context.Context, _ time.Time) (model.Execution, bool, error) {
+	if len(r.retryCandidates) == 0 {
+		return model.Execution{}, false, nil
+	}
+	id := r.retryCandidates[0]
+	r.retryCandidates = r.retryCandidates[1:]
+	exec, ok := r.executions[id]
+	if !ok {
+		return model.Execution{}, false, service.ErrExecutionNotFound
+	}
+	now := time.Now().UTC()
+	exec.RetriedAt = &now
+	r.executions[id] = exec
+	return exec, true, nil
+}
+
+func (r *apiFakeExecutionRepo) ResetRetryClaim(_ context.Context, _ string) error {
+	return nil
 }
 
 type apiFakeLogRepo struct {
@@ -216,6 +237,32 @@ func TestCreateExecutionAcceptsScheduledTriggerSource(t *testing.T) {
 	}
 	if exec.TriggerSource != "scheduled" {
 		t.Fatalf("expected scheduled trigger source, got %+v", exec)
+	}
+}
+
+func TestCreateExecutionAcceptsRetryMetadata(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	router := NewRouter(func() *service.ExecutionService {
+		svc, _, _, _ := newAPITestService()
+		return svc
+	}())
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/executions", strings.NewReader(`{"projectId":"project-1","spiderId":"spider-1","image":"crawler/go-echo:latest","command":["./go-echo"],"triggerSource":"retry","retryLimit":3,"retryCount":1,"retryDelaySeconds":45,"retryOfExecutionId":"exec-root"}`))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+
+	router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusCreated {
+		t.Fatalf("expected status 201, got %d", w.Code)
+	}
+
+	var exec model.Execution
+	if err := json.Unmarshal(w.Body.Bytes(), &exec); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+	if exec.RetryLimit != 3 || exec.RetryCount != 1 || exec.RetryDelaySeconds != 45 || exec.RetryOfExecutionID != "exec-root" {
+		t.Fatalf("expected retry metadata in response, got %+v", exec)
 	}
 }
 
@@ -495,6 +542,47 @@ func TestFailExecutionMarksFailed(t *testing.T) {
 
 	if w.Code != http.StatusOK {
 		t.Fatalf("expected status 200, got %d", w.Code)
+	}
+}
+
+func TestMaterializeRetryCreatesExecution(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	t.Setenv("JWT_SECRET", "test-token")
+
+	svc, execRepo, _, _ := newAPITestService()
+	finishedAt := time.Now().UTC()
+	execRepo.executions = map[string]model.Execution{
+		"failed-1": {
+			ID:                "failed-1",
+			ProjectID:         "project-1",
+			SpiderID:          "spider-1",
+			Status:            "failed",
+			TriggerSource:     "scheduled",
+			Image:             "crawler/go-echo:latest",
+			Command:           []string{"./go-echo"},
+			RetryLimit:        2,
+			RetryCount:        0,
+			RetryDelaySeconds: 30,
+			FinishedAt:        &finishedAt,
+		},
+	}
+	execRepo.retryCandidates = []string{"failed-1"}
+	router := NewRouter(svc)
+
+	req := newInternalJSONRequest(http.MethodPost, "/internal/v1/executions/retries/materialize", "")
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusCreated {
+		t.Fatalf("expected status 201, got %d", w.Code)
+	}
+
+	var exec model.Execution
+	if err := json.Unmarshal(w.Body.Bytes(), &exec); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+	if exec.TriggerSource != "retry" || exec.RetryCount != 1 || exec.RetryOfExecutionID != "failed-1" {
+		t.Fatalf("unexpected retry execution: %+v", exec)
 	}
 }
 

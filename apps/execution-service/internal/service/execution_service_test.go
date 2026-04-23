@@ -11,11 +11,12 @@ import (
 )
 
 type fakeExecutionRepo struct {
-	created    []model.Execution
-	executions map[string]model.Execution
-	deleted    []string
-	deleteErr  error
-	markErr    error
+	created         []model.Execution
+	executions      map[string]model.Execution
+	retryCandidates []string
+	deleted         []string
+	deleteErr       error
+	markErr         error
 }
 
 func newFakeExecutionRepo() *fakeExecutionRepo {
@@ -89,6 +90,32 @@ func (r *fakeExecutionRepo) Delete(_ context.Context, id string) error {
 		return r.deleteErr
 	}
 	delete(r.executions, id)
+	return nil
+}
+
+func (r *fakeExecutionRepo) ClaimNextRetryCandidate(_ context.Context, _ time.Time) (model.Execution, bool, error) {
+	if len(r.retryCandidates) == 0 {
+		return model.Execution{}, false, nil
+	}
+	id := r.retryCandidates[0]
+	r.retryCandidates = r.retryCandidates[1:]
+	exec, ok := r.executions[id]
+	if !ok {
+		return model.Execution{}, false, ErrExecutionNotFound
+	}
+	now := time.Now().UTC()
+	exec.RetriedAt = &now
+	r.executions[id] = exec
+	return exec, true, nil
+}
+
+func (r *fakeExecutionRepo) ResetRetryClaim(_ context.Context, id string) error {
+	exec, ok := r.executions[id]
+	if !ok {
+		return ErrExecutionNotFound
+	}
+	exec.RetriedAt = nil
+	r.executions[id] = exec
 	return nil
 }
 
@@ -215,6 +242,10 @@ func TestCreateExecutionUsesProvidedTriggerSource(t *testing.T) {
 		Image:         "crawler/go-echo:latest",
 		Command:       []string{"./go-echo"},
 		TriggerSource: "scheduled",
+		RetryLimit:    3,
+		RetryCount:    1,
+		RetryDelaySeconds: 45,
+		RetryOfExecutionID: "exec-root",
 	})
 	if err != nil {
 		t.Fatalf("Create returned error: %v", err)
@@ -223,8 +254,52 @@ func TestCreateExecutionUsesProvidedTriggerSource(t *testing.T) {
 	if exec.TriggerSource != "scheduled" {
 		t.Fatalf("expected scheduled trigger source, got %+v", exec)
 	}
+	if exec.RetryLimit != 3 || exec.RetryCount != 1 || exec.RetryDelaySeconds != 45 || exec.RetryOfExecutionID != "exec-root" {
+		t.Fatalf("expected retry metadata to persist, got %+v", exec)
+	}
 	if queue.lastEnqueued != exec.ID {
 		t.Fatalf("expected execution %s to be enqueued, got %s", exec.ID, queue.lastEnqueued)
+	}
+}
+
+func TestMaterializeRetryCreatesNextAttempt(t *testing.T) {
+	execRepo := newFakeExecutionRepo()
+	logRepo := newFakeLogRepo()
+	queue := &fakeQueue{}
+	svc := NewExecutionService(execRepo, logRepo, queue)
+
+	finishedAt := time.Now().UTC()
+	failed := model.Execution{
+		ID:                "failed-1",
+		ProjectID:         "project-1",
+		SpiderID:          "spider-1",
+		Status:            "failed",
+		TriggerSource:     "scheduled",
+		Image:             "crawler/go-echo:latest",
+		Command:           []string{"./go-echo"},
+		RetryLimit:        3,
+		RetryCount:        0,
+		RetryDelaySeconds: 30,
+		FinishedAt:        &finishedAt,
+	}
+	execRepo.executions[failed.ID] = failed
+	execRepo.retryCandidates = []string{failed.ID}
+
+	retried, ok, err := svc.MaterializeRetry(context.Background())
+	if err != nil {
+		t.Fatalf("MaterializeRetry returned error: %v", err)
+	}
+	if !ok {
+		t.Fatal("expected retry materialization to enqueue a new execution")
+	}
+	if retried.TriggerSource != "retry" {
+		t.Fatalf("expected retry trigger source, got %+v", retried)
+	}
+	if retried.RetryCount != 1 || retried.RetryLimit != 3 || retried.RetryDelaySeconds != 30 {
+		t.Fatalf("expected retry metadata to increment, got %+v", retried)
+	}
+	if retried.RetryOfExecutionID != failed.ID {
+		t.Fatalf("expected retry_of to point at failed execution, got %+v", retried)
 	}
 }
 
