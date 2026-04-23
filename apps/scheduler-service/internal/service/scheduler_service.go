@@ -35,16 +35,20 @@ type Repository interface {
 
 type ExecutionClient interface {
 	Create(ctx context.Context, input CreateExecutionInput) (string, error)
+	MaterializeRetry(ctx context.Context) (bool, error)
 }
 
 type CreateExecutionInput struct {
-	ScheduleID     string
-	ProjectID      string
-	SpiderID       string
-	Image          string
-	Command        []string
-	TriggerSource  string
-	ScheduledFor   time.Time
+	ScheduleID         string
+	ProjectID          string
+	SpiderID           string
+	Image              string
+	Command            []string
+	TriggerSource      string
+	ScheduledFor       time.Time
+	RetryLimit         int
+	RetryCount         int
+	RetryDelaySeconds  int
 }
 
 type Option func(*SchedulerService)
@@ -57,8 +61,9 @@ type memoryRepository struct {
 type noopExecutionClient struct{}
 
 type HTTPExecutionClient struct {
-	baseURL string
-	client  *http.Client
+	baseURL       string
+	internalToken string
+	client        *http.Client
 }
 
 func (r *memoryRepository) Create(_ context.Context, schedule model.Schedule) error {
@@ -116,9 +121,14 @@ func (noopExecutionClient) Create(_ context.Context, _ CreateExecutionInput) (st
 	return "", nil
 }
 
-func NewHTTPExecutionClient(baseURL string) *HTTPExecutionClient {
+func (noopExecutionClient) MaterializeRetry(_ context.Context) (bool, error) {
+	return false, nil
+}
+
+func NewHTTPExecutionClient(baseURL, internalToken string) *HTTPExecutionClient {
 	return &HTTPExecutionClient{
-		baseURL: baseURL,
+		baseURL:       baseURL,
+		internalToken: internalToken,
 		client: &http.Client{
 			Timeout: 10 * time.Second,
 		},
@@ -134,6 +144,9 @@ func (c *HTTPExecutionClient) Create(ctx context.Context, input CreateExecutionI
 		"triggerSource": input.TriggerSource,
 		"scheduleId":    input.ScheduleID,
 		"scheduledFor":  input.ScheduledFor.Format(time.RFC3339),
+		"retryLimit":    input.RetryLimit,
+		"retryCount":    input.RetryCount,
+		"retryDelaySeconds": input.RetryDelaySeconds,
 	})
 	if err != nil {
 		return "", err
@@ -167,6 +180,31 @@ func (c *HTTPExecutionClient) Create(ctx context.Context, input CreateExecutionI
 	return payload.ID, nil
 }
 
+func (c *HTTPExecutionClient) MaterializeRetry(ctx context.Context) (bool, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.baseURL+"/internal/v1/executions/retries/materialize", nil)
+	if err != nil {
+		return false, err
+	}
+	if c.internalToken != "" {
+		req.Header.Set("X-Internal-Token", c.internalToken)
+	}
+
+	resp, err := c.client.Do(req)
+	if err != nil {
+		return false, err
+	}
+	defer resp.Body.Close()
+
+	switch resp.StatusCode {
+	case http.StatusCreated:
+		return true, nil
+	case http.StatusNoContent:
+		return false, nil
+	default:
+		return false, fmt.Errorf("retry materialization returned status %d", resp.StatusCode)
+	}
+}
+
 func WithNow(now func() time.Time) Option {
 	return func(s *SchedulerService) {
 		s.now = now
@@ -196,7 +234,7 @@ func NewSchedulerService(repo Repository, executionClient ExecutionClient, optio
 	return svc
 }
 
-func (s *SchedulerService) Create(projectID, spiderID, name, cronExpr, image string, command []string, enabled bool) (model.Schedule, error) {
+func (s *SchedulerService) Create(projectID, spiderID, name, cronExpr, image string, command []string, enabled bool, retryLimit, retryDelaySeconds int) (model.Schedule, error) {
 	if projectID == "" || spiderID == "" || name == "" || cronExpr == "" || image == "" {
 		return model.Schedule{}, ErrInvalidSchedule
 	}
@@ -211,6 +249,8 @@ func (s *SchedulerService) Create(projectID, spiderID, name, cronExpr, image str
 		Enabled:   enabled,
 		Image:     image,
 		Command:   append([]string(nil), command...),
+		RetryLimit: retryLimit,
+		RetryDelaySeconds: retryDelaySeconds,
 		CreatedAt: createdAt,
 	}
 
@@ -264,13 +304,16 @@ func (s *SchedulerService) MaterializeDue(ctx context.Context) (int, error) {
 			}
 
 			_, err = s.executionClient.Create(ctx, CreateExecutionInput{
-				ScheduleID:    schedule.ID,
-				ProjectID:     schedule.ProjectID,
-				SpiderID:      schedule.SpiderID,
-				Image:         schedule.Image,
-				Command:       append([]string(nil), schedule.Command...),
-				TriggerSource: "scheduled",
-				ScheduledFor:  next,
+				ScheduleID:        schedule.ID,
+				ProjectID:         schedule.ProjectID,
+				SpiderID:          schedule.SpiderID,
+				Image:             schedule.Image,
+				Command:           append([]string(nil), schedule.Command...),
+				TriggerSource:     "scheduled",
+				ScheduledFor:      next,
+				RetryLimit:        schedule.RetryLimit,
+				RetryCount:        0,
+				RetryDelaySeconds: schedule.RetryDelaySeconds,
 			})
 			if err != nil {
 				if rollbackErr := s.repo.RestoreLastMaterialized(ctx, schedule.ID, previous, next); rollbackErr != nil {
@@ -295,6 +338,15 @@ func (s *SchedulerService) Run(ctx context.Context, pollInterval time.Duration) 
 	for {
 		if _, err := s.MaterializeDue(ctx); err != nil {
 			return err
+		}
+		for retryBatch := 0; retryBatch < maxCatchUpRunsPerPoll; retryBatch++ {
+			materializedRetry, err := s.executionClient.MaterializeRetry(ctx)
+			if err != nil {
+				return err
+			}
+			if !materializedRetry {
+				break
+			}
 		}
 
 		select {

@@ -3,19 +3,24 @@ package model
 import "time"
 
 type Execution struct {
-	ID            string         `json:"id"`
-	ProjectID     string         `json:"projectId"`
-	SpiderID      string         `json:"spiderId"`
-	NodeID        string         `json:"nodeId,omitempty"`
-	Status        string         `json:"status"`
-	TriggerSource string         `json:"triggerSource"`
-	Image         string         `json:"image"`
-	Command       []string       `json:"command"`
-	ErrorMessage  string         `json:"errorMessage,omitempty"`
-	CreatedAt     time.Time      `json:"createdAt"`
-	StartedAt     *time.Time     `json:"startedAt,omitempty"`
-	FinishedAt    *time.Time     `json:"finishedAt,omitempty"`
-	Logs          []ExecutionLog `json:"logs,omitempty"`
+	ID                string         `json:"id"`
+	ProjectID         string         `json:"projectId"`
+	SpiderID          string         `json:"spiderId"`
+	NodeID            string         `json:"nodeId,omitempty"`
+	Status            string         `json:"status"`
+	TriggerSource     string         `json:"triggerSource"`
+	Image             string         `json:"image"`
+	Command           []string       `json:"command"`
+	RetryLimit        int            `json:"retryLimit"`
+	RetryCount        int            `json:"retryCount"`
+	RetryDelaySeconds int            `json:"retryDelaySeconds"`
+	RetryOfExecutionID string        `json:"retryOfExecutionId,omitempty"`
+	ErrorMessage      string         `json:"errorMessage,omitempty"`
+	CreatedAt         time.Time      `json:"createdAt"`
+	StartedAt         *time.Time     `json:"startedAt,omitempty"`
+	FinishedAt        *time.Time     `json:"finishedAt,omitempty"`
+	RetriedAt         *time.Time     `json:"retriedAt,omitempty"`
+	Logs              []ExecutionLog `json:"logs,omitempty"`
 }
 
 type ExecutionLog struct {

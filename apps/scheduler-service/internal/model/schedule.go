@@ -11,6 +11,8 @@ type Schedule struct {
 	Enabled            bool       `json:"enabled"`
 	Image              string     `json:"image"`
 	Command            []string   `json:"command,omitempty"`
+	RetryLimit         int        `json:"retryLimit"`
+	RetryDelaySeconds  int        `json:"retryDelaySeconds"`
 	CreatedAt          time.Time  `json:"createdAt"`
 	LastMaterializedAt *time.Time `json:"lastMaterializedAt,omitempty"`
 }

@@ -22,7 +22,7 @@ func main() {
 
 	schedulerService := service.NewSchedulerService(
 		schedulerrepo.NewPostgresRepository(db),
-		service.NewHTTPExecutionClient(cfg.ExecutionServiceURL),
+		service.NewHTTPExecutionClient(cfg.ExecutionServiceURL, cfg.JWTSecret),
 	)
 	go func() {
 		if err := schedulerService.Run(context.Background(), 15*time.Second); err != nil {

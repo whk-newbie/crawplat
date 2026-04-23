@@ -26,9 +26,9 @@ func (r *ExecutionRepository) Create(ctx context.Context, exec model.Execution) 
 	}
 
 	_, err = r.db.ExecContext(ctx, `
-		INSERT INTO executions (id, project_id, spider_id, node_id, status, trigger_source, image, command, started_at, finished_at, error_message)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
-	`, exec.ID, exec.ProjectID, exec.SpiderID, nullableString(exec.NodeID), exec.Status, exec.TriggerSource, exec.Image, string(command), exec.StartedAt, exec.FinishedAt, nullableString(exec.ErrorMessage))
+		INSERT INTO executions (id, project_id, spider_id, node_id, status, trigger_source, image, command, retry_limit, retry_count, retry_delay_seconds, retry_of_execution_id, started_at, finished_at, error_message, retried_at)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
+	`, exec.ID, exec.ProjectID, exec.SpiderID, nullableString(exec.NodeID), exec.Status, exec.TriggerSource, exec.Image, string(command), exec.RetryLimit, exec.RetryCount, exec.RetryDelaySeconds, nullableString(exec.RetryOfExecutionID), exec.StartedAt, exec.FinishedAt, nullableString(exec.ErrorMessage), exec.RetriedAt)
 	if err != nil {
 		return model.Execution{}, err
 	}
@@ -42,12 +42,14 @@ func (r *ExecutionRepository) Get(ctx context.Context, id string) (model.Executi
 		nodeID       sql.NullString
 		commandRaw   []byte
 		errorMessage sql.NullString
+		retryOfExecutionID sql.NullString
 		startedAt    sql.NullTime
 		finishedAt   sql.NullTime
+		retriedAt    sql.NullTime
 	)
 
 	err := r.db.QueryRowContext(ctx, `
-		SELECT id, project_id, spider_id, node_id, status, trigger_source, image, command, error_message, created_at, started_at, finished_at
+		SELECT id, project_id, spider_id, node_id, status, trigger_source, image, command, error_message, created_at, started_at, finished_at, retry_limit, retry_count, retry_delay_seconds, retry_of_execution_id, retried_at
 		FROM executions
 		WHERE id = $1
 	`, id).Scan(
@@ -63,6 +65,11 @@ func (r *ExecutionRepository) Get(ctx context.Context, id string) (model.Executi
 		&exec.CreatedAt,
 		&startedAt,
 		&finishedAt,
+		&exec.RetryLimit,
+		&exec.RetryCount,
+		&exec.RetryDelaySeconds,
+		&retryOfExecutionID,
+		&retriedAt,
 	)
 	if err != nil {
 		if err == sql.ErrNoRows {
@@ -77,6 +84,9 @@ func (r *ExecutionRepository) Get(ctx context.Context, id string) (model.Executi
 	if errorMessage.Valid {
 		exec.ErrorMessage = errorMessage.String
 	}
+	if retryOfExecutionID.Valid {
+		exec.RetryOfExecutionID = retryOfExecutionID.String
+	}
 	if startedAt.Valid {
 		t := startedAt.Time
 		exec.StartedAt = &t
@@ -84,6 +94,10 @@ func (r *ExecutionRepository) Get(ctx context.Context, id string) (model.Executi
 	if finishedAt.Valid {
 		t := finishedAt.Time
 		exec.FinishedAt = &t
+	}
+	if retriedAt.Valid {
+		t := retriedAt.Time
+		exec.RetriedAt = &t
 	}
 	if err := json.Unmarshal(commandRaw, &exec.Command); err != nil {
 		return model.Execution{}, err
@@ -143,6 +157,92 @@ func (r *ExecutionRepository) Delete(ctx context.Context, id string) error {
 		return err
 	}
 	return ensureRowsAffected(result)
+}
+
+func (r *ExecutionRepository) ClaimNextRetryCandidate(ctx context.Context, now time.Time) (model.Execution, bool, error) {
+	var exec model.Execution
+	var (
+		nodeID            sql.NullString
+		commandRaw        []byte
+		errorMessage      sql.NullString
+		startedAt         sql.NullTime
+		finishedAt        sql.NullTime
+		retryOfExecutionID sql.NullString
+		retriedAt         sql.NullTime
+	)
+
+	err := r.db.QueryRowContext(ctx, `
+		UPDATE executions
+		SET retried_at = $2
+		WHERE id = (
+			SELECT id
+			FROM executions
+			WHERE status = 'failed'
+			  AND retried_at IS NULL
+			  AND retry_limit > retry_count
+			  AND finished_at IS NOT NULL
+			  AND finished_at + make_interval(secs => retry_delay_seconds) <= $1
+			ORDER BY finished_at ASC, id ASC
+			LIMIT 1
+		)
+		RETURNING id, project_id, spider_id, node_id, status, trigger_source, image, command, error_message, created_at, started_at, finished_at, retry_limit, retry_count, retry_delay_seconds, retry_of_execution_id, retried_at
+	`, now, now).Scan(
+		&exec.ID,
+		&exec.ProjectID,
+		&exec.SpiderID,
+		&nodeID,
+		&exec.Status,
+		&exec.TriggerSource,
+		&exec.Image,
+		&commandRaw,
+		&errorMessage,
+		&exec.CreatedAt,
+		&startedAt,
+		&finishedAt,
+		&exec.RetryLimit,
+		&exec.RetryCount,
+		&exec.RetryDelaySeconds,
+		&retryOfExecutionID,
+		&retriedAt,
+	)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return model.Execution{}, false, nil
+		}
+		return model.Execution{}, false, err
+	}
+
+	if nodeID.Valid {
+		exec.NodeID = nodeID.String
+	}
+	if errorMessage.Valid {
+		exec.ErrorMessage = errorMessage.String
+	}
+	if retryOfExecutionID.Valid {
+		exec.RetryOfExecutionID = retryOfExecutionID.String
+	}
+	if startedAt.Valid {
+		t := startedAt.Time
+		exec.StartedAt = &t
+	}
+	if finishedAt.Valid {
+		t := finishedAt.Time
+		exec.FinishedAt = &t
+	}
+	if retriedAt.Valid {
+		t := retriedAt.Time
+		exec.RetriedAt = &t
+	}
+	if err := json.Unmarshal(commandRaw, &exec.Command); err != nil {
+		return model.Execution{}, false, err
+	}
+
+	return exec, true, nil
+}
+
+func (r *ExecutionRepository) ResetRetryClaim(ctx context.Context, id string) error {
+	_, err := r.db.ExecContext(ctx, `UPDATE executions SET retried_at = NULL WHERE id = $1`, id)
+	return err
 }
 
 func nullableString(value string) any {
