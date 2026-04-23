@@ -42,20 +42,25 @@ const loading = ref(true)
 const error = ref('')
 
 const counterDefinitions = [
-  ['activeExecutions', 'Active executions'],
-  ['runningExecutions', 'Running executions'],
-  ['queuedExecutions', 'Queued executions'],
-  ['failedExecutions', 'Failed executions'],
-  ['healthyNodes', 'Healthy nodes'],
-  ['activeNodes', 'Active nodes'],
-  ['nodesOnline', 'Nodes online'],
-  ['datasourceChecks', 'Datasource checks'],
+  ['executions.total', 'Total executions'],
+  ['executions.pending', 'Pending executions'],
+  ['executions.running', 'Running executions'],
+  ['executions.failed', 'Failed executions'],
+  ['executions.succeeded', 'Succeeded executions'],
+  ['nodes.total', 'Total nodes'],
+  ['nodes.online', 'Nodes online'],
+  ['nodes.offline', 'Nodes offline'],
 ]
 
 const counterEntries = computed(() =>
   counterDefinitions
-    .map(([key, label]) => {
-      const value = overview.value?.[key]
+    .map(([path, label]) => {
+      const value = path.split('.').reduce<unknown>((current, segment) => {
+        if (current && typeof current === 'object' && segment in current) {
+          return (current as Record<string, unknown>)[segment]
+        }
+        return undefined
+      }, overview.value)
       return typeof value === 'number' || typeof value === 'string'
         ? { label, value }
         : null
