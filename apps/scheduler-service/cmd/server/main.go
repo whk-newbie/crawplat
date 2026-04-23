@@ -1,7 +1,9 @@
 package main
 
 import (
+	"context"
 	"log"
+	"time"
 
 	"crawler-platform/apps/scheduler-service/internal/api"
 	schedulerrepo "crawler-platform/apps/scheduler-service/internal/repo"
@@ -18,8 +20,18 @@ func main() {
 	}
 	defer db.Close()
 
-	router := api.NewRouter(service.NewSchedulerService(schedulerrepo.NewPostgresRepository(db)))
-	if err := router.Run(":8086"); err != nil {
+	schedulerService := service.NewSchedulerService(
+		schedulerrepo.NewPostgresRepository(db),
+		service.NewHTTPExecutionClient(cfg.ExecutionServiceURL),
+	)
+	go func() {
+		if err := schedulerService.Run(context.Background(), 15*time.Second); err != nil {
+			log.Printf("scheduler loop stopped: %v", err)
+		}
+	}()
+
+	router := api.NewRouter(schedulerService)
+	if err := router.Run(":8087"); err != nil {
 		log.Fatal(err)
 	}
 }

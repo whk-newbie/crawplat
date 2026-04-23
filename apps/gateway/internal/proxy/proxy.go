@@ -23,6 +23,8 @@ func ResolveServiceURL(name string) string {
 		return "http://node-service:8084"
 	case "datasource-service":
 		return "http://datasource-service:8086"
+	case "scheduler-service":
+		return "http://scheduler-service:8087"
 	default:
 		return ""
 	}

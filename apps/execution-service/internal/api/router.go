@@ -17,21 +17,23 @@ func NewRouter(executionService *service.ExecutionService) *gin.Engine {
 
 	createExecutionHandler := func(c *gin.Context) {
 		var req struct {
-			ProjectID string   `json:"projectId" binding:"required"`
-			SpiderID  string   `json:"spiderId" binding:"required"`
-			Image     string   `json:"image" binding:"required"`
-			Command   []string `json:"command"`
+			ProjectID     string   `json:"projectId" binding:"required"`
+			SpiderID      string   `json:"spiderId" binding:"required"`
+			Image         string   `json:"image" binding:"required"`
+			Command       []string `json:"command"`
+			TriggerSource string   `json:"triggerSource"`
 		}
 		if err := c.ShouldBindJSON(&req); err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 			return
 		}
 
-		exec, err := executionService.CreateManual(context.Background(), service.CreateManualInput{
-			ProjectID: req.ProjectID,
-			SpiderID:  req.SpiderID,
-			Image:     req.Image,
-			Command:   req.Command,
+		exec, err := executionService.Create(context.Background(), service.CreateExecutionInput{
+			ProjectID:     req.ProjectID,
+			SpiderID:      req.SpiderID,
+			Image:         req.Image,
+			Command:       req.Command,
+			TriggerSource: req.TriggerSource,
 		})
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})

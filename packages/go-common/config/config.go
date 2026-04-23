@@ -3,11 +3,12 @@ package config
 import "os"
 
 type App struct {
-	HTTPAddr    string
-	PostgresDSN string
-	RedisAddr   string
-	MongoURI    string
-	JWTSecret   string
+	HTTPAddr            string
+	PostgresDSN         string
+	RedisAddr           string
+	MongoURI            string
+	JWTSecret           string
+	ExecutionServiceURL string
 }
 
 func Load() App {
@@ -17,6 +18,7 @@ func Load() App {
 		RedisAddr:   os.Getenv("REDIS_ADDR"),
 		MongoURI:    os.Getenv("MONGO_URI"),
 		JWTSecret:   os.Getenv("JWT_SECRET"),
+		ExecutionServiceURL: envOrDefault("EXECUTION_SERVICE_URL", "http://execution-service:8085"),
 	}
 }
 
