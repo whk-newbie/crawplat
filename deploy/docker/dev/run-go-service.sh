@@ -14,6 +14,7 @@ bin = "/tmp/${SERVICE_BINARY}"
 delay = 500
 exclude_dir = ["apps/web/node_modules", "apps/web/dist", ".git", ".worktrees", ".docker-bin"]
 include_ext = ["go"]
+include_file = ["go.mod", "go.sum"]
 stop_on_error = true
 
 [log]
