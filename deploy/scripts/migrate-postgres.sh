@@ -2,7 +2,7 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-COMPOSE_FILE="${ROOT_DIR}/deploy/docker-compose/docker-compose.mcp.yml"
+COMPOSE_FILE="${COMPOSE_FILE:-${ROOT_DIR}/deploy/docker-compose/docker-compose.mcp.yml}"
 MIGRATIONS_DIR="${ROOT_DIR}/deploy/migrations/postgres"
 DB_USER="${POSTGRES_USER:-crawler}"
 DB_NAME="${POSTGRES_DB:-crawler}"

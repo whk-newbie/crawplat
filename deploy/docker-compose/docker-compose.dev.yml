@@ -1,0 +1,240 @@
+services:
+  postgres:
+    image: postgres:16
+    env_file:
+      - ../env/.env.example
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-crawler}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-crawler}
+      POSTGRES_DB: ${POSTGRES_DB:-crawler}
+    volumes:
+      - ../migrations/postgres:/migrations:ro
+
+  redis:
+    image: redis:7
+
+  mongo:
+    image: mongo:7
+
+  gateway:
+    build:
+      context: ../..
+      dockerfile: deploy/docker/dev/go-dev.Dockerfile
+    depends_on:
+      - iam-service
+      - project-service
+      - spider-service
+      - execution-service
+      - node-service
+      - datasource-service
+      - scheduler-service
+      - monitor-service
+    env_file:
+      - ../env/.env.example
+    environment:
+      SERVICE_BINARY: gateway
+      SERVICE_BUILD_TARGET: ./apps/gateway/cmd/server
+    command: ["/workspace/deploy/docker/dev/run-go-service.sh"]
+    working_dir: /workspace
+    volumes:
+      - ../..:/workspace
+      - go-mod-cache:/go/pkg/mod
+      - go-build-cache:/root/.cache/go-build
+    ports:
+      - "8080:8080"
+
+  iam-service:
+    build:
+      context: ../..
+      dockerfile: deploy/docker/dev/go-dev.Dockerfile
+    depends_on:
+      - postgres
+    env_file:
+      - ../env/.env.example
+    environment:
+      IAM_ENABLE_SEED_ADMIN: "true"
+      SERVICE_BINARY: iam-service
+      SERVICE_BUILD_TARGET: ./apps/iam-service/cmd/server
+    command: ["/workspace/deploy/docker/dev/run-go-service.sh"]
+    working_dir: /workspace
+    volumes:
+      - ../..:/workspace
+      - go-mod-cache:/go/pkg/mod
+      - go-build-cache:/root/.cache/go-build
+
+  project-service:
+    build:
+      context: ../..
+      dockerfile: deploy/docker/dev/go-dev.Dockerfile
+    depends_on:
+      - postgres
+    env_file:
+      - ../env/.env.example
+    environment:
+      SERVICE_BINARY: project-service
+      SERVICE_BUILD_TARGET: ./apps/project-service/cmd/server
+    command: ["/workspace/deploy/docker/dev/run-go-service.sh"]
+    working_dir: /workspace
+    volumes:
+      - ../..:/workspace
+      - go-mod-cache:/go/pkg/mod
+      - go-build-cache:/root/.cache/go-build
+
+  spider-service:
+    build:
+      context: ../..
+      dockerfile: deploy/docker/dev/go-dev.Dockerfile
+    depends_on:
+      - postgres
+    env_file:
+      - ../env/.env.example
+    environment:
+      SERVICE_BINARY: spider-service
+      SERVICE_BUILD_TARGET: ./apps/spider-service/cmd/server
+    command: ["/workspace/deploy/docker/dev/run-go-service.sh"]
+    working_dir: /workspace
+    volumes:
+      - ../..:/workspace
+      - go-mod-cache:/go/pkg/mod
+      - go-build-cache:/root/.cache/go-build
+
+  execution-service:
+    build:
+      context: ../..
+      dockerfile: deploy/docker/dev/go-dev.Dockerfile
+    depends_on:
+      - postgres
+      - redis
+      - mongo
+    env_file:
+      - ../env/.env.example
+    environment:
+      SERVICE_BINARY: execution-service
+      SERVICE_BUILD_TARGET: ./apps/execution-service/cmd/server
+    command: ["/workspace/deploy/docker/dev/run-go-service.sh"]
+    working_dir: /workspace
+    volumes:
+      - ../..:/workspace
+      - go-mod-cache:/go/pkg/mod
+      - go-build-cache:/root/.cache/go-build
+
+  node-service:
+    build:
+      context: ../..
+      dockerfile: deploy/docker/dev/go-dev.Dockerfile
+    depends_on:
+      - redis
+    env_file:
+      - ../env/.env.example
+    environment:
+      SERVICE_BINARY: node-service
+      SERVICE_BUILD_TARGET: ./apps/node-service/cmd/server
+    command: ["/workspace/deploy/docker/dev/run-go-service.sh"]
+    working_dir: /workspace
+    volumes:
+      - ../..:/workspace
+      - go-mod-cache:/go/pkg/mod
+      - go-build-cache:/root/.cache/go-build
+
+  datasource-service:
+    build:
+      context: ../..
+      dockerfile: deploy/docker/dev/go-dev.Dockerfile
+    depends_on:
+      - postgres
+      - redis
+      - mongo
+    env_file:
+      - ../env/.env.example
+    environment:
+      SERVICE_BINARY: datasource-service
+      SERVICE_BUILD_TARGET: ./apps/datasource-service/cmd/server
+    command: ["/workspace/deploy/docker/dev/run-go-service.sh"]
+    working_dir: /workspace
+    volumes:
+      - ../..:/workspace
+      - go-mod-cache:/go/pkg/mod
+      - go-build-cache:/root/.cache/go-build
+
+  scheduler-service:
+    build:
+      context: ../..
+      dockerfile: deploy/docker/dev/go-dev.Dockerfile
+    depends_on:
+      - postgres
+      - execution-service
+    env_file:
+      - ../env/.env.example
+    environment:
+      EXECUTION_SERVICE_URL: ${EXECUTION_SERVICE_URL:-http://execution-service:8085}
+      SERVICE_BINARY: scheduler-service
+      SERVICE_BUILD_TARGET: ./apps/scheduler-service/cmd/server
+    command: ["/workspace/deploy/docker/dev/run-go-service.sh"]
+    working_dir: /workspace
+    volumes:
+      - ../..:/workspace
+      - go-mod-cache:/go/pkg/mod
+      - go-build-cache:/root/.cache/go-build
+
+  monitor-service:
+    build:
+      context: ../..
+      dockerfile: deploy/docker/dev/go-dev.Dockerfile
+    depends_on:
+      - postgres
+      - redis
+    env_file:
+      - ../env/.env.example
+    environment:
+      HTTP_ADDR: :8088
+      SERVICE_BINARY: monitor-service
+      SERVICE_BUILD_TARGET: ./apps/monitor-service/cmd/server
+    command: ["/workspace/deploy/docker/dev/run-go-service.sh"]
+    working_dir: /workspace
+    volumes:
+      - ../..:/workspace
+      - go-mod-cache:/go/pkg/mod
+      - go-build-cache:/root/.cache/go-build
+
+  agent:
+    build:
+      context: ../..
+      dockerfile: deploy/docker/dev/go-dev.Dockerfile
+    depends_on:
+      - node-service
+      - execution-service
+    env_file:
+      - ../env/.env.example
+    environment:
+      NODE_SERVICE_URL: http://node-service:8084
+      EXECUTION_SERVICE_URL: ${EXECUTION_SERVICE_URL:-http://execution-service:8085}
+      NODE_NAME: mvp-node
+      SERVICE_BINARY: agent
+      SERVICE_BUILD_TARGET: ./apps/agent/cmd/agent
+    command: ["/workspace/deploy/docker/dev/run-go-service.sh"]
+    working_dir: /workspace
+    volumes:
+      - ../..:/workspace
+      - go-mod-cache:/go/pkg/mod
+      - go-build-cache:/root/.cache/go-build
+      - /var/run/docker.sock:/var/run/docker.sock
+
+  web:
+    image: node:22-alpine
+    depends_on:
+      - gateway
+    working_dir: /workspace/apps/web
+    environment:
+      VITE_PROXY_TARGET: http://gateway:8080
+    command: >
+      sh -lc "npm ci && npm run dev -- --host 0.0.0.0 --port 3000"
+    volumes:
+      - ../..:/workspace
+      - web-node-modules:/workspace/apps/web/node_modules
+    ports:
+      - "3000:3000"
+
+volumes:
+  go-mod-cache:
+  go-build-cache:
+  web-node-modules:
