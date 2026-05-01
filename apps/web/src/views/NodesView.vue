@@ -1,183 +1,153 @@
 <template>
-  <main class="page">
-    <section class="card hero">
+  <div>
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px">
       <div>
-        <p class="eyebrow">Node inventory</p>
-        <h1>Nodes</h1>
-        <p>Browse node status and inspect heartbeat/execution detail.</p>
+        <h2 style="margin: 0">Nodes</h2>
+        <p style="margin: 4px 0 0; color: var(--el-text-color-secondary); font-size: 14px">
+          Browse node status and inspect heartbeat/execution detail.
+        </p>
       </div>
-      <button :disabled="loadingList" @click="loadNodes">
-        {{ loadingList ? 'Refreshing...' : 'Refresh' }}
-      </button>
-    </section>
+      <el-button :loading="loadingList" @click="loadNodes">Refresh</el-button>
+    </div>
 
-    <section class="layout">
-      <article class="card">
-        <h2>Node List</h2>
-        <p v-if="loadingList">Loading nodes...</p>
-        <p v-else-if="listError" class="error">{{ listError }}</p>
-        <p v-else-if="nodes.length === 0">No nodes found.</p>
-        <ul v-else class="node-list">
-          <li v-for="node in nodes" :key="node.id">
-            <button
-              :class="{ active: node.id === selectedNodeId }"
-              @click="selectNode(node.id)"
-            >
-              <span>{{ node.name }}</span>
-              <small>{{ node.status }}</small>
-            </button>
-          </li>
-        </ul>
-      </article>
+    <el-row :gutter="16">
+      <el-col :span="8" :xs="24">
+        <el-card>
+          <template #header>Node List</template>
+          <el-table
+            v-loading="loadingList"
+            :data="nodes"
+            highlight-current-row
+            @current-change="onNodeSelect"
+            style="width: 100%"
+          >
+            <el-table-column prop="name" label="Name" />
+            <el-table-column prop="status" label="Status" width="90">
+              <template #default="{ row }">
+                <el-tag :type="row.status === 'online' ? 'success' : 'danger'" size="small">{{ row.status }}</el-tag>
+              </template>
+            </el-table-column>
+            <template #empty>
+              <el-empty description="No nodes found" />
+            </template>
+          </el-table>
+        </el-card>
+      </el-col>
 
-      <article class="card">
-        <h2>Node Detail</h2>
-        <p v-if="loadingDetail">Loading detail...</p>
-        <p v-else-if="detailError" class="error">{{ detailError }}</p>
-        <p v-else-if="!selectedDetail">Select a node to view detail.</p>
-        <template v-else>
-          <dl class="details">
-            <div>
-              <dt>ID</dt>
-              <dd>{{ selectedDetail.id }}</dd>
+      <el-col :span="16" :xs="24">
+        <el-card v-loading="loadingDetail">
+          <template #header>Node Detail</template>
+
+          <el-empty v-if="!selectedDetail && !detailError" description="Select a node to view details" />
+          <el-alert v-if="detailError" :title="detailError" type="error" :closable="false" show-icon />
+
+          <template v-if="selectedDetail">
+            <el-descriptions :border="true" :column="2" style="margin-bottom: 16px">
+              <el-descriptions-item label="ID">{{ selectedDetail.id }}</el-descriptions-item>
+              <el-descriptions-item label="Status">
+                <el-tag :type="selectedDetail.status === 'online' ? 'success' : 'danger'" size="small">{{ selectedDetail.status }}</el-tag>
+              </el-descriptions-item>
+              <el-descriptions-item label="Last Seen">{{ selectedDetail.lastSeenAt || '-' }}</el-descriptions-item>
+            </el-descriptions>
+
+            <h4 style="margin: 16px 0 8px">Capabilities</h4>
+            <div v-if="selectedDetail.capabilities.length" style="display: flex; flex-wrap: wrap; gap: 6px">
+              <el-tag v-for="cap in selectedDetail.capabilities" :key="cap" size="small">{{ cap }}</el-tag>
             </div>
-            <div>
-              <dt>Status</dt>
-              <dd>{{ selectedDetail.status }}</dd>
+            <p v-else style="color: var(--el-text-color-secondary)">No capabilities.</p>
+
+            <h4 style="margin: 16px 0 8px">Heartbeats</h4>
+            <el-timeline v-if="selectedDetail.heartbeats.length">
+              <el-timeline-item
+                v-for="(hb, idx) in selectedDetail.heartbeats"
+                :key="`${hb.seenAt}-${idx}`"
+                :timestamp="hb.seenAt"
+                placement="top"
+              >
+                {{ hb.status || 'heartbeat' }}
+              </el-timeline-item>
+            </el-timeline>
+            <el-empty v-else description="No heartbeat history" :image-size="60" />
+
+            <h4 style="margin: 16px 0 8px">Recent Executions</h4>
+            <div style="display: flex; flex-wrap: wrap; gap: 8px; align-items: end; margin-bottom: 12px">
+              <el-select v-model="executionStatus" placeholder="Status" style="width: 120px" @change="reloadSelectedDetail">
+                <el-option label="All" value="" />
+                <el-option label="Queued" value="queued" />
+                <el-option label="Running" value="running" />
+                <el-option label="Succeeded" value="succeeded" />
+                <el-option label="Failed" value="failed" />
+                <el-option label="Cancelled" value="cancelled" />
+              </el-select>
+              <el-date-picker v-model="executionFromInput" type="datetime" placeholder="From" style="width: 180px" @change="resetExecutionPageAndReload" />
+              <el-date-picker v-model="executionToInput" type="datetime" placeholder="To" style="width: 180px" @change="resetExecutionPageAndReload" />
+              <el-select v-model="executionLimit" style="width: 80px" @change="resetExecutionPageAndReload">
+                <el-option :value="10" label="10" />
+                <el-option :value="20" label="20" />
+                <el-option :value="50" label="50" />
+              </el-select>
+              <el-button-group>
+                <el-button :disabled="loadingDetail || executionOffset === 0" @click="prevExecutionsPage">Prev</el-button>
+                <el-button :disabled="loadingDetail" @click="nextExecutionsPage">Next</el-button>
+              </el-button-group>
+              <span style="font-size: 12px; color: var(--el-text-color-secondary)">offset: {{ executionOffset }}</span>
             </div>
-            <div>
-              <dt>Last Seen</dt>
-              <dd>{{ selectedDetail.lastSeenAt || '-' }}</dd>
+            <el-table v-if="selectedDetail.recentExecutions.length" :data="selectedDetail.recentExecutions" size="small">
+              <el-table-column prop="id" label="ID" />
+              <el-table-column prop="spiderId" label="Spider" />
+              <el-table-column prop="status" label="Status" width="100">
+                <template #default="{ row }">
+                  <el-tag :type="execStatusType(row.status)" size="small">{{ row.status }}</el-tag>
+                </template>
+              </el-table-column>
+            </el-table>
+            <el-empty v-else description="No recent executions" :image-size="60" />
+
+            <h4 style="margin: 16px 0 8px">Online Sessions</h4>
+            <div style="display: flex; flex-wrap: wrap; gap: 8px; align-items: end; margin-bottom: 12px">
+              <div>
+                <span style="font-size: 12px; color: var(--el-text-color-secondary); display: block; margin-bottom: 4px">Limit</span>
+                <el-input-number v-model="sessionLimit" :min="1" size="small" style="width: 100px" />
+              </div>
+              <div>
+                <span style="font-size: 12px; color: var(--el-text-color-secondary); display: block; margin-bottom: 4px">Gap (s)</span>
+                <el-input-number v-model="sessionGapSeconds" :min="1" size="small" style="width: 100px" />
+              </div>
+              <el-button :loading="loadingSessions" size="small" @click="reloadSelectedSessions">Load Sessions</el-button>
             </div>
-          </dl>
-
-          <h3>Capabilities</h3>
-          <div class="chips">
-            <span v-for="capability in selectedDetail.capabilities" :key="capability">
-              {{ capability }}
-            </span>
-            <p v-if="selectedDetail.capabilities.length === 0">No capabilities.</p>
-          </div>
-
-          <h3>Heartbeats</h3>
-          <ul v-if="selectedDetail.heartbeats.length" class="simple-list">
-            <li v-for="(heartbeat, index) in selectedDetail.heartbeats" :key="`${heartbeat.seenAt}-${index}`">
-              {{ heartbeat.seenAt }}
-              <small v-if="heartbeat.status">({{ heartbeat.status }})</small>
-            </li>
-          </ul>
-          <p v-else>No heartbeat history yet.</p>
-
-          <h3>Recent Executions</h3>
-          <div class="toolbar wrap">
-            <label>
-              Status
-              <select v-model="executionStatus" :disabled="loadingDetail" @change="reloadSelectedDetail">
-                <option value="">all</option>
-                <option value="queued">queued</option>
-                <option value="running">running</option>
-                <option value="succeeded">succeeded</option>
-                <option value="failed">failed</option>
-                <option value="cancelled">cancelled</option>
-              </select>
-            </label>
-            <label>
-              From
-              <input
-                v-model="executionFromInput"
-                :disabled="loadingDetail"
-                type="datetime-local"
-                @change="resetExecutionPageAndReload"
-              />
-            </label>
-            <label>
-              To
-              <input
-                v-model="executionToInput"
-                :disabled="loadingDetail"
-                type="datetime-local"
-                @change="resetExecutionPageAndReload"
-              />
-            </label>
-            <label>
-              Limit
-              <select v-model.number="executionLimit" :disabled="loadingDetail" @change="resetExecutionPageAndReload">
-                <option :value="10">10</option>
-                <option :value="20">20</option>
-                <option :value="50">50</option>
-              </select>
-            </label>
-            <button :disabled="loadingDetail || executionOffset === 0" @click="prevExecutionsPage">Prev</button>
-            <button :disabled="loadingDetail" @click="nextExecutionsPage">Next</button>
-            <small>offset: {{ executionOffset }}</small>
-          </div>
-          <ul v-if="selectedDetail.recentExecutions.length" class="simple-list">
-            <li v-for="execution in selectedDetail.recentExecutions" :key="execution.id">
-              <strong>{{ execution.id }}</strong>
-              <span>{{ execution.status }}</span>
-              <small>{{ execution.spiderId || '-' }}</small>
-            </li>
-          </ul>
-          <p v-else>No recent executions.</p>
-
-          <h3>Online Sessions</h3>
-          <div class="toolbar wrap">
-            <label>
-              Limit
-              <input
-                v-model.number="sessionLimit"
-                :disabled="loadingSessions"
-                min="1"
-                step="1"
-                type="number"
-              />
-            </label>
-            <label>
-              Gap Seconds
-              <input
-                v-model.number="sessionGapSeconds"
-                :disabled="loadingSessions"
-                min="1"
-                step="1"
-                type="number"
-              />
-            </label>
-            <button :disabled="loadingSessions" @click="reloadSelectedSessions">
-              {{ loadingSessions ? 'Loading...' : 'Load Sessions' }}
-            </button>
-          </div>
-          <div class="session-summary">
-            <article class="session-stat">
-              <small>sessions</small>
-              <strong>{{ sessionSummary.totalSessions }}</strong>
-            </article>
-            <article class="session-stat">
-              <small>heartbeats</small>
-              <strong>{{ sessionSummary.totalHeartbeatCount }}</strong>
-            </article>
-            <article class="session-stat">
-              <small>online seconds</small>
-              <strong>{{ sessionSummary.totalOnlineDurationSeconds }}</strong>
-            </article>
-          </div>
-          <p v-if="sessionsError" class="error">{{ sessionsError }}</p>
-          <ul v-else-if="sessions.length" class="simple-list">
-            <li v-for="(session, index) in sessions" :key="`${session.startedAt}-${index}`">
-              <strong>{{ session.startedAt }}</strong>
-              <span>~ {{ session.endedAt || 'now' }}</span>
-              <small>heartbeats: {{ session.heartbeatCount ?? '-' }}</small>
-              <small>duration: {{ session.durationSeconds ?? '-' }}s</small>
-            </li>
-          </ul>
-          <p v-else>No session history yet.</p>
-        </template>
-      </article>
-    </section>
-  </main>
+            <el-row :gutter="12" style="margin-bottom: 12px">
+              <el-col :span="8">
+                <el-card shadow="never"><el-statistic title="Sessions" :value="sessionSummary.totalSessions" /></el-card>
+              </el-col>
+              <el-col :span="8">
+                <el-card shadow="never"><el-statistic title="Heartbeats" :value="sessionSummary.totalHeartbeatCount" /></el-card>
+              </el-col>
+              <el-col :span="8">
+                <el-card shadow="never"><el-statistic title="Online (s)" :value="sessionSummary.totalOnlineDurationSeconds" /></el-card>
+              </el-col>
+            </el-row>
+            <el-alert v-if="sessionsError" :title="sessionsError" type="error" :closable="false" show-icon />
+            <el-table v-else-if="sessions.length" :data="sessions" size="small">
+              <el-table-column prop="startedAt" label="Started" />
+              <el-table-column label="Ended">
+                <template #default="{ row }">{{ row.endedAt || 'now' }}</template>
+              </el-table-column>
+              <el-table-column prop="heartbeatCount" label="Heartbeats" width="100" />
+              <el-table-column label="Duration" width="100">
+                <template #default="{ row }">{{ row.durationSeconds ?? '-' }}s</template>
+              </el-table-column>
+            </el-table>
+            <el-empty v-else description="No session history" :image-size="60" />
+          </template>
+        </el-card>
+      </el-col>
+    </el-row>
+  </div>
 </template>
 
 <script setup lang="ts">
 import { onMounted, ref } from 'vue'
+import { ElMessage } from 'element-plus'
 import {
   getNodeDetail,
   getNodeSessions,
@@ -211,8 +181,13 @@ const sessionSummary = ref<NodeSessionsSummary>({
   totalOnlineDurationSeconds: 0,
 })
 
+function execStatusType(status: string) {
+  const map: Record<string, string> = { pending: 'info', running: 'warning', succeeded: 'success', failed: 'danger' }
+  return map[status] || 'info'
+}
+
 function normalizeDateInput(value: string) {
-  if (!value.trim()) {
+  if (!value || !value.trim()) {
     return undefined
   }
   const parsed = new Date(value)
@@ -222,10 +197,15 @@ function normalizeDateInput(value: string) {
   return parsed.toISOString()
 }
 
+function onNodeSelect(row: NodeSummary | null) {
+  if (row) {
+    void selectNode(row.id)
+  }
+}
+
 async function loadNodes() {
   loadingList.value = true
   listError.value = ''
-
   try {
     const result = await listNodes()
     nodes.value = result
@@ -234,6 +214,7 @@ async function loadNodes() {
     }
   } catch (err) {
     listError.value = err instanceof Error ? err.message : 'failed to load nodes'
+    ElMessage.error(listError.value)
   } finally {
     loadingList.value = false
   }
@@ -244,18 +225,12 @@ async function selectNode(nodeId: string) {
   executionOffset.value = 0
   selectedDetail.value = null
   sessions.value = []
-  sessionSummary.value = {
-    totalSessions: 0,
-    totalHeartbeatCount: 0,
-    totalOnlineDurationSeconds: 0,
-  }
+  sessionSummary.value = { totalSessions: 0, totalHeartbeatCount: 0, totalOnlineDurationSeconds: 0 }
   await Promise.all([reloadSelectedDetail(), reloadSelectedSessions()])
 }
 
 async function reloadSelectedDetail() {
-  if (!selectedNodeId.value) {
-    return
-  }
+  if (!selectedNodeId.value) return
   detailError.value = ''
   loadingDetail.value = true
   try {
@@ -274,9 +249,7 @@ async function reloadSelectedDetail() {
 }
 
 async function reloadSelectedSessions() {
-  if (!selectedNodeId.value) {
-    return
-  }
+  if (!selectedNodeId.value) return
   sessionsError.value = ''
   loadingSessions.value = true
   try {
@@ -288,6 +261,7 @@ async function reloadSelectedSessions() {
     sessionSummary.value = result.summary
   } catch (err) {
     sessionsError.value = err instanceof Error ? err.message : 'failed to load sessions'
+    ElMessage.error(sessionsError.value)
   } finally {
     loadingSessions.value = false
   }
@@ -299,9 +273,7 @@ async function resetExecutionPageAndReload() {
 }
 
 async function prevExecutionsPage() {
-  if (executionOffset.value === 0) {
-    return
-  }
+  if (executionOffset.value === 0) return
   executionOffset.value = Math.max(0, executionOffset.value - executionLimit.value)
   await reloadSelectedDetail()
 }
@@ -315,153 +287,3 @@ onMounted(() => {
   void loadNodes()
 })
 </script>
-
-<style scoped>
-.page {
-  display: grid;
-  gap: 1rem;
-  padding: 1rem;
-}
-
-.card {
-  border: 1px solid #d0d7de;
-  border-radius: 8px;
-  padding: 1rem;
-}
-
-.hero {
-  display: flex;
-  justify-content: space-between;
-  gap: 1rem;
-}
-
-.eyebrow {
-  margin: 0 0 0.25rem;
-  font-size: 0.75rem;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: #57606a;
-}
-
-.layout {
-  display: grid;
-  gap: 1rem;
-  grid-template-columns: minmax(16rem, 22rem) minmax(0, 1fr);
-}
-
-.node-list {
-  display: grid;
-  gap: 0.5rem;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-.node-list button {
-  width: 100%;
-  border: 1px solid #d0d7de;
-  border-radius: 8px;
-  background: #f6f8fa;
-  padding: 0.5rem 0.75rem;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  text-align: left;
-  cursor: pointer;
-}
-
-.node-list button.active {
-  border-color: #0969da;
-  background: #ddf4ff;
-}
-
-.details {
-  display: grid;
-  gap: 0.5rem;
-}
-
-.details div {
-  display: grid;
-  gap: 0.25rem;
-}
-
-.chips {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.5rem;
-}
-
-.chips span {
-  padding: 0.2rem 0.5rem;
-  border: 1px solid #d0d7de;
-  border-radius: 999px;
-  background: #f6f8fa;
-  font-size: 0.85rem;
-}
-
-.session-summary {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 0.5rem;
-  margin: 0.5rem 0;
-}
-
-.session-stat {
-  border: 1px solid #d0d7de;
-  border-radius: 8px;
-  padding: 0.5rem 0.6rem;
-  background: #f6f8fa;
-}
-
-.session-stat small {
-  display: block;
-  color: #57606a;
-  text-transform: uppercase;
-  font-size: 0.7rem;
-}
-
-.simple-list {
-  display: grid;
-  gap: 0.5rem;
-  padding-left: 1rem;
-}
-
-.simple-list li {
-  display: flex;
-  gap: 0.5rem;
-  align-items: baseline;
-  flex-wrap: wrap;
-}
-
-.error {
-  color: #b42318;
-}
-
-.toolbar {
-  display: flex;
-  gap: 0.75rem;
-  align-items: end;
-  margin-bottom: 0.75rem;
-}
-
-.toolbar label {
-  display: grid;
-  gap: 0.25rem;
-  font-size: 0.85rem;
-}
-
-.toolbar select,
-.toolbar input {
-  min-width: 6rem;
-}
-
-.toolbar.wrap {
-  flex-wrap: wrap;
-}
-
-@media (max-width: 960px) {
-  .layout {
-    grid-template-columns: 1fr;
-  }
-}
-</style>
