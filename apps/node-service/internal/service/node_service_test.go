@@ -50,8 +50,14 @@ func (r *fakeLiveRepo) ListOnline(_ context.Context) ([]Node, error) {
 
 type fakeCatalogRepo struct {
 	nodes       map[string]Node
+	history     map[string][]NodeHeartbeat
+	executions  map[string][]NodeExecution
 	upsertCalls int
 	listCalls   int
+	getByIDErr  error
+	historyErr  error
+	execErr     error
+	lastLimit   int
 	upsertErr   error
 	listErr     error
 }
@@ -85,6 +91,41 @@ func (r *fakeCatalogRepo) ListCatalog(_ context.Context) ([]Node, error) {
 	}
 	sort.Slice(nodes, func(i, j int) bool { return nodes[i].ID < nodes[j].ID })
 	return nodes, nil
+}
+
+func (r *fakeCatalogRepo) GetByID(_ context.Context, nodeID string) (Node, error) {
+	if r.getByIDErr != nil {
+		return Node{}, r.getByIDErr
+	}
+	node, ok := r.nodes[nodeID]
+	if !ok {
+		return Node{}, ErrNodeNotFound
+	}
+	return node, nil
+}
+
+func (r *fakeCatalogRepo) ListHeartbeatHistory(_ context.Context, nodeID string, limit int) ([]NodeHeartbeat, error) {
+	if r.historyErr != nil {
+		return nil, r.historyErr
+	}
+	r.lastLimit = limit
+	history := r.history[nodeID]
+	if len(history) <= limit {
+		return append([]NodeHeartbeat(nil), history...), nil
+	}
+	return append([]NodeHeartbeat(nil), history[:limit]...), nil
+}
+
+func (r *fakeCatalogRepo) ListRecentExecutions(_ context.Context, nodeID string, limit int) ([]NodeExecution, error) {
+	if r.execErr != nil {
+		return nil, r.execErr
+	}
+	r.lastLimit = limit
+	executions := r.executions[nodeID]
+	if len(executions) <= limit {
+		return append([]NodeExecution(nil), executions...), nil
+	}
+	return append([]NodeExecution(nil), executions[:limit]...), nil
 }
 
 func TestHeartbeatWritesLiveAndCatalog(t *testing.T) {
@@ -182,5 +223,79 @@ func TestHeartbeatReturnsCatalogError(t *testing.T) {
 
 	if _, err := svc.Heartbeat("node-a", []string{"go"}); err == nil {
 		t.Fatalf("expected error when catalog upsert fails")
+	}
+}
+
+func TestDetailReturnsNodeInfoHistoryAndExecutions(t *testing.T) {
+	seenAt := time.Unix(1700000000, 0).UTC()
+	startedAt := seenAt.Add(2 * time.Minute)
+	finishedAt := seenAt.Add(3 * time.Minute)
+
+	live := &fakeLiveRepo{
+		nodes: map[string]Node{
+			"node-a": {
+				ID:           "node-a",
+				Name:         "node-a",
+				Status:       "online",
+				Capabilities: []string{"go"},
+				LastSeenAt:   seenAt.Add(10 * time.Second),
+			},
+		},
+	}
+	catalog := &fakeCatalogRepo{
+		nodes: map[string]Node{
+			"node-a": {
+				ID:           "node-a",
+				Name:         "node-a",
+				Capabilities: []string{"go"},
+				LastSeenAt:   seenAt,
+			},
+		},
+		history: map[string][]NodeHeartbeat{
+			"node-a": {
+				{SeenAt: seenAt, Capabilities: []string{"go"}},
+			},
+		},
+		executions: map[string][]NodeExecution{
+			"node-a": {
+				{
+					ID:            "exec-1",
+					ProjectID:     "project-1",
+					SpiderID:      "spider-1",
+					Status:        "succeeded",
+					TriggerSource: "manual",
+					CreatedAt:     seenAt,
+					StartedAt:     &startedAt,
+					FinishedAt:    &finishedAt,
+				},
+			},
+		},
+	}
+	svc := NewNodeServiceWithCatalog(live, catalog)
+
+	detail, err := svc.Detail("node-a", 5)
+	if err != nil {
+		t.Fatalf("Detail returned error: %v", err)
+	}
+	if detail.Node.ID != "node-a" || detail.Node.Status != "online" {
+		t.Fatalf("unexpected node detail: %#v", detail.Node)
+	}
+	if len(detail.HeartbeatHistory) != 1 {
+		t.Fatalf("expected one heartbeat history record, got %#v", detail.HeartbeatHistory)
+	}
+	if len(detail.RecentExecutions) != 1 || detail.RecentExecutions[0].ID != "exec-1" {
+		t.Fatalf("expected one recent execution, got %#v", detail.RecentExecutions)
+	}
+	if catalog.lastLimit != 5 {
+		t.Fatalf("expected limit 5 to be passed to catalog queries, got %d", catalog.lastLimit)
+	}
+}
+
+func TestDetailReturnsNotFound(t *testing.T) {
+	svc := NewNodeServiceWithCatalog(&fakeLiveRepo{}, &fakeCatalogRepo{nodes: map[string]Node{}})
+
+	_, err := svc.Detail("missing", 5)
+	if !errors.Is(err, ErrNodeNotFound) {
+		t.Fatalf("expected ErrNodeNotFound, got %v", err)
 	}
 }

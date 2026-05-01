@@ -7,6 +7,7 @@ import ExecutionDetailView from '../views/ExecutionDetailView.vue'
 import DatasourcesView from '../views/DatasourcesView.vue'
 import MonitorView from '../views/MonitorView.vue'
 import SchedulesView from '../views/SchedulesView.vue'
+import NodesView from '../views/NodesView.vue'
 
 export const router = createRouter({
   history: createWebHistory(),
@@ -20,6 +21,7 @@ export const router = createRouter({
     { path: '/schedules', component: SchedulesView },
     { path: '/datasources', component: DatasourcesView },
     { path: '/monitor', component: MonitorView },
+    { path: '/nodes', component: NodesView },
   ],
 })
 

@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"time"
 
 	"crawler-platform/apps/node-service/internal/service"
@@ -82,4 +83,107 @@ func (r *PostgresNodeRepository) ListCatalog(ctx context.Context) ([]service.Nod
 		return nil, err
 	}
 	return nodes, nil
+}
+
+func (r *PostgresNodeRepository) GetByID(ctx context.Context, nodeID string) (service.Node, error) {
+	var (
+		node            service.Node
+		capabilitiesRaw []byte
+	)
+	err := r.db.QueryRowContext(ctx, `
+		SELECT id, name, capabilities_json, last_seen_at
+		FROM nodes
+		WHERE id = $1
+	`, nodeID).Scan(&node.ID, &node.Name, &capabilitiesRaw, &node.LastSeenAt)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return service.Node{}, service.ErrNodeNotFound
+		}
+		return service.Node{}, err
+	}
+	if err := json.Unmarshal(capabilitiesRaw, &node.Capabilities); err != nil {
+		return service.Node{}, err
+	}
+	return node, nil
+}
+
+func (r *PostgresNodeRepository) ListHeartbeatHistory(ctx context.Context, nodeID string, limit int) ([]service.NodeHeartbeat, error) {
+	rows, err := r.db.QueryContext(ctx, `
+		SELECT seen_at, capabilities_json
+		FROM node_heartbeats
+		WHERE node_id = $1
+		ORDER BY seen_at DESC
+		LIMIT $2
+	`, nodeID, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	history := make([]service.NodeHeartbeat, 0)
+	for rows.Next() {
+		var (
+			heartbeat       service.NodeHeartbeat
+			capabilitiesRaw []byte
+		)
+		if err := rows.Scan(&heartbeat.SeenAt, &capabilitiesRaw); err != nil {
+			return nil, err
+		}
+		if err := json.Unmarshal(capabilitiesRaw, &heartbeat.Capabilities); err != nil {
+			return nil, err
+		}
+		history = append(history, heartbeat)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return history, nil
+}
+
+func (r *PostgresNodeRepository) ListRecentExecutions(ctx context.Context, nodeID string, limit int) ([]service.NodeExecution, error) {
+	rows, err := r.db.QueryContext(ctx, `
+		SELECT id, project_id, spider_id, status, trigger_source, created_at, started_at, finished_at
+		FROM executions
+		WHERE node_id = $1
+		ORDER BY created_at DESC
+		LIMIT $2
+	`, nodeID, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	executions := make([]service.NodeExecution, 0)
+	for rows.Next() {
+		var (
+			exec       service.NodeExecution
+			startedAt  sql.NullTime
+			finishedAt sql.NullTime
+		)
+		if err := rows.Scan(
+			&exec.ID,
+			&exec.ProjectID,
+			&exec.SpiderID,
+			&exec.Status,
+			&exec.TriggerSource,
+			&exec.CreatedAt,
+			&startedAt,
+			&finishedAt,
+		); err != nil {
+			return nil, err
+		}
+		if startedAt.Valid {
+			t := startedAt.Time
+			exec.StartedAt = &t
+		}
+		if finishedAt.Valid {
+			t := finishedAt.Time
+			exec.FinishedAt = &t
+		}
+		executions = append(executions, exec)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return executions, nil
 }

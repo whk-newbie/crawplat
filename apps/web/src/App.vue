@@ -8,6 +8,7 @@
         <router-link to="/schedules">Schedules</router-link>
         <router-link to="/executions">Executions</router-link>
         <router-link to="/monitor">Monitor</router-link>
+        <router-link to="/nodes">Nodes</router-link>
         <router-link to="/datasources">Datasources</router-link>
       </nav>
     </header>

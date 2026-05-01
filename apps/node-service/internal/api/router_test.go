@@ -96,3 +96,78 @@ func TestHeartbeatRouteRejectsInvalidNodeID(t *testing.T) {
 		t.Fatalf("expected invalid node id error, got %s", w.Body.String())
 	}
 }
+
+func TestNodeDetailRouteReturnsNodeDetail(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	svc := service.NewNodeService()
+	if _, err := svc.Heartbeat("node-a", []string{"docker", "python", "go"}); err != nil {
+		t.Fatalf("Heartbeat returned error: %v", err)
+	}
+	router := NewRouter(svc)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/nodes/node-a?limit=5", nil)
+	w := httptest.NewRecorder()
+
+	router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d, body=%s", w.Code, w.Body.String())
+	}
+
+	var detail struct {
+		Node             service.Node            `json:"node"`
+		HeartbeatHistory []service.NodeHeartbeat `json:"heartbeatHistory"`
+		RecentExecutions []service.NodeExecution `json:"recentExecutions"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &detail); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+	if detail.Node.ID != "node-a" {
+		t.Fatalf("expected node id node-a, got %s", detail.Node.ID)
+	}
+	if len(detail.HeartbeatHistory) == 0 {
+		t.Fatalf("expected heartbeat history, got %#v", detail.HeartbeatHistory)
+	}
+	if detail.RecentExecutions == nil {
+		t.Fatalf("expected recentExecutions array, got nil")
+	}
+}
+
+func TestNodeDetailRouteReturnsNotFound(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	router := NewRouter(service.NewNodeService())
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/nodes/missing", nil)
+	w := httptest.NewRecorder()
+
+	router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusNotFound {
+		t.Fatalf("expected status 404, got %d", w.Code)
+	}
+	if !strings.Contains(w.Body.String(), "node not found") {
+		t.Fatalf("expected node not found error, got %s", w.Body.String())
+	}
+}
+
+func TestNodeDetailRouteRejectsInvalidLimit(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	router := NewRouter(service.NewNodeService())
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/nodes/node-a?limit=abc", nil)
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("expected status 400 for non-number limit, got %d", w.Code)
+	}
+
+	req2 := httptest.NewRequest(http.MethodGet, "/api/v1/nodes/node-a?limit=0", nil)
+	w2 := httptest.NewRecorder()
+	router.ServeHTTP(w2, req2)
+	if w2.Code != http.StatusBadRequest {
+		t.Fatalf("expected status 400 for non-positive limit, got %d", w2.Code)
+	}
+}
