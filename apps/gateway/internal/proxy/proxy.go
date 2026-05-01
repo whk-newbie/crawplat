@@ -5,11 +5,18 @@ import (
 	"net/http"
 	"net/http/httputil"
 	"net/url"
+	"os"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 )
 
 func ResolveServiceURL(name string) string {
+	envKey := "GATEWAY_UPSTREAM_" + strings.ToUpper(strings.ReplaceAll(name, "-", "_"))
+	if override := os.Getenv(envKey); override != "" {
+		return override
+	}
+
 	switch name {
 	case "iam-service":
 		return "http://iam-service:8081"

@@ -8,6 +8,7 @@ import DatasourcesView from '../views/DatasourcesView.vue'
 import MonitorView from '../views/MonitorView.vue'
 import SchedulesView from '../views/SchedulesView.vue'
 import NodesView from '../views/NodesView.vue'
+import { useAuthStore } from '../stores/auth'
 
 export const router = createRouter({
   history: createWebHistory(),
@@ -23,6 +24,23 @@ export const router = createRouter({
     { path: '/monitor', component: MonitorView },
     { path: '/nodes', component: NodesView },
   ],
+})
+
+router.beforeEach((to) => {
+  if (to.path === '/login') {
+    return true
+  }
+
+  const authStore = useAuthStore()
+  if (!authStore.token) {
+    authStore.hydrateToken()
+  }
+
+  if (!authStore.token) {
+    return '/login'
+  }
+
+  return true
 })
 
 export default router
