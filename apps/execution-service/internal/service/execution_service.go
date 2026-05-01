@@ -44,21 +44,27 @@ type Queue interface {
 }
 
 type CreateManualInput struct {
-	ProjectID string
-	SpiderID  string
-	Image     string
-	Command   []string
+	ProjectID      string
+	SpiderID       string
+	Image          string
+	Command        []string
+	CPUCores       float64
+	MemoryMB       int
+	TimeoutSeconds int
 }
 
 type CreateExecutionInput struct {
-	ProjectID         string
-	SpiderID          string
-	Image             string
-	Command           []string
-	TriggerSource     string
-	RetryLimit        int
-	RetryCount        int
-	RetryDelaySeconds int
+	ProjectID          string
+	SpiderID           string
+	Image              string
+	Command            []string
+	CPUCores           float64
+	MemoryMB           int
+	TimeoutSeconds     int
+	TriggerSource      string
+	RetryLimit         int
+	RetryCount         int
+	RetryDelaySeconds  int
 	RetryOfExecutionID string
 }
 
@@ -68,11 +74,14 @@ func NewExecutionService(execRepo ExecutionRepository, logRepo LogRepository, qu
 
 func (s *ExecutionService) CreateManual(ctx context.Context, input CreateManualInput) (model.Execution, error) {
 	return s.Create(ctx, CreateExecutionInput{
-		ProjectID:     input.ProjectID,
-		SpiderID:      input.SpiderID,
-		Image:         input.Image,
-		Command:       input.Command,
-		TriggerSource: "manual",
+		ProjectID:      input.ProjectID,
+		SpiderID:       input.SpiderID,
+		Image:          input.Image,
+		Command:        input.Command,
+		CPUCores:       input.CPUCores,
+		MemoryMB:       input.MemoryMB,
+		TimeoutSeconds: input.TimeoutSeconds,
+		TriggerSource:  "manual",
 	})
 }
 
@@ -83,18 +92,21 @@ func (s *ExecutionService) Create(ctx context.Context, input CreateExecutionInpu
 	}
 
 	exec := model.Execution{
-		ID:                uuid.NewString(),
-		ProjectID:         input.ProjectID,
-		SpiderID:          input.SpiderID,
-		Status:            "pending",
-		TriggerSource:     triggerSource,
-		Image:             input.Image,
-		Command:           append([]string(nil), input.Command...),
-		RetryLimit:        input.RetryLimit,
-		RetryCount:        input.RetryCount,
-		RetryDelaySeconds: input.RetryDelaySeconds,
+		ID:                 uuid.NewString(),
+		ProjectID:          input.ProjectID,
+		SpiderID:           input.SpiderID,
+		Status:             "pending",
+		TriggerSource:      triggerSource,
+		Image:              input.Image,
+		Command:            append([]string(nil), input.Command...),
+		CPUCores:           input.CPUCores,
+		MemoryMB:           input.MemoryMB,
+		TimeoutSeconds:     input.TimeoutSeconds,
+		RetryLimit:         input.RetryLimit,
+		RetryCount:         input.RetryCount,
+		RetryDelaySeconds:  input.RetryDelaySeconds,
 		RetryOfExecutionID: input.RetryOfExecutionID,
-		CreatedAt:         time.Now().UTC(),
+		CreatedAt:          time.Now().UTC(),
 	}
 
 	created, err := s.execRepo.Create(ctx, exec)
@@ -118,14 +130,17 @@ func (s *ExecutionService) MaterializeRetry(ctx context.Context) (model.Executio
 	}
 
 	created, err := s.Create(ctx, CreateExecutionInput{
-		ProjectID:         candidate.ProjectID,
-		SpiderID:          candidate.SpiderID,
-		Image:             candidate.Image,
-		Command:           candidate.Command,
-		TriggerSource:     "retry",
-		RetryLimit:        candidate.RetryLimit,
-		RetryCount:        candidate.RetryCount + 1,
-		RetryDelaySeconds: candidate.RetryDelaySeconds,
+		ProjectID:          candidate.ProjectID,
+		SpiderID:           candidate.SpiderID,
+		Image:              candidate.Image,
+		Command:            candidate.Command,
+		CPUCores:           candidate.CPUCores,
+		MemoryMB:           candidate.MemoryMB,
+		TimeoutSeconds:     candidate.TimeoutSeconds,
+		TriggerSource:      "retry",
+		RetryLimit:         candidate.RetryLimit,
+		RetryCount:         candidate.RetryCount + 1,
+		RetryDelaySeconds:  candidate.RetryDelaySeconds,
 		RetryOfExecutionID: candidate.ID,
 	})
 	if err != nil {

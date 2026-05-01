@@ -120,7 +120,8 @@ function parseCommand(input: string) {
 async function loadSchedules() {
   loading.value = true
   try {
-    schedules.value = await listSchedules()
+    const response = await listSchedules()
+    schedules.value = response.items
   } catch (err) {
     ElMessage.error(err instanceof Error ? err.message : 'failed to load schedules')
   } finally {

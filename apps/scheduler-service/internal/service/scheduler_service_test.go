@@ -120,9 +120,12 @@ func TestSchedulerServiceListReturnsRepoSchedules(t *testing.T) {
 		t.Fatalf("Create returned error: %v", err)
 	}
 
-	schedules, err := svc.List()
+	schedules, total, err := svc.List(20, 0)
 	if err != nil {
 		t.Fatalf("List returned error: %v", err)
+	}
+	if total != 1 {
+		t.Fatalf("expected total 1, got %d", total)
 	}
 	if len(schedules) != 1 {
 		t.Fatalf("expected 1 schedule, got %d", len(schedules))
@@ -132,21 +135,43 @@ func TestSchedulerServiceListReturnsRepoSchedules(t *testing.T) {
 	}
 }
 
+func TestSchedulerServiceListPagination(t *testing.T) {
+	repo := &fakeScheduleRepo{}
+	svc := NewSchedulerService(repo, nil)
+
+	for i := 0; i < 3; i++ {
+		if _, err := svc.Create("project-1", "spider-1", "nightly", "0 * * * *", "crawler/go-echo:latest", []string{"./go-echo"}, true, 0, 0); err != nil {
+			t.Fatalf("Create returned error: %v", err)
+		}
+	}
+
+	schedules, total, err := svc.List(1, 1)
+	if err != nil {
+		t.Fatalf("List returned error: %v", err)
+	}
+	if total != 3 {
+		t.Fatalf("expected total 3, got %d", total)
+	}
+	if len(schedules) != 1 {
+		t.Fatalf("expected 1 schedule, got %d", len(schedules))
+	}
+}
+
 func TestMaterializeDueBackfillsScheduledExecutions(t *testing.T) {
 	now := time.Date(2026, 4, 23, 23, 45, 0, 0, time.UTC)
 	repo := &fakeScheduleRepo{
 		schedules: []model.Schedule{{
-			ID:        "sched-1",
-			ProjectID: "project-1",
-			SpiderID:  "spider-1",
-			Name:      "nightly",
-			CronExpr:  "*/5 * * * *",
-			Enabled:   true,
-			Image:     "crawler/go-echo:latest",
-			Command:   []string{"./go-echo"},
-			RetryLimit: 2,
+			ID:                "sched-1",
+			ProjectID:         "project-1",
+			SpiderID:          "spider-1",
+			Name:              "nightly",
+			CronExpr:          "*/5 * * * *",
+			Enabled:           true,
+			Image:             "crawler/go-echo:latest",
+			Command:           []string{"./go-echo"},
+			RetryLimit:        2,
 			RetryDelaySeconds: 30,
-			CreatedAt: now.Add(-20 * time.Minute),
+			CreatedAt:         now.Add(-20 * time.Minute),
 		}},
 	}
 	client := &fakeExecutionClient{}

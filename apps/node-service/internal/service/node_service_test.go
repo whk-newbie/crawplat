@@ -224,9 +224,12 @@ func TestListMergesCatalogAndLiveWithOnlineOfflineStatus(t *testing.T) {
 	}
 	svc := NewNodeServiceWithCatalog(live, catalog)
 
-	nodes, err := svc.List()
+	nodes, total, err := svc.List(20, 0)
 	if err != nil {
 		t.Fatalf("List returned error: %v", err)
+	}
+	if total != 3 {
+		t.Fatalf("expected total 3, got %d", total)
 	}
 	if len(nodes) != 3 {
 		t.Fatalf("unexpected nodes: %#v", nodes)
@@ -245,6 +248,14 @@ func TestListMergesCatalogAndLiveWithOnlineOfflineStatus(t *testing.T) {
 	}
 	if byID["node-c"].Status != "online" {
 		t.Fatalf("expected node-c online, got %#v", byID["node-c"])
+	}
+
+	pagedNodes, pagedTotal, err := svc.List(1, 1)
+	if err != nil {
+		t.Fatalf("List with pagination returned error: %v", err)
+	}
+	if pagedTotal != 3 || len(pagedNodes) != 1 {
+		t.Fatalf("unexpected paged nodes total=%d nodes=%#v", pagedTotal, pagedNodes)
 	}
 }
 

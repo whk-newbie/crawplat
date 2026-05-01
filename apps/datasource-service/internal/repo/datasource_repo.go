@@ -29,13 +29,14 @@ func (r *PostgresRepository) Create(ctx context.Context, datasource model.Dataso
 	return err
 }
 
-func (r *PostgresRepository) ListByProject(ctx context.Context, projectID string) ([]model.Datasource, error) {
+func (r *PostgresRepository) ListByProject(ctx context.Context, projectID string, limit, offset int) ([]model.Datasource, error) {
 	rows, err := r.db.QueryContext(ctx, `
 		SELECT id, project_id, name, type, readonly, config_json
 		FROM datasources
-		WHERE project_id = $1
+		WHERE ($1 = '' OR project_id = $1)
 		ORDER BY created_at DESC, id DESC
-	`, projectID)
+		LIMIT $2 OFFSET $3
+	`, projectID, limit, offset)
 	if err != nil {
 		return nil, err
 	}
@@ -53,6 +54,14 @@ func (r *PostgresRepository) ListByProject(ctx context.Context, projectID string
 		return nil, err
 	}
 	return datasources, nil
+}
+
+func (r *PostgresRepository) CountByProject(ctx context.Context, projectID string) (int64, error) {
+	var count int64
+	err := r.db.QueryRowContext(ctx, `
+		SELECT COUNT(*) FROM datasources WHERE ($1 = '' OR project_id = $1)
+	`, projectID).Scan(&count)
+	return count, err
 }
 
 func (r *PostgresRepository) Get(ctx context.Context, id string) (model.Datasource, bool, error) {

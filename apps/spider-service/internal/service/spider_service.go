@@ -21,7 +21,8 @@ type SpiderService struct {
 
 type Repository interface {
 	Create(ctx context.Context, spider model.Spider) error
-	ListByProject(ctx context.Context, projectID string) ([]model.Spider, error)
+	ListByProject(ctx context.Context, projectID string, limit, offset int) ([]model.Spider, error)
+	CountByProject(ctx context.Context, projectID string) (int64, error)
 	Get(ctx context.Context, id string) (model.Spider, bool, error)
 }
 
@@ -38,18 +39,37 @@ func (r *memoryRepository) Create(_ context.Context, spider model.Spider) error 
 	return nil
 }
 
-func (r *memoryRepository) ListByProject(_ context.Context, projectID string) ([]model.Spider, error) {
+func (r *memoryRepository) ListByProject(_ context.Context, projectID string, limit, offset int) ([]model.Spider, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
-	var spiders []model.Spider
+	var all []model.Spider
 	for _, spider := range r.spiders {
 		if spider.ProjectID == projectID {
 			spider.Command = append([]string(nil), spider.Command...)
-			spiders = append(spiders, spider)
+			all = append(all, spider)
 		}
 	}
-	return spiders, nil
+	if offset >= len(all) {
+		return nil, nil
+	}
+	end := offset + limit
+	if end > len(all) {
+		end = len(all)
+	}
+	return all[offset:end], nil
+}
+
+func (r *memoryRepository) CountByProject(_ context.Context, projectID string) (int64, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	var count int64
+	for _, spider := range r.spiders {
+		if spider.ProjectID == projectID {
+			count++
+		}
+	}
+	return count, nil
 }
 
 func (r *memoryRepository) Get(_ context.Context, id string) (model.Spider, bool, error) {
@@ -99,6 +119,14 @@ func (s *SpiderService) Create(projectID, name, language, runtime, image string,
 	return spider, nil
 }
 
-func (s *SpiderService) List(projectID string) ([]model.Spider, error) {
-	return s.repo.ListByProject(context.Background(), projectID)
+func (s *SpiderService) List(projectID string, limit, offset int) ([]model.Spider, int64, error) {
+	spiders, err := s.repo.ListByProject(context.Background(), projectID, limit, offset)
+	if err != nil {
+		return nil, 0, err
+	}
+	total, err := s.repo.CountByProject(context.Background(), projectID)
+	if err != nil {
+		return nil, 0, err
+	}
+	return spiders, total, nil
 }

@@ -19,6 +19,13 @@ export type CreateSpiderInput = {
   command: string[]
 }
 
+export type PaginatedSpiders = {
+  items: Spider[]
+  total: number
+  limit: number
+  offset: number
+}
+
 export function createSpider(input: CreateSpiderInput) {
   const { projectId, ...body } = input
   return apiFetch<Spider>(`/projects/${projectId}/spiders`, {
@@ -28,5 +35,5 @@ export function createSpider(input: CreateSpiderInput) {
 }
 
 export function listSpiders(projectId: string) {
-  return apiFetch<Spider[]>(`/projects/${projectId}/spiders`)
+  return apiFetch<PaginatedSpiders>(`/projects/${projectId}/spiders`)
 }

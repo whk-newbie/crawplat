@@ -11,8 +11,15 @@ export type CreateProjectInput = {
   name: string
 }
 
+export type PaginatedProjects = {
+  items: Project[]
+  total: number
+  limit: number
+  offset: number
+}
+
 export function listProjects() {
-  return apiFetch<Project[]>('/projects')
+  return apiFetch<PaginatedProjects>('/projects')
 }
 
 export function createProject(input: CreateProjectInput) {

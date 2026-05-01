@@ -27,16 +27,21 @@ describe('datasources view', () => {
     const fetchMock = vi.fn().mockResolvedValueOnce({
       ok: true,
       status: 200,
-      json: async () => ([
-        {
-          id: 'ds-1',
-          projectId: 'project-1',
-          name: 'main-pg',
-          type: 'postgresql',
-          readonly: true,
-          config: { schema: 'public' },
-        },
-      ]),
+      json: async () => ({
+        items: [
+          {
+            id: 'ds-1',
+            projectId: 'project-1',
+            name: 'main-pg',
+            type: 'postgresql',
+            readonly: true,
+            config: { schema: 'public' },
+          },
+        ],
+        total: 1,
+        limit: 20,
+        offset: 0,
+      }),
     })
 
     vi.stubGlobal('fetch', fetchMock)
@@ -56,16 +61,21 @@ describe('datasources view', () => {
       .mockResolvedValueOnce({
         ok: true,
         status: 200,
-        json: async () => ([
-          {
-            id: 'ds-1',
-            projectId: 'project-1',
-            name: 'main-pg',
-            type: 'postgresql',
-            readonly: true,
-            config: { schema: 'public' },
-          },
-        ]),
+        json: async () => ({
+          items: [
+            {
+              id: 'ds-1',
+              projectId: 'project-1',
+              name: 'main-pg',
+              type: 'postgresql',
+              readonly: true,
+              config: { schema: 'public' },
+            },
+          ],
+          total: 1,
+          limit: 20,
+          offset: 0,
+        }),
       })
       .mockResolvedValueOnce({
         ok: true,

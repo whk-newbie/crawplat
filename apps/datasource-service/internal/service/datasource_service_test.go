@@ -16,14 +16,31 @@ func (r *fakeDatasourceRepo) Create(_ context.Context, datasource model.Datasour
 	return nil
 }
 
-func (r *fakeDatasourceRepo) ListByProject(_ context.Context, projectID string) ([]model.Datasource, error) {
-	var datasources []model.Datasource
+func (r *fakeDatasourceRepo) ListByProject(_ context.Context, projectID string, limit, offset int) ([]model.Datasource, error) {
+	var all []model.Datasource
 	for _, datasource := range r.datasources {
 		if projectID == "" || datasource.ProjectID == projectID {
-			datasources = append(datasources, datasource)
+			all = append(all, datasource)
 		}
 	}
-	return datasources, nil
+	if offset >= len(all) {
+		return nil, nil
+	}
+	end := offset + limit
+	if end > len(all) {
+		end = len(all)
+	}
+	return all[offset:end], nil
+}
+
+func (r *fakeDatasourceRepo) CountByProject(_ context.Context, projectID string) (int64, error) {
+	var count int64
+	for _, datasource := range r.datasources {
+		if projectID == "" || datasource.ProjectID == projectID {
+			count++
+		}
+	}
+	return count, nil
 }
 
 func (r *fakeDatasourceRepo) Get(_ context.Context, id string) (model.Datasource, bool, error) {
@@ -71,9 +88,12 @@ func TestDatasourceServiceListAndReadUseRepo(t *testing.T) {
 		t.Fatalf("Create returned error: %v", err)
 	}
 
-	listed, err := svc.List("project-1")
+	listed, total, err := svc.List("project-1", 20, 0)
 	if err != nil {
 		t.Fatalf("List returned error: %v", err)
+	}
+	if total != 1 {
+		t.Fatalf("unexpected total: %d", total)
 	}
 	if len(listed) != 1 {
 		t.Fatalf("unexpected list length: %#v", listed)
