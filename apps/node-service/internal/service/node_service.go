@@ -232,14 +232,14 @@ func (s *NodeService) Heartbeat(name string, capabilities []string) (Node, error
 	return node, nil
 }
 
-func (s *NodeService) List() ([]Node, error) {
+func (s *NodeService) List(limit, offset int) ([]Node, int64, error) {
 	catalogNodes, err := s.catalogRepo.ListCatalog(context.Background())
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 	liveNodes, err := s.liveRepo.ListOnline(context.Background())
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 
 	liveByID := make(map[string]Node, len(liveNodes))
@@ -269,7 +269,17 @@ func (s *NodeService) List() ([]Node, error) {
 		nodes = append(nodes, live)
 	}
 
-	return nodes, nil
+	total := int64(len(nodes))
+	if offset >= len(nodes) {
+		return nil, total, nil
+	}
+	end := offset + limit
+	if end > len(nodes) {
+		end = len(nodes)
+	}
+	result := make([]Node, end-offset)
+	copy(result, nodes[offset:end])
+	return result, total, nil
 }
 
 func (s *NodeService) Detail(id string, query DetailQuery) (NodeDetail, error) {

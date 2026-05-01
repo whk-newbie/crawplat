@@ -200,7 +200,8 @@ async function loadDatasources() {
   loading.value = true
   try {
     const projectId = projectFilter.value.trim() || undefined
-    datasources.value = await listDatasources(projectId)
+    const response = await listDatasources(projectId)
+    datasources.value = response.items
     if (!datasources.value.some((item) => item.id === selectedDatasourceId.value)) {
       selectedDatasourceId.value = datasources.value[0]?.id ?? ''
     }

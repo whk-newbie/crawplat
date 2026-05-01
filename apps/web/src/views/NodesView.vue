@@ -208,9 +208,9 @@ async function loadNodes() {
   listError.value = ''
   try {
     const result = await listNodes()
-    nodes.value = result
-    if (!selectedNodeId.value && result.length > 0) {
-      await selectNode(result[0].id)
+    nodes.value = result.items
+    if (!selectedNodeId.value && result.items.length > 0) {
+      await selectNode(result.items[0].id)
     }
   } catch (err) {
     listError.value = err instanceof Error ? err.message : 'failed to load nodes'

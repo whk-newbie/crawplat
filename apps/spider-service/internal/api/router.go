@@ -2,8 +2,10 @@ package api
 
 import (
 	"net/http"
+	"strconv"
 
 	"crawler-platform/apps/spider-service/internal/service"
+	"crawler-platform/packages/go-common/httpx"
 	"github.com/gin-gonic/gin"
 )
 
@@ -38,12 +40,21 @@ func NewRouter(spiderService *service.SpiderService) *gin.Engine {
 	})
 
 	router.GET("/api/v1/projects/:projectId/spiders", func(c *gin.Context) {
-		spiders, err := spiderService.List(c.Param("projectId"))
+		limit, _ := strconv.Atoi(c.DefaultQuery("limit", "20"))
+		offset, _ := strconv.Atoi(c.DefaultQuery("offset", "0"))
+		p := httpx.DefaultPagination(limit, offset)
+
+		spiders, total, err := spiderService.List(c.Param("projectId"), p.Limit, p.Offset)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
 		}
-		c.JSON(http.StatusOK, spiders)
+		c.JSON(http.StatusOK, httpx.PaginatedResponse{
+			Items:  spiders,
+			Total:  total,
+			Limit:  p.Limit,
+			Offset: p.Offset,
+		})
 	})
 
 	return router

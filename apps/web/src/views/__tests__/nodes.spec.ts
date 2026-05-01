@@ -23,22 +23,27 @@ describe('nodes view', () => {
       .mockResolvedValueOnce({
         ok: true,
         status: 200,
-        json: async () => ([
-          {
-            id: 'node-a',
-            name: 'node-a',
-            status: 'online',
-            capabilities: ['docker', 'go'],
-            lastSeenAt: '2026-05-01T09:30:00Z',
-          },
-          {
-            id: 'node-b',
-            name: 'node-b',
-            status: 'offline',
-            capabilities: ['python'],
-            lastSeenAt: '2026-04-30T22:00:00Z',
-          },
-        ]),
+        json: async () => ({
+          items: [
+            {
+              id: 'node-a',
+              name: 'node-a',
+              status: 'online',
+              capabilities: ['docker', 'go'],
+              lastSeenAt: '2026-05-01T09:30:00Z',
+            },
+            {
+              id: 'node-b',
+              name: 'node-b',
+              status: 'offline',
+              capabilities: ['python'],
+              lastSeenAt: '2026-04-30T22:00:00Z',
+            },
+          ],
+          total: 2,
+          limit: 20,
+          offset: 0,
+        }),
       })
       .mockResolvedValueOnce({
         ok: true,

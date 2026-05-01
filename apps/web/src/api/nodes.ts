@@ -8,6 +8,13 @@ export type NodeSummary = {
   lastSeenAt: string
 }
 
+export type PaginatedNodes = {
+  items: NodeSummary[]
+  total: number
+  limit: number
+  offset: number
+}
+
 export type NodeHeartbeat = {
   seenAt: string
   status?: string
@@ -54,7 +61,7 @@ export type NodeSessionsQuery = {
 }
 
 export function listNodes() {
-  return apiFetch<NodeSummary[]>('/nodes')
+  return apiFetch<PaginatedNodes>('/nodes')
 }
 
 type NodeDetailResponse = {
@@ -128,7 +135,7 @@ export async function getNodeDetail(nodeId: string, query: NodeDetailQuery = {})
     }
 
     const nodes = await listNodes()
-    const node = nodes.find((item) => item.id === nodeId)
+    const node = nodes.items.find((item) => item.id === nodeId)
     if (!node) {
       throw err
     }

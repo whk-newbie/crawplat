@@ -60,21 +60,29 @@ func TestListRouteReturnsPersistedNodes(t *testing.T) {
 		t.Fatalf("expected status 200, got %d", w.Code)
 	}
 
-	var nodes []service.Node
-	if err := json.Unmarshal(w.Body.Bytes(), &nodes); err != nil {
+	var payload struct {
+		Items  []service.Node `json:"items"`
+		Total  int64          `json:"total"`
+		Limit  int            `json:"limit"`
+		Offset int            `json:"offset"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &payload); err != nil {
 		t.Fatalf("failed to decode response: %v", err)
 	}
-	if len(nodes) != 1 {
-		t.Fatalf("expected 1 node, got %d", len(nodes))
+	if len(payload.Items) != 1 || payload.Total != 1 {
+		t.Fatalf("expected 1 node, got payload=%+v", payload)
 	}
-	if nodes[0].ID != "node-a" {
-		t.Fatalf("expected node id node-a, got %s", nodes[0].ID)
+	if payload.Items[0].ID != "node-a" {
+		t.Fatalf("expected node id node-a, got %s", payload.Items[0].ID)
 	}
-	if nodes[0].Status != "online" {
-		t.Fatalf("expected status online, got %s", nodes[0].Status)
+	if payload.Items[0].Status != "online" {
+		t.Fatalf("expected status online, got %s", payload.Items[0].Status)
 	}
-	if len(nodes[0].Capabilities) != 3 || nodes[0].Capabilities[0] != "docker" || nodes[0].Capabilities[1] != "python" || nodes[0].Capabilities[2] != "go" {
-		t.Fatalf("expected capabilities [docker python go], got %+v", nodes[0].Capabilities)
+	if len(payload.Items[0].Capabilities) != 3 || payload.Items[0].Capabilities[0] != "docker" || payload.Items[0].Capabilities[1] != "python" || payload.Items[0].Capabilities[2] != "go" {
+		t.Fatalf("expected capabilities [docker python go], got %+v", payload.Items[0].Capabilities)
+	}
+	if payload.Limit != 20 || payload.Offset != 0 {
+		t.Fatalf("expected default pagination, got limit=%d offset=%d", payload.Limit, payload.Offset)
 	}
 }
 

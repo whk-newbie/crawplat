@@ -48,9 +48,12 @@ func TestPostgresRepositoryList(t *testing.T) {
 		SELECT id, code, name
 		FROM projects
 		ORDER BY created_at DESC, id DESC
-	`)).WillReturnRows(rows)
+		LIMIT $1 OFFSET $2
+	`)).
+		WithArgs(20, 0).
+		WillReturnRows(rows)
 
-	projects, err := repo.List(context.Background())
+	projects, err := repo.List(context.Background(), 20, 0)
 	if err != nil {
 		t.Fatalf("List returned error: %v", err)
 	}

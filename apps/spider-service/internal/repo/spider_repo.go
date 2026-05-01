@@ -29,13 +29,14 @@ func (r *PostgresRepository) Create(ctx context.Context, spider model.Spider) er
 	return err
 }
 
-func (r *PostgresRepository) ListByProject(ctx context.Context, projectID string) ([]model.Spider, error) {
+func (r *PostgresRepository) ListByProject(ctx context.Context, projectID string, limit, offset int) ([]model.Spider, error) {
 	rows, err := r.db.QueryContext(ctx, `
 		SELECT id, project_id, name, language, runtime, image, command
 		FROM spiders
 		WHERE project_id = $1
 		ORDER BY created_at DESC, id DESC
-	`, projectID)
+		LIMIT $2 OFFSET $3
+	`, projectID, limit, offset)
 	if err != nil {
 		return nil, err
 	}
@@ -77,4 +78,10 @@ func (r *PostgresRepository) Get(ctx context.Context, id string) (model.Spider, 
 		return model.Spider{}, false, err
 	}
 	return spider, true, nil
+}
+
+func (r *PostgresRepository) CountByProject(ctx context.Context, projectID string) (int64, error) {
+	var count int64
+	err := r.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM spiders WHERE project_id = $1`, projectID).Scan(&count)
+	return count, err
 }

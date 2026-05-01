@@ -23,9 +23,12 @@ describe('projects view', () => {
       .mockResolvedValueOnce({
         ok: true,
         status: 200,
-        json: async () => ([
-          { id: 'p1', code: 'core-crawlers', name: 'Core Crawlers' },
-        ]),
+        json: async () => ({
+          items: [{ id: 'p1', code: 'core-crawlers', name: 'Core Crawlers' }],
+          total: 1,
+          limit: 20,
+          offset: 0,
+        }),
       })
 
     vi.stubGlobal('fetch', fetchMock)
@@ -44,7 +47,12 @@ describe('projects view', () => {
       .mockResolvedValueOnce({
         ok: true,
         status: 200,
-        json: async () => ([]),
+        json: async () => ({
+          items: [],
+          total: 0,
+          limit: 20,
+          offset: 0,
+        }),
       })
       .mockResolvedValueOnce({
         ok: true,
@@ -54,9 +62,12 @@ describe('projects view', () => {
       .mockResolvedValueOnce({
         ok: true,
         status: 200,
-        json: async () => ([
-          { id: 'p2', code: 'data-team', name: 'Data Team' },
-        ]),
+        json: async () => ({
+          items: [{ id: 'p2', code: 'data-team', name: 'Data Team' }],
+          total: 1,
+          limit: 20,
+          offset: 0,
+        }),
       })
 
     vi.stubGlobal('fetch', fetchMock)

@@ -28,6 +28,13 @@ export type DatasourcePreviewResult = {
   rows: Array<Record<string, string>>
 }
 
+export type PaginatedDatasources = {
+  items: Datasource[]
+  total: number
+  limit: number
+  offset: number
+}
+
 function buildQueryString(input: Record<string, string>) {
   const params = new URLSearchParams()
   for (const [key, value] of Object.entries(input)) {
@@ -43,7 +50,7 @@ export function listDatasources(projectId?: string) {
   const query = buildQueryString({
     projectId: projectId?.trim() ?? '',
   })
-  return apiFetch<Datasource[]>(`/datasources${query}`)
+  return apiFetch<PaginatedDatasources>(`/datasources${query}`)
 }
 
 export function createDatasource(input: CreateDatasourceInput) {

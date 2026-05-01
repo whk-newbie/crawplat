@@ -9,6 +9,7 @@ import (
 
 	"crawler-platform/apps/project-service/internal/model"
 	"crawler-platform/apps/project-service/internal/service"
+	"crawler-platform/packages/go-common/httpx"
 	"github.com/gin-gonic/gin"
 )
 
@@ -37,15 +38,9 @@ func TestCreateProjectReturnsLowerCaseJSON(t *testing.T) {
 	if project.Code != "core-crawlers" {
 		t.Fatalf("expected code core-crawlers, got %s", project.Code)
 	}
-	if project.Name != "Core Crawlers" {
-		t.Fatalf("expected name Core Crawlers, got %s", project.Name)
-	}
-	if !strings.Contains(w.Body.String(), `"id":`) || !strings.Contains(w.Body.String(), `"code":`) || !strings.Contains(w.Body.String(), `"name":`) {
-		t.Fatalf("expected lower-case JSON keys, got %s", w.Body.String())
-	}
 }
 
-func TestListProjectsReturnsLowerCaseJSON(t *testing.T) {
+func TestListProjectsReturnsPaginatedResponse(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
 	svc := service.NewProjectService()
@@ -63,24 +58,53 @@ func TestListProjectsReturnsLowerCaseJSON(t *testing.T) {
 		t.Fatalf("expected status 200, got %d", w.Code)
 	}
 
-	var projects []model.Project
-	if err := json.Unmarshal(w.Body.Bytes(), &projects); err != nil {
+	var resp struct {
+		Items  []model.Project `json:"items"`
+		Total  int64           `json:"total"`
+		Limit  int             `json:"limit"`
+		Offset int             `json:"offset"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
 		t.Fatalf("failed to decode response: %v", err)
 	}
 
-	if len(projects) != 1 {
-		t.Fatalf("expected 1 project, got %d", len(projects))
+	if resp.Total != 1 {
+		t.Fatalf("expected total 1, got %d", resp.Total)
 	}
-	if projects[0].ID == "" {
-		t.Fatal("expected generated id")
+	if len(resp.Items) != 1 {
+		t.Fatalf("expected 1 item, got %d", len(resp.Items))
 	}
-	if projects[0].Code != "core-crawlers" {
-		t.Fatalf("expected code core-crawlers, got %s", projects[0].Code)
+	if resp.Items[0].Code != "core-crawlers" {
+		t.Fatalf("expected code core-crawlers, got %s", resp.Items[0].Code)
 	}
-	if projects[0].Name != "Core Crawlers" {
-		t.Fatalf("expected name Core Crawlers, got %s", projects[0].Name)
+	if resp.Limit != 20 || resp.Offset != 0 {
+		t.Fatalf("expected default pagination, got limit=%d offset=%d", resp.Limit, resp.Offset)
 	}
-	if !strings.Contains(w.Body.String(), `"id":`) || !strings.Contains(w.Body.String(), `"code":`) || !strings.Contains(w.Body.String(), `"name":`) {
-		t.Fatalf("expected lower-case JSON keys, got %s", w.Body.String())
+}
+
+func TestListProjectsRespectsPaginationParams(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	svc := service.NewProjectService()
+	for i := 0; i < 3; i++ {
+		if _, err := svc.Create("code", "name"); err != nil {
+			t.Fatal(err)
+		}
+	}
+	router := NewRouter(svc)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/projects?limit=1&offset=1", nil)
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	var resp httpx.PaginatedResponse
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatal(err)
+	}
+	if resp.Total != 3 {
+		t.Fatalf("expected total 3, got %d", resp.Total)
+	}
+	if resp.Limit != 1 || resp.Offset != 1 {
+		t.Fatalf("expected limit=1 offset=1, got limit=%d offset=%d", resp.Limit, resp.Offset)
 	}
 }

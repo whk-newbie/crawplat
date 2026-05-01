@@ -39,16 +39,16 @@ type ExecutionClient interface {
 }
 
 type CreateExecutionInput struct {
-	ScheduleID         string
-	ProjectID          string
-	SpiderID           string
-	Image              string
-	Command            []string
-	TriggerSource      string
-	ScheduledFor       time.Time
-	RetryLimit         int
-	RetryCount         int
-	RetryDelaySeconds  int
+	ScheduleID        string
+	ProjectID         string
+	SpiderID          string
+	Image             string
+	Command           []string
+	TriggerSource     string
+	ScheduledFor      time.Time
+	RetryLimit        int
+	RetryCount        int
+	RetryDelaySeconds int
 }
 
 type Option func(*SchedulerService)
@@ -137,15 +137,15 @@ func NewHTTPExecutionClient(baseURL, internalToken string) *HTTPExecutionClient 
 
 func (c *HTTPExecutionClient) Create(ctx context.Context, input CreateExecutionInput) (string, error) {
 	body, err := json.Marshal(map[string]any{
-		"projectId":     input.ProjectID,
-		"spiderId":      input.SpiderID,
-		"image":         input.Image,
-		"command":       input.Command,
-		"triggerSource": input.TriggerSource,
-		"scheduleId":    input.ScheduleID,
-		"scheduledFor":  input.ScheduledFor.Format(time.RFC3339),
-		"retryLimit":    input.RetryLimit,
-		"retryCount":    input.RetryCount,
+		"projectId":         input.ProjectID,
+		"spiderId":          input.SpiderID,
+		"image":             input.Image,
+		"command":           input.Command,
+		"triggerSource":     input.TriggerSource,
+		"scheduleId":        input.ScheduleID,
+		"scheduledFor":      input.ScheduledFor.Format(time.RFC3339),
+		"retryLimit":        input.RetryLimit,
+		"retryCount":        input.RetryCount,
 		"retryDelaySeconds": input.RetryDelaySeconds,
 	})
 	if err != nil {
@@ -241,17 +241,17 @@ func (s *SchedulerService) Create(projectID, spiderID, name, cronExpr, image str
 
 	createdAt := s.now().UTC()
 	schedule := model.Schedule{
-		ID:        uuid.NewString(),
-		ProjectID: projectID,
-		SpiderID:  spiderID,
-		Name:      name,
-		CronExpr:  cronExpr,
-		Enabled:   enabled,
-		Image:     image,
-		Command:   append([]string(nil), command...),
-		RetryLimit: retryLimit,
+		ID:                uuid.NewString(),
+		ProjectID:         projectID,
+		SpiderID:          spiderID,
+		Name:              name,
+		CronExpr:          cronExpr,
+		Enabled:           enabled,
+		Image:             image,
+		Command:           append([]string(nil), command...),
+		RetryLimit:        retryLimit,
 		RetryDelaySeconds: retryDelaySeconds,
-		CreatedAt: createdAt,
+		CreatedAt:         createdAt,
 	}
 
 	if err := s.repo.Create(context.Background(), schedule); err != nil {
@@ -260,8 +260,23 @@ func (s *SchedulerService) Create(projectID, spiderID, name, cronExpr, image str
 	return schedule, nil
 }
 
-func (s *SchedulerService) List() ([]model.Schedule, error) {
-	return s.repo.List(context.Background())
+func (s *SchedulerService) List(limit, offset int) ([]model.Schedule, int64, error) {
+	schedules, err := s.repo.List(context.Background())
+	if err != nil {
+		return nil, 0, err
+	}
+
+	total := int64(len(schedules))
+	if offset >= len(schedules) {
+		return nil, total, nil
+	}
+	end := offset + limit
+	if end > len(schedules) {
+		end = len(schedules)
+	}
+	result := make([]model.Schedule, end-offset)
+	copy(result, schedules[offset:end])
+	return result, total, nil
 }
 
 func (s *SchedulerService) MaterializeDue(ctx context.Context) (int, error) {
