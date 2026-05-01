@@ -11,6 +11,7 @@ import (
 )
 
 const requestIDContextKey = "request_id"
+const requestPathContextKey = "request_path"
 
 func attachRequestID(cfg observabilityConfig) gin.HandlerFunc {
 	header := strings.TrimSpace(cfg.requestIDHeader)
@@ -27,6 +28,7 @@ func attachRequestID(cfg observabilityConfig) gin.HandlerFunc {
 			requestID = newRequestID()
 		}
 
+		c.Set(requestPathContextKey, c.Request.URL.Path)
 		c.Request.Header.Set(header, requestID)
 		c.Writer.Header().Set(header, requestID)
 		c.Set(requestIDContextKey, requestID)
@@ -49,11 +51,15 @@ func logRequest(cfg observabilityConfig) gin.HandlerFunc {
 		if requestID == "" {
 			requestID = sanitizeRequestID(c.Writer.Header().Get(header))
 		}
+		requestPath := c.GetString(requestPathContextKey)
+		if requestPath == "" {
+			requestPath = c.Request.URL.Path
+		}
 
 		log.Printf(
 			"gateway_request method=%s path=%s status=%d latency_ms=%d ip=%s request_id=%s user_agent=%q",
 			c.Request.Method,
-			c.Request.URL.Path,
+			requestPath,
 			c.Writer.Status(),
 			latency.Milliseconds(),
 			c.ClientIP(),

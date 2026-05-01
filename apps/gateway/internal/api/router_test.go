@@ -266,6 +266,60 @@ func TestGatewayCanDisableTrustIncomingRequestID(t *testing.T) {
 	}
 }
 
+func TestConfiguredApiVersionIsRouted(t *testing.T) {
+	t.Setenv("GATEWAY_ENFORCE_JWT", "false")
+	t.Setenv("GATEWAY_API_SUPPORTED_VERSIONS", "v1,v2")
+	t.Setenv("JWT_SECRET", "test-secret")
+	router := NewRouter()
+
+	routes := router.Routes()
+	seen := map[string]bool{}
+	for _, route := range routes {
+		seen[route.Path] = true
+	}
+	if !seen["/api/v2/projects"] {
+		t.Fatal("expected configured api version route to be registered")
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v2/projects", nil)
+	w := &closeNotifyRecorder{ResponseRecorder: httptest.NewRecorder()}
+	router.ServeHTTP(w, req)
+
+	if got := strings.TrimSpace(w.Header().Get("X-API-Version")); got != "v2" {
+		t.Fatalf("expected response to advertise version v2, got %q", got)
+	}
+}
+
+func TestConfiguredApiVersionRoutesAuthLogin(t *testing.T) {
+	t.Setenv("GATEWAY_ENFORCE_JWT", "false")
+	t.Setenv("GATEWAY_API_SUPPORTED_VERSIONS", "v1,v2")
+	t.Setenv("JWT_SECRET", "test-secret")
+	router := NewRouter()
+
+	req := httptest.NewRequest(http.MethodPost, "/api/v2/auth/login", strings.NewReader(`{"username":"admin","password":"admin123"}`))
+	req.Header.Set("Content-Type", "application/json")
+	w := &closeNotifyRecorder{ResponseRecorder: httptest.NewRecorder()}
+	router.ServeHTTP(w, req)
+
+	if got := strings.TrimSpace(w.Header().Get("X-API-Version")); got != "v2" {
+		t.Fatalf("expected response to advertise version v2, got %q", got)
+	}
+}
+
+func TestUnsupportedApiVersionReturns404(t *testing.T) {
+	t.Setenv("GATEWAY_ENFORCE_JWT", "false")
+	t.Setenv("JWT_SECRET", "test-secret")
+	router := NewRouter()
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v9/projects", nil)
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusNotFound {
+		t.Fatalf("expected unsupported api version to return 404, got %d", w.Code)
+	}
+}
+
 type closeNotifyRecorder struct {
 	*httptest.ResponseRecorder
 }

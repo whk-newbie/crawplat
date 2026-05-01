@@ -33,48 +33,31 @@ type observabilityConfig struct {
 }
 
 func NewRouter() *gin.Engine {
-	return newRouter(loadAuthConfig(), loadRateLimitConfig(), loadObservabilityConfig())
+	return newRouter(loadAuthConfig(), loadRateLimitConfig(), loadObservabilityConfig(), loadAPIVersionConfig())
 }
 
-func newRouter(cfg authConfig, rlCfg rateLimitConfig, obsCfg observabilityConfig) *gin.Engine {
+func newRouter(cfg authConfig, rlCfg rateLimitConfig, obsCfg observabilityConfig, versionCfg apiVersionConfig) *gin.Engine {
 	router := gin.Default()
 	router.Use(attachRequestID(obsCfg))
 	if obsCfg.requestLogEnabled {
 		router.Use(logRequest(obsCfg))
 	}
 
-	router.Any("/api/v1/auth", proxy.ProxyTo("iam-service"))
-	router.Any("/api/v1/auth/*path", proxy.ProxyTo("iam-service"))
-
-	api := router.Group("/api/v1")
-	if cfg.enforceJWT {
-		api.Use(requireJWT(cfg.jwtSecret))
-	}
+	var rateLimitHandler gin.HandlerFunc
 	if rlCfg.enabled {
-		api.Use(requireRateLimit(rlCfg))
+		rateLimitHandler = requireRateLimit(rlCfg)
 	}
 
-	api.Any("/projects", proxy.ProxyTo("project-service"))
+	for _, version := range versionCfg.supported {
+		registerAPIVersion(router, version, cfg, rateLimitHandler)
+	}
 
-	api.Any("/projects/:projectId/spiders", proxy.ProxyTo("spider-service"))
-
-	api.Any("/executions", proxy.ProxyTo("execution-service"))
-	api.Any("/executions/*path", proxy.ProxyTo("execution-service"))
 	internalExecution := router.Group("/internal/v1/executions", requireInternalToken(cfg.internalToken))
 	internalExecution.Any("/claim", proxy.ProxyTo("execution-service"))
 	internalExecution.Any("/:id/start", proxy.ProxyTo("execution-service"))
 	internalExecution.Any("/:id/logs", proxy.ProxyTo("execution-service"))
 	internalExecution.Any("/:id/complete", proxy.ProxyTo("execution-service"))
 	internalExecution.Any("/:id/fail", proxy.ProxyTo("execution-service"))
-
-	api.Any("/nodes", proxy.ProxyTo("node-service"))
-	api.Any("/nodes/*path", proxy.ProxyTo("node-service"))
-
-	api.Any("/datasources", proxy.ProxyTo("datasource-service"))
-	api.Any("/datasources/*path", proxy.ProxyTo("datasource-service"))
-
-	api.Any("/schedules", proxy.ProxyTo("scheduler-service"))
-	api.Any("/monitor/*path", proxy.ProxyTo("monitor-service"))
 
 	return router
 }
@@ -108,6 +91,32 @@ func loadObservabilityConfig() observabilityConfig {
 		requestLogEnabled: envBool("GATEWAY_REQUEST_LOG_ENABLED", true),
 		requestIDHeader:   header,
 		trustRequestID:    envBool("GATEWAY_TRUST_REQUEST_ID", true),
+	}
+}
+
+func loadAPIVersionConfig() apiVersionConfig {
+	versions := []string{"v1"}
+	seen := map[string]struct{}{
+		"v1": {},
+	}
+
+	raw := strings.TrimSpace(os.Getenv("GATEWAY_API_SUPPORTED_VERSIONS"))
+	if raw != "" {
+		for _, candidate := range strings.Split(raw, ",") {
+			version := normalizeAPIVersion(candidate)
+			if version == "" {
+				continue
+			}
+			if _, ok := seen[version]; ok {
+				continue
+			}
+			versions = append(versions, version)
+			seen[version] = struct{}{}
+		}
+	}
+
+	return apiVersionConfig{
+		supported: versions,
 	}
 }
 
