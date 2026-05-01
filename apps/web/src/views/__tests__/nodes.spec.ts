@@ -81,6 +81,11 @@ describe('nodes view', () => {
               heartbeatCount: 12,
             },
           ],
+          summary: {
+            totalSessions: 1,
+            totalHeartbeatCount: 12,
+            totalOnlineDurationSeconds: 2400,
+          },
         }),
       })
 
@@ -106,6 +111,8 @@ describe('nodes view', () => {
     expect(container.textContent).toContain('exec-1')
     expect(container.textContent).toContain('Online Sessions')
     expect(container.textContent).toContain('heartbeats: 12')
+    expect(container.textContent).toContain('online seconds')
+    expect(container.textContent).toContain('2400')
   })
 
   it('applies execution filter and pagination query params', async () => {
@@ -173,6 +180,21 @@ describe('nodes view', () => {
           recentExecutions: [],
         }),
       })
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({
+          node: {
+            id: 'node-a',
+            name: 'node-a',
+            status: 'online',
+            capabilities: ['docker'],
+            lastSeenAt: '2026-05-01T09:30:00Z',
+          },
+          heartbeatHistory: [],
+          recentExecutions: [],
+        }),
+      })
 
     vi.stubGlobal('fetch', fetchMock)
 
@@ -183,6 +205,19 @@ describe('nodes view', () => {
     await flushPromises()
 
     const statusSelect = container.querySelector('select') as HTMLSelectElement
+    const datetimeInputs = container.querySelectorAll('input[type="datetime-local"]')
+    const fromInput = datetimeInputs[0] as HTMLInputElement
+    const toInput = datetimeInputs[1] as HTMLInputElement
+    const expectedFrom = encodeURIComponent(new Date('2026-05-01T08:00').toISOString())
+    const expectedTo = encodeURIComponent(new Date('2026-05-01T10:00').toISOString())
+
+    fromInput.value = '2026-05-01T08:00'
+    fromInput.dispatchEvent(new Event('input'))
+    toInput.value = '2026-05-01T10:00'
+    toInput.dispatchEvent(new Event('input'))
+    toInput.dispatchEvent(new Event('change'))
+    await flushPromises()
+
     statusSelect.value = 'running'
     statusSelect.dispatchEvent(new Event('change'))
     await flushPromises()
@@ -192,11 +227,11 @@ describe('nodes view', () => {
     await flushPromises()
 
     expect(fetchMock).toHaveBeenCalledWith(
-      '/api/v1/nodes/node-a?executionLimit=20&executionStatus=running',
+      `/api/v1/nodes/node-a?executionLimit=20&executionStatus=running&executionFrom=${expectedFrom}&executionTo=${expectedTo}`,
       expect.any(Object),
     )
     expect(fetchMock).toHaveBeenCalledWith(
-      '/api/v1/nodes/node-a?executionLimit=20&executionOffset=20&executionStatus=running',
+      `/api/v1/nodes/node-a?executionLimit=20&executionOffset=20&executionStatus=running&executionFrom=${expectedFrom}&executionTo=${expectedTo}`,
       expect.any(Object),
     )
   })

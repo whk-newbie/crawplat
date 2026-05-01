@@ -38,6 +38,17 @@ type NodeSession struct {
 	DurationSeconds int64     `json:"durationSeconds"`
 }
 
+type NodeSessionSummary struct {
+	TotalSessions              int   `json:"totalSessions"`
+	TotalHeartbeatCount        int   `json:"totalHeartbeatCount"`
+	TotalOnlineDurationSeconds int64 `json:"totalOnlineDurationSeconds"`
+}
+
+type NodeSessionsResult struct {
+	Sessions []NodeSession      `json:"sessions"`
+	Summary  NodeSessionSummary `json:"summary"`
+}
+
 type NodeDetail struct {
 	Node             Node            `json:"node"`
 	HeartbeatHistory []NodeHeartbeat `json:"heartbeatHistory"`
@@ -48,6 +59,8 @@ type ExecutionQuery struct {
 	Limit  int
 	Offset int
 	Status string
+	From   *time.Time
+	To     *time.Time
 }
 
 type DetailQuery struct {
@@ -300,9 +313,9 @@ func (s *NodeService) Detail(id string, query DetailQuery) (NodeDetail, error) {
 	}, nil
 }
 
-func (s *NodeService) Sessions(id string, limit int, gapSeconds int) ([]NodeSession, error) {
+func (s *NodeService) Sessions(id string, limit int, gapSeconds int) (NodeSessionsResult, error) {
 	if _, err := s.catalogRepo.GetByID(context.Background(), id); err != nil {
-		return nil, err
+		return NodeSessionsResult{}, err
 	}
 
 	historyLimit := limit * 20
@@ -315,13 +328,25 @@ func (s *NodeService) Sessions(id string, limit int, gapSeconds int) ([]NodeSess
 
 	history, err := s.catalogRepo.ListHeartbeatHistory(context.Background(), id, historyLimit)
 	if err != nil {
-		return nil, err
+		return NodeSessionsResult{}, err
 	}
 	sessions := aggregateSessions(history, time.Duration(gapSeconds)*time.Second)
 	if len(sessions) > limit {
-		return sessions[:limit], nil
+		sessions = sessions[:limit]
 	}
-	return sessions, nil
+
+	summary := NodeSessionSummary{
+		TotalSessions: len(sessions),
+	}
+	for _, s := range sessions {
+		summary.TotalHeartbeatCount += s.HeartbeatCount
+		summary.TotalOnlineDurationSeconds += s.DurationSeconds
+	}
+
+	return NodeSessionsResult{
+		Sessions: sessions,
+		Summary:  summary,
+	}, nil
 }
 
 func aggregateSessions(history []NodeHeartbeat, gap time.Duration) []NodeSession {

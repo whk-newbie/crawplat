@@ -106,7 +106,11 @@ func TestNodeDetailRouteReturnsNodeDetail(t *testing.T) {
 	}
 	router := NewRouter(svc)
 
-	req := httptest.NewRequest(http.MethodGet, "/api/v1/nodes/node-a?limit=5&executionLimit=3&executionOffset=0&executionStatus=succeeded", nil)
+	req := httptest.NewRequest(
+		http.MethodGet,
+		"/api/v1/nodes/node-a?limit=5&executionLimit=3&executionOffset=0&executionStatus=succeeded&executionFrom=2023-11-14T22:12:00Z&executionTo=2023-11-14T22:16:00Z",
+		nil,
+	)
 	w := httptest.NewRecorder()
 
 	router.ServeHTTP(w, req)
@@ -184,6 +188,27 @@ func TestNodeDetailRouteRejectsInvalidLimit(t *testing.T) {
 	if w4.Code != http.StatusBadRequest {
 		t.Fatalf("expected status 400 for executionOffset, got %d", w4.Code)
 	}
+
+	req5 := httptest.NewRequest(http.MethodGet, "/api/v1/nodes/node-a?executionFrom=not-time", nil)
+	w5 := httptest.NewRecorder()
+	router.ServeHTTP(w5, req5)
+	if w5.Code != http.StatusBadRequest {
+		t.Fatalf("expected status 400 for invalid executionFrom, got %d", w5.Code)
+	}
+
+	req6 := httptest.NewRequest(http.MethodGet, "/api/v1/nodes/node-a?executionTo=not-time", nil)
+	w6 := httptest.NewRecorder()
+	router.ServeHTTP(w6, req6)
+	if w6.Code != http.StatusBadRequest {
+		t.Fatalf("expected status 400 for invalid executionTo, got %d", w6.Code)
+	}
+
+	req7 := httptest.NewRequest(http.MethodGet, "/api/v1/nodes/node-a?executionFrom=2023-11-14T22:16:00Z&executionTo=2023-11-14T22:12:00Z", nil)
+	w7 := httptest.NewRecorder()
+	router.ServeHTTP(w7, req7)
+	if w7.Code != http.StatusBadRequest {
+		t.Fatalf("expected status 400 for executionFrom > executionTo, got %d", w7.Code)
+	}
 }
 
 func TestNodeSessionsRouteReturnsSessions(t *testing.T) {
@@ -203,12 +228,18 @@ func TestNodeSessionsRouteReturnsSessions(t *testing.T) {
 		t.Fatalf("expected status 200, got %d, body=%s", w.Code, w.Body.String())
 	}
 
-	var sessions []service.NodeSession
-	if err := json.Unmarshal(w.Body.Bytes(), &sessions); err != nil {
+	var response struct {
+		Sessions []service.NodeSession      `json:"sessions"`
+		Summary  service.NodeSessionSummary `json:"summary"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &response); err != nil {
 		t.Fatalf("failed to decode response: %v", err)
 	}
-	if len(sessions) == 0 {
+	if len(response.Sessions) == 0 {
 		t.Fatalf("expected non-empty sessions")
+	}
+	if response.Summary.TotalSessions == 0 || response.Summary.TotalHeartbeatCount == 0 {
+		t.Fatalf("expected non-empty summary, got %#v", response.Summary)
 	}
 }
 

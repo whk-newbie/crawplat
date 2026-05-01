@@ -132,6 +132,24 @@ func (r *fakeCatalogRepo) ListRecentExecutions(_ context.Context, nodeID string,
 		}
 		executions = filtered
 	}
+	if query.From != nil {
+		filtered := make([]NodeExecution, 0, len(executions))
+		for _, exec := range executions {
+			if !exec.CreatedAt.Before(*query.From) {
+				filtered = append(filtered, exec)
+			}
+		}
+		executions = filtered
+	}
+	if query.To != nil {
+		filtered := make([]NodeExecution, 0, len(executions))
+		for _, exec := range executions {
+			if !exec.CreatedAt.After(*query.To) {
+				filtered = append(filtered, exec)
+			}
+		}
+		executions = filtered
+	}
 	if query.Offset >= len(executions) {
 		return []NodeExecution{}, nil
 	}
@@ -286,6 +304,8 @@ func TestDetailReturnsNodeInfoHistoryAndExecutions(t *testing.T) {
 		},
 	}
 	svc := NewNodeServiceWithCatalog(live, catalog)
+	from := seenAt.Add(-time.Minute)
+	to := seenAt.Add(time.Minute)
 
 	detail, err := svc.Detail("node-a", DetailQuery{
 		HeartbeatLimit: 5,
@@ -293,6 +313,8 @@ func TestDetailReturnsNodeInfoHistoryAndExecutions(t *testing.T) {
 			Limit:  3,
 			Offset: 0,
 			Status: "succeeded",
+			From:   &from,
+			To:     &to,
 		},
 	})
 	if err != nil {
@@ -312,6 +334,12 @@ func TestDetailReturnsNodeInfoHistoryAndExecutions(t *testing.T) {
 	}
 	if catalog.lastExecutionQuery.Limit != 3 || catalog.lastExecutionQuery.Status != "succeeded" {
 		t.Fatalf("unexpected execution query: %#v", catalog.lastExecutionQuery)
+	}
+	if catalog.lastExecutionQuery.From == nil || !catalog.lastExecutionQuery.From.Equal(from) {
+		t.Fatalf("expected from=%v, got %#v", from, catalog.lastExecutionQuery.From)
+	}
+	if catalog.lastExecutionQuery.To == nil || !catalog.lastExecutionQuery.To.Equal(to) {
+		t.Fatalf("expected to=%v, got %#v", to, catalog.lastExecutionQuery.To)
 	}
 }
 
@@ -348,10 +376,11 @@ func TestSessionsSplitsByGapAndReturnsNewestSessions(t *testing.T) {
 	}
 	svc := NewNodeServiceWithCatalog(&fakeLiveRepo{}, catalog)
 
-	sessions, err := svc.Sessions("node-a", 5, 60)
+	result, err := svc.Sessions("node-a", 5, 60)
 	if err != nil {
 		t.Fatalf("Sessions returned error: %v", err)
 	}
+	sessions := result.Sessions
 	if len(sessions) != 2 {
 		t.Fatalf("expected 2 sessions, got %#v", sessions)
 	}
@@ -360,5 +389,8 @@ func TestSessionsSplitsByGapAndReturnsNewestSessions(t *testing.T) {
 	}
 	if sessions[1].HeartbeatCount != 2 || sessions[1].DurationSeconds != 40 {
 		t.Fatalf("unexpected second session: %#v", sessions[1])
+	}
+	if result.Summary.TotalSessions != 2 || result.Summary.TotalHeartbeatCount != 5 || result.Summary.TotalOnlineDurationSeconds != 120 {
+		t.Fatalf("unexpected summary: %#v", result.Summary)
 	}
 }

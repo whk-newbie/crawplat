@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"strconv"
+	"time"
 
 	"crawler-platform/apps/node-service/internal/service"
 	"github.com/gin-gonic/gin"
@@ -68,6 +69,20 @@ func NewRouter(nodeService *service.NodeService) *gin.Engine {
 			return
 		}
 		executionStatus := c.Query("executionStatus")
+		executionFrom, err := parseRFC3339Query(c, "executionFrom")
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "executionFrom must be RFC3339"})
+			return
+		}
+		executionTo, err := parseRFC3339Query(c, "executionTo")
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "executionTo must be RFC3339"})
+			return
+		}
+		if executionFrom != nil && executionTo != nil && executionFrom.After(*executionTo) {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "executionFrom must be before or equal to executionTo"})
+			return
+		}
 
 		detail, err := nodeService.Detail(id, service.DetailQuery{
 			HeartbeatLimit: heartbeatLimit,
@@ -75,6 +90,8 @@ func NewRouter(nodeService *service.NodeService) *gin.Engine {
 				Limit:  executionLimit,
 				Offset: executionOffset,
 				Status: executionStatus,
+				From:   executionFrom,
+				To:     executionTo,
 			},
 		})
 		if err != nil {
@@ -156,6 +173,18 @@ func parseIntRangeQuery(c *gin.Context, key string, defaultValue int, min int, m
 		return 0, errors.New("out of range")
 	}
 	return parsed, nil
+}
+
+func parseRFC3339Query(c *gin.Context, key string) (*time.Time, error) {
+	raw := c.Query(key)
+	if raw == "" {
+		return nil, nil
+	}
+	parsed, err := time.Parse(time.RFC3339, raw)
+	if err != nil {
+		return nil, err
+	}
+	return &parsed, nil
 }
 
 func validateNodeID(id string) error {

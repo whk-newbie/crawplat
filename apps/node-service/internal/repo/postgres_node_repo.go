@@ -151,6 +151,16 @@ func (r *PostgresNodeRepository) ListRecentExecutions(ctx context.Context, nodeI
 		args = append(args, query.Status)
 		argPos++
 	}
+	if query.From != nil {
+		where = append(where, fmt.Sprintf("created_at >= $%d", argPos))
+		args = append(args, *query.From)
+		argPos++
+	}
+	if query.To != nil {
+		where = append(where, fmt.Sprintf("created_at <= $%d", argPos))
+		args = append(args, *query.To)
+		argPos++
+	}
 
 	sqlQuery := fmt.Sprintf(`
 		SELECT id, project_id, spider_id, status, trigger_source, created_at, started_at, finished_at

@@ -114,6 +114,23 @@ func TestPostgresNodeRepositoryUpsertAndListCatalog(t *testing.T) {
 		t.Fatalf("ListRecentExecutions with status filter returned error: %v", err)
 	}
 
+	from := seenAt.Add(-2 * time.Hour)
+	to := seenAt.Add(2 * time.Hour)
+	mock.ExpectQuery(`SELECT id, project_id, spider_id, status, trigger_source, created_at, started_at, finished_at FROM executions WHERE node_id = \$1 AND status = \$2 AND created_at >= \$3 AND created_at <= \$4 ORDER BY created_at DESC LIMIT \$5 OFFSET \$6`).
+		WithArgs("node-1", "succeeded", from, to, 20, 2).
+		WillReturnRows(sqlmock.NewRows([]string{"id", "project_id", "spider_id", "status", "trigger_source", "created_at", "started_at", "finished_at"}))
+
+	_, err = repo.ListRecentExecutions(context.Background(), "node-1", service.ExecutionQuery{
+		Limit:  20,
+		Offset: 2,
+		Status: "succeeded",
+		From:   &from,
+		To:     &to,
+	})
+	if err != nil {
+		t.Fatalf("ListRecentExecutions with time range returned error: %v", err)
+	}
+
 	if err := mock.ExpectationsWereMet(); err != nil {
 		t.Fatalf("unmet sql expectations: %v", err)
 	}

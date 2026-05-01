@@ -82,6 +82,24 @@
               </select>
             </label>
             <label>
+              From
+              <input
+                v-model="executionFromInput"
+                :disabled="loadingDetail"
+                type="datetime-local"
+                @change="resetExecutionPageAndReload"
+              />
+            </label>
+            <label>
+              To
+              <input
+                v-model="executionToInput"
+                :disabled="loadingDetail"
+                type="datetime-local"
+                @change="resetExecutionPageAndReload"
+              />
+            </label>
+            <label>
               Limit
               <select v-model.number="executionLimit" :disabled="loadingDetail" @change="resetExecutionPageAndReload">
                 <option :value="10">10</option>
@@ -128,6 +146,20 @@
               {{ loadingSessions ? 'Loading...' : 'Load Sessions' }}
             </button>
           </div>
+          <div class="session-summary">
+            <article class="session-stat">
+              <small>sessions</small>
+              <strong>{{ sessionSummary.totalSessions }}</strong>
+            </article>
+            <article class="session-stat">
+              <small>heartbeats</small>
+              <strong>{{ sessionSummary.totalHeartbeatCount }}</strong>
+            </article>
+            <article class="session-stat">
+              <small>online seconds</small>
+              <strong>{{ sessionSummary.totalOnlineDurationSeconds }}</strong>
+            </article>
+          </div>
           <p v-if="sessionsError" class="error">{{ sessionsError }}</p>
           <ul v-else-if="sessions.length" class="simple-list">
             <li v-for="(session, index) in sessions" :key="`${session.startedAt}-${index}`">
@@ -152,6 +184,7 @@ import {
   listNodes,
   type NodeDetail,
   type NodeSession,
+  type NodeSessionsSummary,
   type NodeSummary,
 } from '../api/nodes'
 
@@ -168,8 +201,26 @@ const sessions = ref<NodeSession[]>([])
 const executionLimit = ref(20)
 const executionOffset = ref(0)
 const executionStatus = ref('')
+const executionFromInput = ref('')
+const executionToInput = ref('')
 const sessionLimit = ref(20)
 const sessionGapSeconds = ref(90)
+const sessionSummary = ref<NodeSessionsSummary>({
+  totalSessions: 0,
+  totalHeartbeatCount: 0,
+  totalOnlineDurationSeconds: 0,
+})
+
+function normalizeDateInput(value: string) {
+  if (!value.trim()) {
+    return undefined
+  }
+  const parsed = new Date(value)
+  if (Number.isNaN(parsed.getTime())) {
+    return undefined
+  }
+  return parsed.toISOString()
+}
 
 async function loadNodes() {
   loadingList.value = true
@@ -193,6 +244,11 @@ async function selectNode(nodeId: string) {
   executionOffset.value = 0
   selectedDetail.value = null
   sessions.value = []
+  sessionSummary.value = {
+    totalSessions: 0,
+    totalHeartbeatCount: 0,
+    totalOnlineDurationSeconds: 0,
+  }
   await Promise.all([reloadSelectedDetail(), reloadSelectedSessions()])
 }
 
@@ -207,6 +263,8 @@ async function reloadSelectedDetail() {
       executionLimit: executionLimit.value,
       executionOffset: executionOffset.value,
       executionStatus: executionStatus.value.trim() || undefined,
+      executionFrom: normalizeDateInput(executionFromInput.value),
+      executionTo: normalizeDateInput(executionToInput.value),
     })
   } catch (err) {
     detailError.value = err instanceof Error ? err.message : 'failed to load node detail'
@@ -222,10 +280,12 @@ async function reloadSelectedSessions() {
   sessionsError.value = ''
   loadingSessions.value = true
   try {
-    sessions.value = await getNodeSessions(selectedNodeId.value, {
+    const result = await getNodeSessions(selectedNodeId.value, {
       limit: Math.max(1, sessionLimit.value || 20),
       gapSeconds: Math.max(1, sessionGapSeconds.value || 90),
     })
+    sessions.value = result.sessions
+    sessionSummary.value = result.summary
   } catch (err) {
     sessionsError.value = err instanceof Error ? err.message : 'failed to load sessions'
   } finally {
@@ -337,6 +397,27 @@ onMounted(() => {
   border-radius: 999px;
   background: #f6f8fa;
   font-size: 0.85rem;
+}
+
+.session-summary {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.5rem;
+  margin: 0.5rem 0;
+}
+
+.session-stat {
+  border: 1px solid #d0d7de;
+  border-radius: 8px;
+  padding: 0.5rem 0.6rem;
+  background: #f6f8fa;
+}
+
+.session-stat small {
+  display: block;
+  color: #57606a;
+  text-transform: uppercase;
+  font-size: 0.7rem;
 }
 
 .simple-list {

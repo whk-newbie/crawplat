@@ -34,10 +34,18 @@ export type NodeSession = {
   heartbeatCount?: number
 }
 
+export type NodeSessionsSummary = {
+  totalSessions: number
+  totalHeartbeatCount: number
+  totalOnlineDurationSeconds: number
+}
+
 export type NodeDetailQuery = {
   executionLimit?: number
   executionOffset?: number
   executionStatus?: string
+  executionFrom?: string
+  executionTo?: string
 }
 
 export type NodeSessionsQuery = {
@@ -63,7 +71,16 @@ type NodeSessionsResponse =
   | NodeSession[]
   | {
       sessions?: NodeSession[]
+      summary?: Partial<NodeSessionsSummary> & {
+        sessionCount?: number
+        totalDurationSeconds?: number
+      }
     }
+
+export type NodeSessionsResult = {
+  sessions: NodeSession[]
+  summary: NodeSessionsSummary
+}
 
 function buildFallbackDetail(node: NodeSummary): NodeDetail {
   return {
@@ -94,6 +111,8 @@ export async function getNodeDetail(nodeId: string, query: NodeDetailQuery = {})
     executionLimit: query.executionLimit ? String(query.executionLimit) : '',
     executionOffset: query.executionOffset ? String(query.executionOffset) : '',
     executionStatus: query.executionStatus ?? '',
+    executionFrom: query.executionFrom ?? '',
+    executionTo: query.executionTo ?? '',
   })
 
   try {
@@ -128,12 +147,33 @@ export async function getNodeSessions(nodeId: string, query: NodeSessionsQuery =
       `/nodes/${encodeURIComponent(nodeId)}/sessions${requestQuery}`,
     )
     if (Array.isArray(response)) {
-      return response
+      return {
+        sessions: response,
+        summary: {
+          totalSessions: response.length,
+          totalHeartbeatCount: 0,
+          totalOnlineDurationSeconds: 0,
+        },
+      }
     }
-    return response.sessions ?? []
+    return {
+      sessions: response.sessions ?? [],
+      summary: {
+        totalSessions: response.summary?.totalSessions ?? response.summary?.sessionCount ?? 0,
+        totalHeartbeatCount: response.summary?.totalHeartbeatCount ?? 0,
+        totalOnlineDurationSeconds: response.summary?.totalOnlineDurationSeconds ?? response.summary?.totalDurationSeconds ?? 0,
+      },
+    }
   } catch (err) {
     if (shouldFallbackByError(err)) {
-      return []
+      return {
+        sessions: [],
+        summary: {
+          totalSessions: 0,
+          totalHeartbeatCount: 0,
+          totalOnlineDurationSeconds: 0,
+        },
+      }
     }
     throw err
   }
