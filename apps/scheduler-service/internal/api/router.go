@@ -2,8 +2,10 @@ package api
 
 import (
 	"net/http"
+	"strconv"
 
 	"crawler-platform/apps/scheduler-service/internal/service"
+	"crawler-platform/packages/go-common/httpx"
 	"github.com/gin-gonic/gin"
 )
 
@@ -41,12 +43,21 @@ func NewRouter(schedulerService *service.SchedulerService) *gin.Engine {
 	})
 
 	router.GET("/api/v1/schedules", func(c *gin.Context) {
-		schedules, err := schedulerService.List()
+		limit, _ := strconv.Atoi(c.DefaultQuery("limit", "20"))
+		offset, _ := strconv.Atoi(c.DefaultQuery("offset", "0"))
+		p := httpx.DefaultPagination(limit, offset)
+
+		schedules, total, err := schedulerService.List(p.Limit, p.Offset)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
 		}
-		c.JSON(http.StatusOK, schedules)
+		c.JSON(http.StatusOK, httpx.PaginatedResponse{
+			Items:  schedules,
+			Total:  total,
+			Limit:  p.Limit,
+			Offset: p.Offset,
+		})
 	})
 
 	return router

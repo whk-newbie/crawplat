@@ -21,7 +21,8 @@ type DatasourceService struct {
 
 type Repository interface {
 	Create(ctx context.Context, datasource model.Datasource) error
-	ListByProject(ctx context.Context, projectID string) ([]model.Datasource, error)
+	ListByProject(ctx context.Context, projectID string, limit, offset int) ([]model.Datasource, error)
+	CountByProject(ctx context.Context, projectID string) (int64, error)
 	Get(ctx context.Context, id string) (model.Datasource, bool, error)
 }
 
@@ -38,18 +39,38 @@ func (r *memoryRepository) Create(_ context.Context, datasource model.Datasource
 	return nil
 }
 
-func (r *memoryRepository) ListByProject(_ context.Context, projectID string) ([]model.Datasource, error) {
+func (r *memoryRepository) ListByProject(_ context.Context, projectID string, limit, offset int) ([]model.Datasource, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
-	var datasources []model.Datasource
+	var all []model.Datasource
 	for _, datasource := range r.datasources {
 		if projectID == "" || datasource.ProjectID == projectID {
 			datasource.Config = cloneConfig(datasource.Config)
-			datasources = append(datasources, datasource)
+			all = append(all, datasource)
 		}
 	}
-	return datasources, nil
+	if offset >= len(all) {
+		return nil, nil
+	}
+	end := offset + limit
+	if end > len(all) {
+		end = len(all)
+	}
+	return all[offset:end], nil
+}
+
+func (r *memoryRepository) CountByProject(_ context.Context, projectID string) (int64, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	var count int64
+	for _, datasource := range r.datasources {
+		if projectID == "" || datasource.ProjectID == projectID {
+			count++
+		}
+	}
+	return count, nil
 }
 
 func (r *memoryRepository) Get(_ context.Context, id string) (model.Datasource, bool, error) {
@@ -94,8 +115,16 @@ func (s *DatasourceService) Create(projectID, name, typ string, cfg map[string]s
 	return datasource, nil
 }
 
-func (s *DatasourceService) List(projectID string) ([]Datasource, error) {
-	return s.repo.ListByProject(context.Background(), projectID)
+func (s *DatasourceService) List(projectID string, limit, offset int) ([]Datasource, int64, error) {
+	datasources, err := s.repo.ListByProject(context.Background(), projectID, limit, offset)
+	if err != nil {
+		return nil, 0, err
+	}
+	total, err := s.repo.CountByProject(context.Background(), projectID)
+	if err != nil {
+		return nil, 0, err
+	}
+	return datasources, total, nil
 }
 
 func (s *DatasourceService) Get(id string) (Datasource, bool, error) {

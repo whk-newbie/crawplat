@@ -22,20 +22,25 @@ describe('schedules view', () => {
     const fetchMock = vi.fn().mockResolvedValue({
       ok: true,
       status: 200,
-      json: async () => ([
-        {
-          id: 'schedule-1',
-          projectId: 'project-1',
-          spiderId: 'spider-1',
-          name: 'nightly-go-echo',
-          cronExpr: '*/5 * * * *',
-          enabled: true,
-          image: 'crawler/go-echo:latest',
-          command: ['./go-echo'],
-          retryLimit: 2,
-          retryDelaySeconds: 30,
-        },
-      ]),
+      json: async () => ({
+        items: [
+          {
+            id: 'schedule-1',
+            projectId: 'project-1',
+            spiderId: 'spider-1',
+            name: 'nightly-go-echo',
+            cronExpr: '*/5 * * * *',
+            enabled: true,
+            image: 'crawler/go-echo:latest',
+            command: ['./go-echo'],
+            retryLimit: 2,
+            retryDelaySeconds: 30,
+          },
+        ],
+        total: 1,
+        limit: 20,
+        offset: 0,
+      }),
     })
 
     vi.stubGlobal('fetch', fetchMock)

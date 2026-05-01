@@ -25,8 +25,15 @@ export type CreateScheduleInput = {
   retryDelaySeconds: number
 }
 
+export type PaginatedSchedules = {
+  items: Schedule[]
+  total: number
+  limit: number
+  offset: number
+}
+
 export function listSchedules() {
-  return apiFetch<Schedule[]>('/schedules')
+  return apiFetch<PaginatedSchedules>('/schedules')
 }
 
 export function createSchedule(input: CreateScheduleInput) {

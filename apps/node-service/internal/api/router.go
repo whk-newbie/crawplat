@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"crawler-platform/apps/node-service/internal/service"
+	"crawler-platform/packages/go-common/httpx"
 	"github.com/gin-gonic/gin"
 )
 
@@ -38,12 +39,21 @@ func NewRouter(nodeService *service.NodeService) *gin.Engine {
 	})
 
 	router.GET("/api/v1/nodes", func(c *gin.Context) {
-		nodes, err := nodeService.List()
+		limit, _ := strconv.Atoi(c.DefaultQuery("limit", "20"))
+		offset, _ := strconv.Atoi(c.DefaultQuery("offset", "0"))
+		p := httpx.DefaultPagination(limit, offset)
+
+		nodes, total, err := nodeService.List(p.Limit, p.Offset)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
 		}
-		c.JSON(http.StatusOK, nodes)
+		c.JSON(http.StatusOK, httpx.PaginatedResponse{
+			Items:  nodes,
+			Total:  total,
+			Limit:  p.Limit,
+			Offset: p.Offset,
+		})
 	})
 
 	router.GET("/api/v1/nodes/:id", func(c *gin.Context) {

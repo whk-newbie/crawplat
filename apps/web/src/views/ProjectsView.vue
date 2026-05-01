@@ -75,7 +75,8 @@ function closeCreateDialog() {
 async function loadProjects() {
   loading.value = true
   try {
-    projects.value = await listProjects()
+    const response = await listProjects()
+    projects.value = response.items
   } catch (err) {
     ElMessage.error(err instanceof Error ? err.message : 'failed to load projects')
   } finally {

@@ -117,7 +117,8 @@ async function loadSpiders() {
   }
   loading.value = true
   try {
-    spiders.value = await listSpiders(projectFilter.value.trim())
+    const response = await listSpiders(projectFilter.value.trim())
+    spiders.value = response.items
   } catch (err) {
     ElMessage.error(err instanceof Error ? err.message : 'failed to load spiders')
   } finally {
