@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -13,10 +14,46 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
+type stubProber struct {
+	testResult    model.TestResult
+	previewResult model.PreviewResult
+	testErr       error
+	previewErr    error
+}
+
+func (p *stubProber) Test(_ context.Context, datasource model.Datasource) (model.TestResult, error) {
+	if p.testErr != nil {
+		return model.TestResult{}, p.testErr
+	}
+	result := p.testResult
+	if result.DatasourceID == "" {
+		result.DatasourceID = datasource.ID
+	}
+	return result, nil
+}
+
+func (p *stubProber) Preview(_ context.Context, datasource model.Datasource) (model.PreviewResult, error) {
+	if p.previewErr != nil {
+		return model.PreviewResult{}, p.previewErr
+	}
+	result := p.previewResult
+	if result.DatasourceID == "" {
+		result.DatasourceID = datasource.ID
+	}
+	if result.DatasourceType == "" {
+		result.DatasourceType = datasource.Type
+	}
+	return result, nil
+}
+
 func TestCreateDatasourceReturnsCreatedDatasource(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
-	router := NewRouter(service.NewDatasourceService())
+	svc := service.NewDatasourceService().WithProber(&stubProber{
+		testResult:    model.TestResult{Status: "ok", Message: "connection test passed"},
+		previewResult: model.PreviewResult{Rows: []map[string]string{{"id": "sample-1"}}},
+	})
+	router := NewRouter(svc)
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/datasources", strings.NewReader(`{"projectId":"p1","name":"main","type":"postgresql","config":{"schema":"public"}}`))
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
@@ -39,7 +76,10 @@ func TestCreateDatasourceReturnsCreatedDatasource(t *testing.T) {
 func TestDatasourceLifecycleRoutesUseService(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
-	svc := service.NewDatasourceService()
+	svc := service.NewDatasourceService().WithProber(&stubProber{
+		testResult:    model.TestResult{Status: "ok", Message: "connection test passed"},
+		previewResult: model.PreviewResult{Rows: []map[string]string{{"key": "k1"}}},
+	})
 	created, err := svc.Create("p1", "main", "redis", map[string]string{"db": "0"})
 	if err != nil {
 		t.Fatalf("Create returned error: %v", err)
@@ -86,7 +126,10 @@ func TestDatasourceLifecycleRoutesUseService(t *testing.T) {
 func TestListDatasourcesRespectsPaginationParams(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
-	svc := service.NewDatasourceService()
+	svc := service.NewDatasourceService().WithProber(&stubProber{
+		testResult:    model.TestResult{Status: "ok", Message: "connection test passed"},
+		previewResult: model.PreviewResult{Rows: []map[string]string{{"key": "k1"}}},
+	})
 	for i := 0; i < 3; i++ {
 		if _, err := svc.Create("p1", "main", "redis", map[string]string{"db": "0"}); err != nil {
 			t.Fatalf("Create returned error: %v", err)
@@ -108,4 +151,40 @@ func TestListDatasourcesRespectsPaginationParams(t *testing.T) {
 	if payload.Total != 3 || payload.Limit != 1 || payload.Offset != 1 {
 		t.Fatalf("unexpected pagination payload: %+v", payload)
 	}
+}
+
+func TestDatasourceProbeErrorsMapToGatewayResponses(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	svc := service.NewDatasourceService().WithProber(&stubProber{
+		testErr:    service.ErrDatasourceConfigInvalid,
+		previewErr: service.ErrDatasourceProbeFailed,
+	})
+	created, err := svc.Create("p1", "main", "redis", map[string]string{"addr": "redis:6379"})
+	if err != nil {
+		t.Fatalf("Create returned error: %v", err)
+	}
+	router := NewRouter(svc)
+
+	testReq := httptest.NewRequest(http.MethodPost, "/api/v1/datasources/"+created.ID+"/test", nil)
+	testResp := httptest.NewRecorder()
+	router.ServeHTTP(testResp, testReq)
+	if testResp.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400 for config error, got %d", testResp.Code)
+	}
+
+	previewReq := httptest.NewRequest(http.MethodPost, "/api/v1/datasources/"+created.ID+"/preview", nil)
+	previewResp := httptest.NewRecorder()
+	router.ServeHTTP(previewResp, previewReq)
+	if previewResp.Code != http.StatusBadGateway {
+		t.Fatalf("expected 502 for probe error, got %d", previewResp.Code)
+	}
+
+	notFoundReq := httptest.NewRequest(http.MethodPost, "/api/v1/datasources/missing/test", nil)
+	notFoundResp := httptest.NewRecorder()
+	router.ServeHTTP(notFoundResp, notFoundReq)
+	if notFoundResp.Code != http.StatusNotFound {
+		t.Fatalf("expected 404 for missing datasource, got %d", notFoundResp.Code)
+	}
+
 }

@@ -12,11 +12,14 @@ import (
 var ErrInvalidDatasourceType = errors.New("invalid datasource type")
 
 var ErrDatasourceNotFound = errors.New("datasource not found")
+var ErrDatasourceConfigInvalid = errors.New("invalid datasource config")
+var ErrDatasourceProbeFailed = errors.New("datasource probe failed")
 
 type Datasource = model.Datasource
 
 type DatasourceService struct {
-	repo Repository
+	repo   Repository
+	prober Prober
 }
 
 type Repository interface {
@@ -24,6 +27,11 @@ type Repository interface {
 	ListByProject(ctx context.Context, projectID string, limit, offset int) ([]model.Datasource, error)
 	CountByProject(ctx context.Context, projectID string) (int64, error)
 	Get(ctx context.Context, id string) (model.Datasource, bool, error)
+}
+
+type Prober interface {
+	Test(ctx context.Context, datasource model.Datasource) (model.TestResult, error)
+	Preview(ctx context.Context, datasource model.Datasource) (model.PreviewResult, error)
 }
 
 type memoryRepository struct {
@@ -87,10 +95,20 @@ func (r *memoryRepository) Get(_ context.Context, id string) (model.Datasource, 
 }
 
 func NewDatasourceService(repos ...Repository) *DatasourceService {
+	svc := &DatasourceService{prober: newLiveDatasourceProber()}
 	if len(repos) > 0 && repos[0] != nil {
-		return &DatasourceService{repo: repos[0]}
+		svc.repo = repos[0]
+		return svc
 	}
-	return &DatasourceService{repo: &memoryRepository{}}
+	svc.repo = &memoryRepository{}
+	return svc
+}
+
+func (s *DatasourceService) WithProber(prober Prober) *DatasourceService {
+	if prober != nil {
+		s.prober = prober
+	}
+	return s
 }
 
 func (s *DatasourceService) Create(projectID, name, typ string, cfg map[string]string) (Datasource, error) {
@@ -139,12 +157,14 @@ func (s *DatasourceService) Test(id string) (model.TestResult, error) {
 	if !ok {
 		return model.TestResult{}, ErrDatasourceNotFound
 	}
-
-	return model.TestResult{
-		DatasourceID: datasource.ID,
-		Status:       "ok",
-		Message:      "mock connection test passed",
-	}, nil
+	result, err := s.prober.Test(context.Background(), datasource)
+	if err != nil {
+		return model.TestResult{}, err
+	}
+	if result.DatasourceID == "" {
+		result.DatasourceID = datasource.ID
+	}
+	return result, nil
 }
 
 func (s *DatasourceService) Preview(id string) (model.PreviewResult, error) {
@@ -155,17 +175,17 @@ func (s *DatasourceService) Preview(id string) (model.PreviewResult, error) {
 	if !ok {
 		return model.PreviewResult{}, ErrDatasourceNotFound
 	}
-
-	return model.PreviewResult{
-		DatasourceID:   datasource.ID,
-		DatasourceType: datasource.Type,
-		Rows: []map[string]string{
-			{
-				"id":   "sample-1",
-				"name": "example",
-			},
-		},
-	}, nil
+	result, err := s.prober.Preview(context.Background(), datasource)
+	if err != nil {
+		return model.PreviewResult{}, err
+	}
+	if result.DatasourceID == "" {
+		result.DatasourceID = datasource.ID
+	}
+	if result.DatasourceType == "" {
+		result.DatasourceType = datasource.Type
+	}
+	return result, nil
 }
 
 func cloneConfig(input map[string]string) map[string]string {

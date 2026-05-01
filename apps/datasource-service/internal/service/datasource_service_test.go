@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"errors"
 	"testing"
 
 	"crawler-platform/apps/datasource-service/internal/model"
@@ -9,6 +10,27 @@ import (
 
 type fakeDatasourceRepo struct {
 	datasources []model.Datasource
+}
+
+type fakeProber struct {
+	testResult    model.TestResult
+	previewResult model.PreviewResult
+	testErr       error
+	previewErr    error
+}
+
+func (p *fakeProber) Test(_ context.Context, _ model.Datasource) (model.TestResult, error) {
+	if p.testErr != nil {
+		return model.TestResult{}, p.testErr
+	}
+	return p.testResult, nil
+}
+
+func (p *fakeProber) Preview(_ context.Context, _ model.Datasource) (model.PreviewResult, error) {
+	if p.previewErr != nil {
+		return model.PreviewResult{}, p.previewErr
+	}
+	return p.previewResult, nil
 }
 
 func (r *fakeDatasourceRepo) Create(_ context.Context, datasource model.Datasource) error {
@@ -81,7 +103,15 @@ func TestCreateDatasourcePersistsThroughRepo(t *testing.T) {
 
 func TestDatasourceServiceListAndReadUseRepo(t *testing.T) {
 	repo := &fakeDatasourceRepo{}
-	svc := NewDatasourceService(repo)
+	svc := NewDatasourceService(repo).WithProber(&fakeProber{
+		testResult: model.TestResult{
+			Status:  "ok",
+			Message: "connection test passed",
+		},
+		previewResult: model.PreviewResult{
+			Rows: []map[string]string{{"key": "k1"}},
+		},
+	})
 
 	created, err := svc.Create("project-1", "main", "redis", map[string]string{"db": "0"})
 	if err != nil {
@@ -116,5 +146,21 @@ func TestDatasourceServiceListAndReadUseRepo(t *testing.T) {
 	}
 	if preview.DatasourceType != "redis" {
 		t.Fatalf("unexpected preview result: %#v", preview)
+	}
+}
+
+func TestDatasourceServiceProbeErrorIsReturned(t *testing.T) {
+	repo := &fakeDatasourceRepo{}
+	svc := NewDatasourceService(repo).WithProber(&fakeProber{
+		testErr: errors.New("probe failed"),
+	})
+
+	created, err := svc.Create("project-1", "main", "redis", map[string]string{"addr": "redis:6379"})
+	if err != nil {
+		t.Fatalf("Create returned error: %v", err)
+	}
+
+	if _, err := svc.Test(created.ID); err == nil {
+		t.Fatal("expected probe error")
 	}
 }

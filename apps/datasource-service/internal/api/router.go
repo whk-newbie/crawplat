@@ -1,6 +1,7 @@
 package api
 
 import (
+	"errors"
 	"net/http"
 	"strconv"
 
@@ -58,7 +59,16 @@ func NewRouter(datasourceService *service.DatasourceService) *gin.Engine {
 	router.POST("/api/v1/datasources/:id/test", func(c *gin.Context) {
 		result, err := datasourceService.Test(c.Param("id"))
 		if err != nil {
-			c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
+			switch {
+			case errors.Is(err, service.ErrDatasourceNotFound):
+				c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
+			case errors.Is(err, service.ErrDatasourceConfigInvalid):
+				c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			case errors.Is(err, service.ErrDatasourceProbeFailed):
+				c.JSON(http.StatusBadGateway, gin.H{"error": err.Error()})
+			default:
+				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			}
 			return
 		}
 
@@ -68,7 +78,16 @@ func NewRouter(datasourceService *service.DatasourceService) *gin.Engine {
 	router.POST("/api/v1/datasources/:id/preview", func(c *gin.Context) {
 		result, err := datasourceService.Preview(c.Param("id"))
 		if err != nil {
-			c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
+			switch {
+			case errors.Is(err, service.ErrDatasourceNotFound):
+				c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
+			case errors.Is(err, service.ErrDatasourceConfigInvalid):
+				c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			case errors.Is(err, service.ErrDatasourceProbeFailed):
+				c.JSON(http.StatusBadGateway, gin.H{"error": err.Error()})
+			default:
+				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			}
 			return
 		}
 
