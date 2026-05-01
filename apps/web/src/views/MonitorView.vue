@@ -1,81 +1,106 @@
 <template>
-  <main class="page">
-    <section class="hero card">
+  <div>
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px">
       <div>
-        <p class="eyebrow">Control plane</p>
-        <h1>Monitor</h1>
-        <p>Live overview pulled from the gateway monitor endpoint.</p>
+        <h2 style="margin: 0">Monitor</h2>
+        <p style="margin: 4px 0 0; color: var(--el-text-color-secondary); font-size: 14px">
+          Live overview pulled from the gateway monitor endpoint.
+        </p>
       </div>
-      <button class="refresh" :disabled="loading" @click="loadOverview">
-        {{ loading ? 'Refreshing...' : 'Refresh' }}
-      </button>
-    </section>
+      <el-button :loading="loading" @click="loadOverview">Refresh</el-button>
+    </div>
 
-    <section class="card">
-      <p v-if="loading">Loading overview...</p>
-      <p v-else-if="error" class="error">{{ error }}</p>
-      <template v-else>
-        <dl v-if="counterEntries.length" class="counters">
-          <div v-for="item in counterEntries" :key="item.label">
-            <dt>{{ item.label }}</dt>
-            <dd>{{ item.value }}</dd>
-          </div>
-        </dl>
-        <p v-else>No counters returned yet.</p>
-      </template>
-    </section>
+    <el-alert v-if="error" :title="error" type="error" :closable="false" show-icon style="margin-bottom: 16px" />
 
-    <section class="card">
-      <h2>Overview payload</h2>
-      <pre v-if="overview" class="payload">{{ payloadText }}</pre>
-      <p v-else>No overview loaded.</p>
-    </section>
-  </main>
+    <div v-loading="loading">
+      <h3 style="margin: 0 0 12px">Executions</h3>
+      <el-row :gutter="16" style="margin-bottom: 24px">
+        <el-col :span="4" :xs="12">
+          <el-card shadow="hover">
+            <el-statistic title="Total" :value="executions.total" />
+          </el-card>
+        </el-col>
+        <el-col :span="4" :xs="12">
+          <el-card shadow="hover">
+            <el-statistic title="Pending" :value="executions.pending" />
+          </el-card>
+        </el-col>
+        <el-col :span="4" :xs="12">
+          <el-card shadow="hover">
+            <el-statistic title="Running" :value="executions.running" />
+          </el-card>
+        </el-col>
+        <el-col :span="4" :xs="12">
+          <el-card shadow="hover">
+            <el-statistic title="Succeeded" :value="executions.succeeded" />
+          </el-card>
+        </el-col>
+        <el-col :span="4" :xs="12">
+          <el-card shadow="hover">
+            <el-statistic title="Failed" :value="executions.failed" />
+          </el-card>
+        </el-col>
+      </el-row>
+
+      <h3 style="margin: 0 0 12px">Nodes</h3>
+      <el-row :gutter="16" style="margin-bottom: 24px">
+        <el-col :span="8" :xs="12">
+          <el-card shadow="hover">
+            <el-statistic title="Total Nodes" :value="nodes.total" />
+          </el-card>
+        </el-col>
+        <el-col :span="8" :xs="12">
+          <el-card shadow="hover">
+            <el-statistic title="Online" :value="nodes.online" />
+          </el-card>
+        </el-col>
+        <el-col :span="8" :xs="12">
+          <el-card shadow="hover">
+            <el-statistic title="Offline" :value="nodes.offline" />
+          </el-card>
+        </el-col>
+      </el-row>
+    </div>
+
+    <el-collapse>
+      <el-collapse-item title="Raw JSON Payload">
+        <pre style="margin: 0; white-space: pre-wrap; font-size: 13px">{{ payloadText }}</pre>
+      </el-collapse-item>
+    </el-collapse>
+  </div>
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
-import { getMonitorOverview, type MonitorOverview } from '../api/monitor'
+import { computed, onMounted, reactive, ref } from 'vue'
+import { getMonitorOverview } from '../api/monitor'
 
-const overview = ref<MonitorOverview | null>(null)
+interface OverviewData {
+  executions: { total: number; pending: number; running: number; succeeded: number; failed: number }
+  nodes: { total: number; online: number; offline: number }
+}
+
+const rawOverview = ref<OverviewData | null>(null)
 const loading = ref(true)
 const error = ref('')
 
-const counterDefinitions = [
-  ['executions.total', 'Total executions'],
-  ['executions.pending', 'Pending executions'],
-  ['executions.running', 'Running executions'],
-  ['executions.failed', 'Failed executions'],
-  ['executions.succeeded', 'Succeeded executions'],
-  ['nodes.total', 'Total nodes'],
-  ['nodes.online', 'Nodes online'],
-  ['nodes.offline', 'Nodes offline'],
-]
+const executions = reactive({ total: 0, pending: 0, running: 0, succeeded: 0, failed: 0 })
+const nodes = reactive({ total: 0, online: 0, offline: 0 })
 
-const counterEntries = computed(() =>
-  counterDefinitions
-    .map(([path, label]) => {
-      const value = path.split('.').reduce<unknown>((current, segment) => {
-        if (current && typeof current === 'object' && segment in current) {
-          return (current as Record<string, unknown>)[segment]
-        }
-        return undefined
-      }, overview.value)
-      return typeof value === 'number' || typeof value === 'string'
-        ? { label, value }
-        : null
-    })
-    .filter((item): item is { label: string; value: string | number } => item !== null),
-)
-
-const payloadText = computed(() => JSON.stringify(overview.value, null, 2))
+const payloadText = computed(() => rawOverview.value ? JSON.stringify(rawOverview.value, null, 2) : '')
 
 async function loadOverview() {
   loading.value = true
   error.value = ''
 
   try {
-    overview.value = await getMonitorOverview()
+    const data = await getMonitorOverview() as unknown as OverviewData
+    rawOverview.value = data
+    if (data.executions) {
+      Object.assign(executions, data.executions)
+    }
+    if (data.nodes) {
+      Object.assign(nodes, data.nodes)
+    }
   } catch (err) {
     error.value = err instanceof Error ? err.message : 'failed to load monitor overview'
   } finally {
@@ -87,72 +112,3 @@ onMounted(() => {
   void loadOverview()
 })
 </script>
-
-<style scoped>
-.page {
-  display: grid;
-  gap: 1rem;
-  padding: 1rem;
-}
-
-.card {
-  border: 1px solid #d0d7de;
-  border-radius: 8px;
-  padding: 1rem;
-}
-
-.hero {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 1rem;
-}
-
-.eyebrow {
-  margin: 0 0 0.25rem;
-  font-size: 0.75rem;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: #57606a;
-}
-
-.refresh {
-  white-space: nowrap;
-}
-
-.counters {
-  display: grid;
-  gap: 0.75rem;
-  grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr));
-}
-
-.counters div {
-  border: 1px solid #d0d7de;
-  border-radius: 8px;
-  padding: 0.75rem;
-  background: #f6f8fa;
-}
-
-.counters dt {
-  font-size: 0.8rem;
-  color: #57606a;
-}
-
-.counters dd {
-  margin: 0.25rem 0 0;
-  font-size: 1.5rem;
-  font-weight: 600;
-}
-
-.payload {
-  overflow: auto;
-  margin: 0;
-  padding: 0.75rem;
-  border-radius: 8px;
-  background: #f6f8fa;
-}
-
-.error {
-  color: #b42318;
-}
-</style>

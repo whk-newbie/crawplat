@@ -1,31 +1,43 @@
 <template>
-  <main class="page">
-    <section class="card login-card">
-      <h1>Login</h1>
-      <p>Use IAM credentials to enter the crawler control plane.</p>
-
-      <form class="form" @submit.prevent="submit">
-        <label>
-          Username
-          <input v-model="form.username" name="username" required autocomplete="username" />
-        </label>
-        <label>
-          Password
-          <input v-model="form.password" name="password" type="password" required autocomplete="current-password" />
-        </label>
-        <button :disabled="submitting" type="submit">
-          {{ submitting ? 'Signing in...' : 'Sign In' }}
-        </button>
-      </form>
-
-      <p v-if="error" class="error">{{ error }}</p>
-    </section>
-  </main>
+  <div class="login-page">
+    <el-card class="login-card">
+      <template #header>
+        <h2>Crawler Platform</h2>
+        <p class="login-subtitle">Use IAM credentials to enter the control plane.</p>
+      </template>
+      <el-form :model="form" @submit.prevent="submit">
+        <el-form-item label="Username">
+          <el-input
+            v-model="form.username"
+            name="username"
+            autocomplete="username"
+            placeholder="Enter username"
+          />
+        </el-form-item>
+        <el-form-item label="Password">
+          <el-input
+            v-model="form.password"
+            name="password"
+            type="password"
+            show-password
+            autocomplete="current-password"
+            placeholder="Enter password"
+          />
+        </el-form-item>
+        <el-form-item>
+          <el-button type="primary" native-type="submit" :loading="submitting" style="width: 100%">
+            Sign In
+          </el-button>
+        </el-form-item>
+      </el-form>
+    </el-card>
+  </div>
 </template>
 
 <script setup lang="ts">
 import { reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
+import { ElMessage } from 'element-plus'
 import { login } from '../api/auth'
 import { useAuthStore } from '../stores/auth'
 
@@ -38,11 +50,9 @@ const form = reactive({
 })
 
 const submitting = ref(false)
-const error = ref('')
 
 async function submit() {
   submitting.value = true
-  error.value = ''
 
   try {
     const result = await login({
@@ -50,9 +60,10 @@ async function submit() {
       password: form.password,
     })
     authStore.setToken(result.token)
+    ElMessage.success('Login successful')
     await router.push('/projects')
   } catch (err) {
-    error.value = err instanceof Error ? err.message : 'login failed'
+    ElMessage.error(err instanceof Error ? err.message : 'login failed')
   } finally {
     submitting.value = false
   }
@@ -60,31 +71,21 @@ async function submit() {
 </script>
 
 <style scoped>
-.page {
-  min-height: calc(100vh - 2rem);
+.login-page {
+  min-height: 100vh;
   display: grid;
   place-items: center;
   padding: 1rem;
-}
-
-.card {
-  border: 1px solid #d0d7de;
-  border-radius: 8px;
-  padding: 1rem;
-  width: min(28rem, 100%);
+  background: var(--el-bg-color-page);
 }
 
 .login-card {
-  display: grid;
-  gap: 0.75rem;
+  width: min(400px, 100%);
 }
 
-.form {
-  display: grid;
-  gap: 0.75rem;
-}
-
-.error {
-  color: #b42318;
+.login-subtitle {
+  margin: 4px 0 0;
+  color: var(--el-text-color-secondary);
+  font-size: 14px;
 }
 </style>

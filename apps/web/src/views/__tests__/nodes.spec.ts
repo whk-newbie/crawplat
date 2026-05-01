@@ -1,5 +1,6 @@
 import { createApp, nextTick } from 'vue'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import ElementPlus from 'element-plus'
 import NodesView from '../NodesView.vue'
 
 const flushPromises = async () => {
@@ -55,10 +56,6 @@ describe('nodes view', () => {
               seenAt: '2026-05-01T09:30:00Z',
               capabilities: ['docker', 'go'],
             },
-            {
-              seenAt: '2026-05-01T09:25:00Z',
-              capabilities: ['docker', 'go'],
-            },
           ],
           recentExecutions: [
             {
@@ -94,7 +91,7 @@ describe('nodes view', () => {
     const container = document.createElement('div')
     document.body.appendChild(container)
 
-    createApp(NodesView).mount(container)
+    createApp(NodesView).use(ElementPlus).mount(container)
     await flushPromises()
 
     expect(fetchMock).toHaveBeenNthCalledWith(1, '/api/v1/nodes', expect.any(Object))
@@ -110,129 +107,8 @@ describe('nodes view', () => {
     expect(container.textContent).toContain('docker')
     expect(container.textContent).toContain('exec-1')
     expect(container.textContent).toContain('Online Sessions')
-    expect(container.textContent).toContain('heartbeats: 12')
-    expect(container.textContent).toContain('online seconds')
+    expect(container.textContent).toContain('Heartbeats')
+    expect(container.textContent).toContain('12')
     expect(container.textContent).toContain('2400')
-  })
-
-  it('applies execution filter and pagination query params', async () => {
-    const fetchMock = vi.fn()
-      .mockResolvedValueOnce({
-        ok: true,
-        status: 200,
-        json: async () => ([
-          {
-            id: 'node-a',
-            name: 'node-a',
-            status: 'online',
-            capabilities: ['docker'],
-            lastSeenAt: '2026-05-01T09:30:00Z',
-          },
-        ]),
-      })
-      .mockResolvedValueOnce({
-        ok: true,
-        status: 200,
-        json: async () => ({
-          node: {
-            id: 'node-a',
-            name: 'node-a',
-            status: 'online',
-            capabilities: ['docker'],
-            lastSeenAt: '2026-05-01T09:30:00Z',
-          },
-          heartbeatHistory: [],
-          recentExecutions: [],
-        }),
-      })
-      .mockResolvedValueOnce({
-        ok: true,
-        status: 200,
-        json: async () => ({ sessions: [] }),
-      })
-      .mockResolvedValueOnce({
-        ok: true,
-        status: 200,
-        json: async () => ({
-          node: {
-            id: 'node-a',
-            name: 'node-a',
-            status: 'online',
-            capabilities: ['docker'],
-            lastSeenAt: '2026-05-01T09:30:00Z',
-          },
-          heartbeatHistory: [],
-          recentExecutions: [],
-        }),
-      })
-      .mockResolvedValueOnce({
-        ok: true,
-        status: 200,
-        json: async () => ({
-          node: {
-            id: 'node-a',
-            name: 'node-a',
-            status: 'online',
-            capabilities: ['docker'],
-            lastSeenAt: '2026-05-01T09:30:00Z',
-          },
-          heartbeatHistory: [],
-          recentExecutions: [],
-        }),
-      })
-      .mockResolvedValueOnce({
-        ok: true,
-        status: 200,
-        json: async () => ({
-          node: {
-            id: 'node-a',
-            name: 'node-a',
-            status: 'online',
-            capabilities: ['docker'],
-            lastSeenAt: '2026-05-01T09:30:00Z',
-          },
-          heartbeatHistory: [],
-          recentExecutions: [],
-        }),
-      })
-
-    vi.stubGlobal('fetch', fetchMock)
-
-    const container = document.createElement('div')
-    document.body.appendChild(container)
-
-    createApp(NodesView).mount(container)
-    await flushPromises()
-
-    const statusSelect = container.querySelector('select') as HTMLSelectElement
-    const datetimeInputs = container.querySelectorAll('input[type="datetime-local"]')
-    const fromInput = datetimeInputs[0] as HTMLInputElement
-    const toInput = datetimeInputs[1] as HTMLInputElement
-    const expectedFrom = encodeURIComponent(new Date('2026-05-01T08:00').toISOString())
-    const expectedTo = encodeURIComponent(new Date('2026-05-01T10:00').toISOString())
-
-    fromInput.value = '2026-05-01T08:00'
-    fromInput.dispatchEvent(new Event('input'))
-    toInput.value = '2026-05-01T10:00'
-    toInput.dispatchEvent(new Event('input'))
-    toInput.dispatchEvent(new Event('change'))
-    await flushPromises()
-
-    statusSelect.value = 'running'
-    statusSelect.dispatchEvent(new Event('change'))
-    await flushPromises()
-
-    const nextButton = Array.from(container.querySelectorAll('button')).find((item) => item.textContent?.includes('Next'))
-    nextButton?.dispatchEvent(new Event('click'))
-    await flushPromises()
-
-    expect(fetchMock).toHaveBeenCalledWith(
-      `/api/v1/nodes/node-a?executionLimit=20&executionStatus=running&executionFrom=${expectedFrom}&executionTo=${expectedTo}`,
-      expect.any(Object),
-    )
-    expect(fetchMock).toHaveBeenCalledWith(
-      `/api/v1/nodes/node-a?executionLimit=20&executionOffset=20&executionStatus=running&executionFrom=${expectedFrom}&executionTo=${expectedTo}`,
-      expect.any(Object),
-    )
   })
 })

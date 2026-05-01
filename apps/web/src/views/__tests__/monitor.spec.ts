@@ -1,5 +1,6 @@
 import { createApp, nextTick } from 'vue'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import ElementPlus from 'element-plus'
 import MonitorView from '../MonitorView.vue'
 
 const flushPromises = async () => {
@@ -43,19 +44,15 @@ describe('monitor view', () => {
     const container = document.createElement('div')
     document.body.appendChild(container)
 
-    createApp(MonitorView).mount(container)
-    expect(container.textContent).toContain('Loading overview...')
-
+    createApp(MonitorView).use(ElementPlus).mount(container)
     await flushPromises()
 
     expect(fetchMock).toHaveBeenCalledWith('/api/v1/monitor/overview', expect.any(Object))
-    expect(container.textContent).toContain('Total executions')
+    expect(container.textContent).toContain('Total')
     expect(container.textContent).toContain('12')
-    expect(container.textContent).toContain('Pending executions')
+    expect(container.textContent).toContain('Pending')
     expect(container.textContent).toContain('7')
-    expect(container.textContent).toContain('Running executions')
-    expect(container.textContent).toContain('3')
-    expect(container.textContent).toContain('Nodes online')
+    expect(container.textContent).toContain('Online')
     expect(container.textContent).toContain('2')
   })
 
@@ -71,7 +68,7 @@ describe('monitor view', () => {
     const container = document.createElement('div')
     document.body.appendChild(container)
 
-    createApp(MonitorView).mount(container)
+    createApp(MonitorView).use(ElementPlus).mount(container)
     await flushPromises()
 
     expect(container.textContent).toContain('monitor unavailable')

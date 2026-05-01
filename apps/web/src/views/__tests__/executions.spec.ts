@@ -1,6 +1,7 @@
 import { createApp, nextTick } from 'vue'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { createMemoryHistory, createRouter } from 'vue-router'
+import ElementPlus from 'element-plus'
 import ExecutionDetailView from '../ExecutionDetailView.vue'
 
 const flushPromises = async () => {
@@ -60,7 +61,7 @@ describe('execution detail view', () => {
     const container = document.createElement('div')
     document.body.appendChild(container)
 
-    createApp(ExecutionDetailView).use(router).mount(container)
+    createApp(ExecutionDetailView).use(router).use(ElementPlus).mount(container)
     await flushPromises()
 
     expect(container.textContent).toContain('Status')
