@@ -1,51 +1,50 @@
 <template>
-  <main class="page">
-    <section class="card">
-      <h1>Executions</h1>
-      <p>Create a manual execution and jump into its detail page, or inspect an existing execution by ID.</p>
-    </section>
-
-    <section class="card">
-      <h2>Create Execution</h2>
-      <form class="form" @submit.prevent="submit">
-        <label>
-          Project ID
-          <input v-model="form.projectId" required />
-        </label>
-        <label>
-          Spider ID
-          <input v-model="form.spiderId" required />
-        </label>
-        <label>
-          Image
-          <input v-model="form.image" required placeholder="crawler/go-echo:latest" />
-        </label>
-        <label>
-          Command
-          <input v-model="form.command" placeholder="./go-echo" />
-        </label>
-        <button :disabled="submitting" type="submit">{{ submitting ? 'Creating...' : 'Create Execution' }}</button>
-      </form>
-      <p v-if="error" class="error">{{ error }}</p>
-      <p v-if="createdExecutionId" class="success">
-        Created execution
-        <router-link :to="`/executions/${createdExecutionId}`">{{ createdExecutionId }}</router-link>
-      </p>
-    </section>
-
-    <section class="card">
-      <h2>Open Execution Detail</h2>
-      <div class="toolbar">
-        <input v-model="lookupId" placeholder="execution id" />
-        <button @click="openExecution">Open</button>
+  <div>
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px">
+      <div>
+        <h2 style="margin: 0">Executions</h2>
+        <p style="margin: 4px 0 0; color: var(--el-text-color-secondary); font-size: 14px">
+          Create a manual execution and jump into its detail page, or inspect an existing execution by ID.
+        </p>
       </div>
-    </section>
-  </main>
+      <el-button type="primary" @click="createDialogVisible = true">Create Execution</el-button>
+    </div>
+
+    <el-card>
+      <template #header>Open Execution Detail</template>
+      <div style="display: flex; gap: 12px">
+        <el-input v-model="lookupId" placeholder="execution id" style="width: 360px" />
+        <el-button @click="openExecution">Open</el-button>
+      </div>
+    </el-card>
+
+    <el-dialog v-model="createDialogVisible" title="Create Execution" width="500px">
+      <el-form :model="form" label-position="top" @submit.prevent="submit">
+        <el-form-item label="Project ID" required>
+          <el-input v-model="form.projectId" />
+        </el-form-item>
+        <el-form-item label="Spider ID" required>
+          <el-input v-model="form.spiderId" />
+        </el-form-item>
+        <el-form-item label="Image" required>
+          <el-input v-model="form.image" placeholder="crawler/go-echo:latest" />
+        </el-form-item>
+        <el-form-item label="Command">
+          <el-input v-model="form.command" placeholder="./go-echo" />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="createDialogVisible = false">Cancel</el-button>
+        <el-button type="primary" :loading="submitting" @click="submit">Create</el-button>
+      </template>
+    </el-dialog>
+  </div>
 </template>
 
 <script setup lang="ts">
 import { reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
+import { ElMessage } from 'element-plus'
 import { createExecution } from '../api/executions'
 
 const router = useRouter()
@@ -58,8 +57,7 @@ const form = reactive({
 })
 
 const lookupId = ref('')
-const createdExecutionId = ref('')
-const error = ref('')
+const createDialogVisible = ref(false)
 const submitting = ref(false)
 
 function parseCommand(input: string) {
@@ -71,8 +69,6 @@ function parseCommand(input: string) {
 
 async function submit() {
   submitting.value = true
-  error.value = ''
-
   try {
     const execution = await createExecution({
       projectId: form.projectId,
@@ -80,11 +76,12 @@ async function submit() {
       image: form.image,
       command: parseCommand(form.command),
     })
-    createdExecutionId.value = execution.id
+    ElMessage.success('Execution created')
+    createDialogVisible.value = false
     lookupId.value = execution.id
     await router.push(`/executions/${execution.id}`)
   } catch (err) {
-    error.value = err instanceof Error ? err.message : 'failed to create execution'
+    ElMessage.error(err instanceof Error ? err.message : 'failed to create execution')
   } finally {
     submitting.value = false
   }
@@ -97,36 +94,3 @@ async function openExecution() {
   await router.push(`/executions/${lookupId.value.trim()}`)
 }
 </script>
-
-<style scoped>
-.page {
-  display: grid;
-  gap: 1rem;
-  padding: 1rem;
-}
-
-.card {
-  border: 1px solid #d0d7de;
-  border-radius: 8px;
-  padding: 1rem;
-}
-
-.form {
-  display: grid;
-  gap: 0.75rem;
-  max-width: 32rem;
-}
-
-.toolbar {
-  display: flex;
-  gap: 0.75rem;
-}
-
-.error {
-  color: #b42318;
-}
-
-.success {
-  color: #027a48;
-}
-</style>

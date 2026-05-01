@@ -1,62 +1,72 @@
 <template>
-  <main class="page">
-    <section class="card">
-      <h1>Spiders</h1>
-      <p>Register Docker-based Go or Python spiders and inspect project-scoped spider definitions.</p>
-    </section>
-
-    <section class="card">
-      <h2>Create Spider</h2>
-      <form class="form" @submit.prevent="submit">
-        <label>
-          Project ID
-          <input v-model="form.projectId" required />
-        </label>
-        <label>
-          Name
-          <input v-model="form.name" required />
-        </label>
-        <label>
-          Language
-          <select v-model="form.language">
-            <option value="go">go</option>
-            <option value="python">python</option>
-          </select>
-        </label>
-        <label>
-          Image
-          <input v-model="form.image" required placeholder="crawler/go-echo:latest" />
-        </label>
-        <label>
-          Command
-          <input v-model="form.command" placeholder="./go-echo" />
-        </label>
-        <button :disabled="submitting" type="submit">{{ submitting ? 'Creating...' : 'Create Spider' }}</button>
-      </form>
-      <p v-if="error" class="error">{{ error }}</p>
-      <p v-if="createdSpider" class="success">Created {{ createdSpider.name }} ({{ createdSpider.id }})</p>
-    </section>
-
-    <section class="card">
-      <h2>Project Spiders</h2>
-      <div class="toolbar">
-        <input v-model="projectFilter" placeholder="project id" />
-        <button :disabled="loading" @click="loadSpiders">{{ loading ? 'Loading...' : 'Load Spiders' }}</button>
+  <div>
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px">
+      <div>
+        <h2 style="margin: 0">Spiders</h2>
+        <p style="margin: 4px 0 0; color: var(--el-text-color-secondary); font-size: 14px">
+          Register Docker-based Go or Python spiders and inspect project-scoped spider definitions.
+        </p>
       </div>
-      <ul v-if="spiders.length" class="list">
-        <li v-for="spider in spiders" :key="spider.id">
-          <strong>{{ spider.name }}</strong>
-          <span>{{ spider.language }} / {{ spider.runtime }}</span>
-          <code>{{ spider.image }}</code>
-        </li>
-      </ul>
-      <p v-else>No spiders loaded yet.</p>
-    </section>
-  </main>
+      <el-button type="primary" @click="createDialogVisible = true">Create Spider</el-button>
+    </div>
+
+    <el-card style="margin-bottom: 16px">
+      <template #header>Project Spiders</template>
+      <div style="display: flex; gap: 12px; margin-bottom: 12px">
+        <el-input v-model="projectFilter" placeholder="project id" style="width: 280px" />
+        <el-button :loading="loading" @click="loadSpiders">Load Spiders</el-button>
+      </div>
+      <el-table v-loading="loading" :data="spiders" stripe>
+        <el-table-column prop="name" label="Name" />
+        <el-table-column prop="language" label="Language">
+          <template #default="{ row }">
+            <el-tag :type="row.language === 'go' ? 'success' : 'warning'" size="small">{{ row.language }}</el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column prop="runtime" label="Runtime" />
+        <el-table-column prop="image" label="Image">
+          <template #default="{ row }">
+            <el-tag type="info" size="small">{{ row.image }}</el-tag>
+          </template>
+        </el-table-column>
+        <template #empty>
+          <el-empty v-if="!loading" description="No spiders loaded yet" />
+        </template>
+      </el-table>
+    </el-card>
+
+    <el-dialog v-model="createDialogVisible" title="Create Spider" width="500px">
+      <el-form :model="form" label-position="top" @submit.prevent="submit">
+        <el-form-item label="Project ID" required>
+          <el-input v-model="form.projectId" />
+        </el-form-item>
+        <el-form-item label="Name" required>
+          <el-input v-model="form.name" />
+        </el-form-item>
+        <el-form-item label="Language">
+          <el-select v-model="form.language" style="width: 100%">
+            <el-option label="Go" value="go" />
+            <el-option label="Python" value="python" />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="Image" required>
+          <el-input v-model="form.image" placeholder="crawler/go-echo:latest" />
+        </el-form-item>
+        <el-form-item label="Command">
+          <el-input v-model="form.command" placeholder="./go-echo" />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="createDialogVisible = false">Cancel</el-button>
+        <el-button type="primary" :loading="submitting" @click="submit">Create</el-button>
+      </template>
+    </el-dialog>
+  </div>
 </template>
 
 <script setup lang="ts">
 import { reactive, ref } from 'vue'
+import { ElMessage } from 'element-plus'
 import { createSpider, listSpiders, type Spider } from '../api/spiders'
 
 const form = reactive({
@@ -69,8 +79,7 @@ const form = reactive({
 
 const projectFilter = ref('project-1')
 const spiders = ref<Spider[]>([])
-const createdSpider = ref<Spider | null>(null)
-const error = ref('')
+const createDialogVisible = ref(false)
 const submitting = ref(false)
 const loading = ref(false)
 
@@ -83,10 +92,8 @@ function parseCommand(input: string) {
 
 async function submit() {
   submitting.value = true
-  error.value = ''
-
   try {
-    createdSpider.value = await createSpider({
+    const spider = await createSpider({
       projectId: form.projectId,
       name: form.name,
       language: form.language,
@@ -94,9 +101,11 @@ async function submit() {
       image: form.image,
       command: parseCommand(form.command),
     })
+    ElMessage.success(`Spider created: ${spider.name}`)
+    createDialogVisible.value = false
     await loadSpiders()
   } catch (err) {
-    error.value = err instanceof Error ? err.message : 'failed to create spider'
+    ElMessage.error(err instanceof Error ? err.message : 'failed to create spider')
   } finally {
     submitting.value = false
   }
@@ -106,55 +115,13 @@ async function loadSpiders() {
   if (!projectFilter.value.trim()) {
     return
   }
-
   loading.value = true
-  error.value = ''
   try {
     spiders.value = await listSpiders(projectFilter.value.trim())
   } catch (err) {
-    error.value = err instanceof Error ? err.message : 'failed to load spiders'
+    ElMessage.error(err instanceof Error ? err.message : 'failed to load spiders')
   } finally {
     loading.value = false
   }
 }
 </script>
-
-<style scoped>
-.page {
-  display: grid;
-  gap: 1rem;
-  padding: 1rem;
-}
-
-.card {
-  border: 1px solid #d0d7de;
-  border-radius: 8px;
-  padding: 1rem;
-}
-
-.form {
-  display: grid;
-  gap: 0.75rem;
-  max-width: 32rem;
-}
-
-.toolbar {
-  display: flex;
-  gap: 0.75rem;
-  margin-bottom: 1rem;
-}
-
-.list {
-  display: grid;
-  gap: 0.5rem;
-  padding-left: 1rem;
-}
-
-.error {
-  color: #b42318;
-}
-
-.success {
-  color: #027a48;
-}
-</style>
