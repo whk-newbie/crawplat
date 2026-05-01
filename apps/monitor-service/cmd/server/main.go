@@ -1,7 +1,10 @@
 package main
 
 import (
+	"context"
 	"log"
+	"os"
+	"time"
 
 	"crawler-platform/apps/monitor-service/internal/api"
 	monitorrepo "crawler-platform/apps/monitor-service/internal/repo"
@@ -26,7 +29,19 @@ func main() {
 	}
 	defer redisClient.Close()
 
-	router := api.NewRouter(service.NewMonitorService(monitorrepo.NewOverviewRepository(db, redisClient)))
+	monitorService := service.NewMonitorService(monitorrepo.NewOverviewRepository(db, redisClient))
+	pollInterval := 15 * time.Second
+	if raw := os.Getenv("MONITOR_ALERT_POLL_INTERVAL"); raw != "" {
+		parsed, err := time.ParseDuration(raw)
+		if err != nil {
+			log.Printf("invalid MONITOR_ALERT_POLL_INTERVAL=%q, fallback to %s", raw, pollInterval)
+		} else {
+			pollInterval = parsed
+		}
+	}
+	monitorService.StartAlertLoop(context.Background(), pollInterval)
+
+	router := api.NewRouter(monitorService)
 	if err := router.Run(cfg.HTTPAddr); err != nil {
 		log.Fatal(err)
 	}

@@ -8,6 +8,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"crawler-platform/apps/monitor-service/internal/model"
 	"crawler-platform/apps/monitor-service/internal/service"
@@ -15,8 +16,12 @@ import (
 )
 
 type fakeSummaryRepository struct {
-	overview model.Overview
-	err      error
+	overview      model.Overview
+	err           error
+	rules         []model.AlertRule
+	events        []model.AlertEvent
+	totalEvents   int64
+	createRuleErr error
 }
 
 func (r *fakeSummaryRepository) Overview(_ context.Context) (model.Overview, error) {
@@ -24,6 +29,45 @@ func (r *fakeSummaryRepository) Overview(_ context.Context) (model.Overview, err
 		return model.Overview{}, r.err
 	}
 	return r.overview, nil
+}
+
+func (r *fakeSummaryRepository) CreateAlertRule(_ context.Context, rule model.AlertRule) (model.AlertRule, error) {
+	if r.createRuleErr != nil {
+		return model.AlertRule{}, r.createRuleErr
+	}
+	r.rules = append(r.rules, rule)
+	return rule, nil
+}
+func (r *fakeSummaryRepository) ListAlertRules(_ context.Context) ([]model.AlertRule, error) {
+	return append([]model.AlertRule(nil), r.rules...), nil
+}
+func (r *fakeSummaryRepository) ListAlertEvents(_ context.Context, limit, offset int) ([]model.AlertEvent, error) {
+	if offset >= len(r.events) {
+		return nil, nil
+	}
+	end := offset + limit
+	if end > len(r.events) {
+		end = len(r.events)
+	}
+	return append([]model.AlertEvent(nil), r.events[offset:end]...), nil
+}
+func (r *fakeSummaryRepository) CountAlertEvents(_ context.Context) (int64, error) {
+	if r.totalEvents > 0 {
+		return r.totalEvents, nil
+	}
+	return int64(len(r.events)), nil
+}
+func (r *fakeSummaryRepository) ListFailedExecutionsSince(_ context.Context, _ time.Time, _ int) ([]model.FailedExecutionCandidate, error) {
+	return nil, nil
+}
+func (r *fakeSummaryRepository) ListOfflineNodes(_ context.Context, _ time.Time, _ int) ([]model.OfflineNodeCandidate, error) {
+	return nil, nil
+}
+func (r *fakeSummaryRepository) LastAlertEventAt(_ context.Context, _, _ string) (*time.Time, error) {
+	return nil, nil
+}
+func (r *fakeSummaryRepository) SaveAlertEvent(_ context.Context, _ model.AlertEventRecord) error {
+	return nil
 }
 
 func TestOverviewRouteReturnsSummaryJSON(t *testing.T) {
@@ -87,5 +131,65 @@ func TestOverviewRouteReturnsInternalServerErrorWhenSummaryFails(t *testing.T) {
 	}
 	if !strings.Contains(w.Body.String(), "boom") {
 		t.Fatalf("expected error body to mention boom, got %s", w.Body.String())
+	}
+}
+
+func TestAlertRulesAndEventsRoutes(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	repo := &fakeSummaryRepository{
+		rules: []model.AlertRule{{
+			ID:                  "rule-1",
+			Name:                "exec failed",
+			RuleType:            model.AlertRuleTypeExecutionFailed,
+			Enabled:             true,
+			WebhookURL:          "https://example.com/hook",
+			CooldownSeconds:     120,
+			TimeoutSeconds:      5,
+			OfflineGraceSeconds: 60,
+			CreatedAt:           time.Now().UTC(),
+			UpdatedAt:           time.Now().UTC(),
+		}},
+		events: []model.AlertEvent{{
+			ID:             "evt-1",
+			RuleID:         "rule-1",
+			RuleType:       model.AlertRuleTypeExecutionFailed,
+			EntityType:     "execution",
+			EntityID:       "exec-1",
+			DedupeKey:      "execution:exec-1",
+			Payload:        `{"entityId":"exec-1"}`,
+			DeliveryStatus: "sent",
+			CreatedAt:      time.Now().UTC(),
+		}},
+	}
+	router := NewRouter(service.NewMonitorService(repo))
+
+	createReq := httptest.NewRequest(http.MethodPost, "/api/v1/monitor/alerts/rules", strings.NewReader(`{
+		"name":"node offline",
+		"ruleType":"node_offline",
+		"webhookUrl":"https://example.com/offline"
+	}`))
+	createReq.Header.Set("Content-Type", "application/json")
+	createResp := httptest.NewRecorder()
+	router.ServeHTTP(createResp, createReq)
+	if createResp.Code != http.StatusCreated {
+		t.Fatalf("expected create status 201, got %d body=%s", createResp.Code, createResp.Body.String())
+	}
+
+	listRulesReq := httptest.NewRequest(http.MethodGet, "/api/v1/monitor/alerts/rules", nil)
+	listRulesResp := httptest.NewRecorder()
+	router.ServeHTTP(listRulesResp, listRulesReq)
+	if listRulesResp.Code != http.StatusOK || !strings.Contains(listRulesResp.Body.String(), `"ruleType":"execution_failed"`) {
+		t.Fatalf("unexpected list rules response: %d %s", listRulesResp.Code, listRulesResp.Body.String())
+	}
+
+	listEventsReq := httptest.NewRequest(http.MethodGet, "/api/v1/monitor/alerts/events?limit=10&offset=0", nil)
+	listEventsResp := httptest.NewRecorder()
+	router.ServeHTTP(listEventsResp, listEventsReq)
+	if listEventsResp.Code != http.StatusOK {
+		t.Fatalf("expected list events status 200, got %d body=%s", listEventsResp.Code, listEventsResp.Body.String())
+	}
+	if !strings.Contains(listEventsResp.Body.String(), `"deliveryStatus":"sent"`) || !strings.Contains(listEventsResp.Body.String(), `"total":1`) {
+		t.Fatalf("unexpected list events payload: %s", listEventsResp.Body.String())
 	}
 }

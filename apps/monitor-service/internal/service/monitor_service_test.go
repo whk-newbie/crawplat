@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"testing"
+	"time"
 
 	"crawler-platform/apps/monitor-service/internal/model"
 )
@@ -18,6 +19,31 @@ func (r *fakeSummaryRepository) Overview(_ context.Context) (model.Overview, err
 		return model.Overview{}, r.err
 	}
 	return r.overview, nil
+}
+
+func (r *fakeSummaryRepository) CreateAlertRule(_ context.Context, rule model.AlertRule) (model.AlertRule, error) {
+	return rule, nil
+}
+func (r *fakeSummaryRepository) ListAlertRules(_ context.Context) ([]model.AlertRule, error) {
+	return nil, nil
+}
+func (r *fakeSummaryRepository) ListAlertEvents(_ context.Context, _ int, _ int) ([]model.AlertEvent, error) {
+	return nil, nil
+}
+func (r *fakeSummaryRepository) CountAlertEvents(_ context.Context) (int64, error) {
+	return 0, nil
+}
+func (r *fakeSummaryRepository) ListFailedExecutionsSince(_ context.Context, _ time.Time, _ int) ([]model.FailedExecutionCandidate, error) {
+	return nil, nil
+}
+func (r *fakeSummaryRepository) ListOfflineNodes(_ context.Context, _ time.Time, _ int) ([]model.OfflineNodeCandidate, error) {
+	return nil, nil
+}
+func (r *fakeSummaryRepository) LastAlertEventAt(_ context.Context, _, _ string) (*time.Time, error) {
+	return nil, nil
+}
+func (r *fakeSummaryRepository) SaveAlertEvent(_ context.Context, _ model.AlertEventRecord) error {
+	return nil
 }
 
 func TestMonitorServiceOverviewReturnsRepositorySummary(t *testing.T) {
