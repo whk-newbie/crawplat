@@ -3,54 +3,115 @@ package api
 import (
 	"net/http"
 	"os"
+	"strconv"
+	"strings"
 
 	"crawler-platform/apps/gateway/internal/proxy"
+	commonauth "crawler-platform/packages/go-common/auth"
 
 	"github.com/gin-gonic/gin"
 )
 
 const internalTokenHeader = "X-Internal-Token"
 
+type authConfig struct {
+	enforceJWT    bool
+	jwtSecret     string
+	internalToken string
+}
+
 func NewRouter() *gin.Engine {
+	return newRouter(loadAuthConfig())
+}
+
+func newRouter(cfg authConfig) *gin.Engine {
 	router := gin.Default()
 
 	router.Any("/api/v1/auth", proxy.ProxyTo("iam-service"))
 	router.Any("/api/v1/auth/*path", proxy.ProxyTo("iam-service"))
 
-	router.Any("/api/v1/projects", proxy.ProxyTo("project-service"))
+	api := router.Group("/api/v1")
+	if cfg.enforceJWT {
+		api.Use(requireJWT(cfg.jwtSecret))
+	}
 
-	router.Any("/api/v1/projects/:projectId/spiders", proxy.ProxyTo("spider-service"))
+	api.Any("/projects", proxy.ProxyTo("project-service"))
 
-	router.Any("/api/v1/executions", proxy.ProxyTo("execution-service"))
-	router.Any("/api/v1/executions/*path", proxy.ProxyTo("execution-service"))
-	internalExecution := router.Group("/internal/v1/executions", requireInternalToken())
+	api.Any("/projects/:projectId/spiders", proxy.ProxyTo("spider-service"))
+
+	api.Any("/executions", proxy.ProxyTo("execution-service"))
+	api.Any("/executions/*path", proxy.ProxyTo("execution-service"))
+	internalExecution := router.Group("/internal/v1/executions", requireInternalToken(cfg.internalToken))
 	internalExecution.Any("/claim", proxy.ProxyTo("execution-service"))
 	internalExecution.Any("/:id/start", proxy.ProxyTo("execution-service"))
 	internalExecution.Any("/:id/logs", proxy.ProxyTo("execution-service"))
 	internalExecution.Any("/:id/complete", proxy.ProxyTo("execution-service"))
 	internalExecution.Any("/:id/fail", proxy.ProxyTo("execution-service"))
 
-	router.Any("/api/v1/nodes", proxy.ProxyTo("node-service"))
-	router.Any("/api/v1/nodes/*path", proxy.ProxyTo("node-service"))
+	api.Any("/nodes", proxy.ProxyTo("node-service"))
+	api.Any("/nodes/*path", proxy.ProxyTo("node-service"))
 
-	router.Any("/api/v1/datasources", proxy.ProxyTo("datasource-service"))
-	router.Any("/api/v1/datasources/*path", proxy.ProxyTo("datasource-service"))
+	api.Any("/datasources", proxy.ProxyTo("datasource-service"))
+	api.Any("/datasources/*path", proxy.ProxyTo("datasource-service"))
 
-	router.Any("/api/v1/schedules", proxy.ProxyTo("scheduler-service"))
-	router.Any("/api/v1/monitor/*path", proxy.ProxyTo("monitor-service"))
+	api.Any("/schedules", proxy.ProxyTo("scheduler-service"))
+	api.Any("/monitor/*path", proxy.ProxyTo("monitor-service"))
 
 	return router
 }
 
-func requireInternalToken() gin.HandlerFunc {
-	token := os.Getenv("INTERNAL_API_TOKEN")
-	if token == "" {
-		token = os.Getenv("JWT_SECRET")
+func loadAuthConfig() authConfig {
+	internalToken := os.Getenv("INTERNAL_API_TOKEN")
+	if internalToken == "" {
+		internalToken = os.Getenv("JWT_SECRET")
 	}
+	return authConfig{
+		enforceJWT:    envBool("GATEWAY_ENFORCE_JWT", false),
+		jwtSecret:     os.Getenv("JWT_SECRET"),
+		internalToken: internalToken,
+	}
+}
 
+func envBool(name string, fallback bool) bool {
+	value := strings.TrimSpace(os.Getenv(name))
+	if value == "" {
+		return fallback
+	}
+	parsed, err := strconv.ParseBool(value)
+	if err != nil {
+		return fallback
+	}
+	return parsed
+}
+
+func requireInternalToken(token string) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		if token == "" || c.GetHeader(internalTokenHeader) != token {
 			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "unauthorized internal route"})
+			return
+		}
+		c.Next()
+	}
+}
+
+func requireJWT(secret string) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		authz := strings.TrimSpace(c.GetHeader("Authorization"))
+		if !strings.HasPrefix(authz, "Bearer ") {
+			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "missing bearer token"})
+			return
+		}
+		token := strings.TrimSpace(strings.TrimPrefix(authz, "Bearer "))
+		if token == "" {
+			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "missing bearer token"})
+			return
+		}
+		if secret == "" {
+			c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": "jwt auth is misconfigured"})
+			return
+		}
+		if _, err := commonauth.ParseToken(secret, token); err != nil {
+			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "invalid bearer token"})
 			return
 		}
 		c.Next()

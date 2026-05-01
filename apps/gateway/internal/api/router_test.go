@@ -5,6 +5,8 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+
+	commonauth "crawler-platform/packages/go-common/auth"
 )
 
 func TestNewRouterDoesNotPanic(t *testing.T) {
@@ -80,6 +82,69 @@ func TestInternalExecutionRoutesAcceptValidToken(t *testing.T) {
 
 	if w.Code == http.StatusUnauthorized {
 		t.Fatalf("expected valid token to pass internal auth, got %d", w.Code)
+	}
+}
+
+func TestPublicRoutesBypassJWTWhenDisabled(t *testing.T) {
+	t.Setenv("GATEWAY_ENFORCE_JWT", "false")
+	t.Setenv("JWT_SECRET", "test-secret")
+	router := NewRouter()
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/projects", nil)
+	w := &closeNotifyRecorder{ResponseRecorder: httptest.NewRecorder()}
+	router.ServeHTTP(w, req)
+
+	if w.Code == http.StatusUnauthorized {
+		t.Fatalf("expected jwt-disabled gateway to bypass auth, got %d", w.Code)
+	}
+}
+
+func TestPublicRoutesRequireJWTWhenEnabled(t *testing.T) {
+	t.Setenv("GATEWAY_ENFORCE_JWT", "true")
+	t.Setenv("JWT_SECRET", "test-secret")
+	router := NewRouter()
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/projects", nil)
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusUnauthorized {
+		t.Fatalf("expected 401 without bearer token, got %d", w.Code)
+	}
+}
+
+func TestPublicRoutesAcceptValidJWTWhenEnabled(t *testing.T) {
+	t.Setenv("GATEWAY_ENFORCE_JWT", "true")
+	t.Setenv("JWT_SECRET", "test-secret")
+	router := NewRouter()
+
+	token, err := commonauth.IssueToken("test-secret", "user-1")
+	if err != nil {
+		t.Fatalf("IssueToken returned error: %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/projects", nil)
+	req.Header.Set("Authorization", "Bearer "+token)
+	w := &closeNotifyRecorder{ResponseRecorder: httptest.NewRecorder()}
+	router.ServeHTTP(w, req)
+
+	if w.Code == http.StatusUnauthorized {
+		t.Fatalf("expected valid token to pass jwt auth, got %d", w.Code)
+	}
+}
+
+func TestAuthRoutesBypassJWTWhenEnabled(t *testing.T) {
+	t.Setenv("GATEWAY_ENFORCE_JWT", "true")
+	t.Setenv("JWT_SECRET", "test-secret")
+	router := NewRouter()
+
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/login", strings.NewReader(`{"username":"admin","password":"admin123"}`))
+	req.Header.Set("Content-Type", "application/json")
+	w := &closeNotifyRecorder{ResponseRecorder: httptest.NewRecorder()}
+	router.ServeHTTP(w, req)
+
+	if w.Code == http.StatusUnauthorized {
+		t.Fatalf("expected auth routes to bypass jwt auth, got %d", w.Code)
 	}
 }
 
