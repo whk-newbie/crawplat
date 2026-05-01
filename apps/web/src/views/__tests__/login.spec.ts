@@ -2,6 +2,7 @@ import { createApp, nextTick } from 'vue'
 import { createPinia } from 'pinia'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { createMemoryHistory, createRouter } from 'vue-router'
+import ElementPlus from 'element-plus'
 import LoginView from '../LoginView.vue'
 import { useAuthStore } from '../../stores/auth'
 
@@ -43,13 +44,20 @@ describe('login view', () => {
 
     const container = document.createElement('div')
     document.body.appendChild(container)
-    createApp(LoginView).use(router).use(pinia).mount(container)
+    createApp(LoginView).use(router).use(pinia).use(ElementPlus).mount(container)
 
-    ;(container.querySelector('input[name="username"]') as HTMLInputElement).value = 'admin'
-    ;(container.querySelector('input[name="username"]') as HTMLInputElement).dispatchEvent(new Event('input'))
-    ;(container.querySelector('input[name="password"]') as HTMLInputElement).value = 'admin123'
-    ;(container.querySelector('input[name="password"]') as HTMLInputElement).dispatchEvent(new Event('input'))
-    ;(container.querySelector('form') as HTMLFormElement).dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }))
+    await flushPromises()
+
+    const usernameInput = container.querySelector('input[name="username"]') as HTMLInputElement
+    const passwordInput = container.querySelector('input[name="password"]') as HTMLInputElement
+
+    usernameInput.value = 'admin'
+    usernameInput.dispatchEvent(new Event('input'))
+    passwordInput.value = 'admin123'
+    passwordInput.dispatchEvent(new Event('input'))
+
+    const submitButton = container.querySelector('.el-button--primary') as HTMLButtonElement
+    submitButton.click()
 
     await flushPromises()
 
