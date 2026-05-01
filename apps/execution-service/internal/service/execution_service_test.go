@@ -237,15 +237,18 @@ func TestCreateExecutionUsesProvidedTriggerSource(t *testing.T) {
 	svc := NewExecutionService(execRepo, logRepo, queue)
 
 	exec, err := svc.Create(context.Background(), CreateExecutionInput{
-		ProjectID:     "project-1",
-		SpiderID:      "spider-1",
-		Image:         "crawler/go-echo:latest",
-		Command:       []string{"./go-echo"},
-		TriggerSource: "scheduled",
-		RetryLimit:    3,
-		RetryCount:    1,
-		RetryDelaySeconds: 45,
+		ProjectID:          "project-1",
+		SpiderID:           "spider-1",
+		Image:              "crawler/go-echo:latest",
+		Command:            []string{"./go-echo"},
+		TriggerSource:      "scheduled",
+		RetryLimit:         3,
+		RetryCount:         1,
+		RetryDelaySeconds:  45,
 		RetryOfExecutionID: "exec-root",
+		CPUCores:           1.5,
+		MemoryMB:           768,
+		TimeoutSeconds:     120,
 	})
 	if err != nil {
 		t.Fatalf("Create returned error: %v", err)
@@ -256,6 +259,9 @@ func TestCreateExecutionUsesProvidedTriggerSource(t *testing.T) {
 	}
 	if exec.RetryLimit != 3 || exec.RetryCount != 1 || exec.RetryDelaySeconds != 45 || exec.RetryOfExecutionID != "exec-root" {
 		t.Fatalf("expected retry metadata to persist, got %+v", exec)
+	}
+	if exec.CPUCores != 1.5 || exec.MemoryMB != 768 || exec.TimeoutSeconds != 120 {
+		t.Fatalf("expected resource limits to persist, got %+v", exec)
 	}
 	if queue.lastEnqueued != exec.ID {
 		t.Fatalf("expected execution %s to be enqueued, got %s", exec.ID, queue.lastEnqueued)

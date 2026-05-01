@@ -17,15 +17,18 @@ func NewRouter(executionService *service.ExecutionService) *gin.Engine {
 
 	createExecutionHandler := func(c *gin.Context) {
 		var req struct {
-			ProjectID         string   `json:"projectId" binding:"required"`
-			SpiderID          string   `json:"spiderId" binding:"required"`
-			Image             string   `json:"image" binding:"required"`
-			Command           []string `json:"command"`
-			TriggerSource     string   `json:"triggerSource"`
-			RetryLimit        int      `json:"retryLimit"`
-			RetryCount        int      `json:"retryCount"`
-			RetryDelaySeconds int      `json:"retryDelaySeconds"`
-			RetryOfExecutionID string  `json:"retryOfExecutionId"`
+			ProjectID          string   `json:"projectId" binding:"required"`
+			SpiderID           string   `json:"spiderId" binding:"required"`
+			Image              string   `json:"image" binding:"required"`
+			Command            []string `json:"command"`
+			CPUCores           float64  `json:"cpuCores"`
+			MemoryMB           int      `json:"memoryMB"`
+			TimeoutSeconds     int      `json:"timeoutSeconds"`
+			TriggerSource      string   `json:"triggerSource"`
+			RetryLimit         int      `json:"retryLimit"`
+			RetryCount         int      `json:"retryCount"`
+			RetryDelaySeconds  int      `json:"retryDelaySeconds"`
+			RetryOfExecutionID string   `json:"retryOfExecutionId"`
 		}
 		if err := c.ShouldBindJSON(&req); err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
@@ -33,14 +36,17 @@ func NewRouter(executionService *service.ExecutionService) *gin.Engine {
 		}
 
 		exec, err := executionService.Create(context.Background(), service.CreateExecutionInput{
-			ProjectID:         req.ProjectID,
-			SpiderID:          req.SpiderID,
-			Image:             req.Image,
-			Command:           req.Command,
-			TriggerSource:     req.TriggerSource,
-			RetryLimit:        req.RetryLimit,
-			RetryCount:        req.RetryCount,
-			RetryDelaySeconds: req.RetryDelaySeconds,
+			ProjectID:          req.ProjectID,
+			SpiderID:           req.SpiderID,
+			Image:              req.Image,
+			Command:            req.Command,
+			CPUCores:           req.CPUCores,
+			MemoryMB:           req.MemoryMB,
+			TimeoutSeconds:     req.TimeoutSeconds,
+			TriggerSource:      req.TriggerSource,
+			RetryLimit:         req.RetryLimit,
+			RetryCount:         req.RetryCount,
+			RetryDelaySeconds:  req.RetryDelaySeconds,
 			RetryOfExecutionID: req.RetryOfExecutionID,
 		})
 		if err != nil {
