@@ -77,9 +77,32 @@ func (r *OverviewRepository) executionSummary(ctx context.Context) (model.Execut
 }
 
 func (r *OverviewRepository) nodeSummary(ctx context.Context) (model.NodeSummary, error) {
-	nodeIDs, err := r.client.SMembers(ctx, nodeIndexKey).Result()
+	var total int
+	if err := r.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM nodes`).Scan(&total); err != nil {
+		return model.NodeSummary{}, err
+	}
+
+	online, err := r.countOnlineNodes(ctx)
 	if err != nil {
 		return model.NodeSummary{}, err
+	}
+
+	offline := total - online
+	if offline < 0 {
+		offline = 0
+	}
+
+	return model.NodeSummary{
+		Total:   total,
+		Online:  online,
+		Offline: offline,
+	}, nil
+}
+
+func (r *OverviewRepository) countOnlineNodes(ctx context.Context) (int, error) {
+	nodeIDs, err := r.client.SMembers(ctx, nodeIndexKey).Result()
+	if err != nil {
+		return 0, err
 	}
 
 	online := 0
@@ -90,14 +113,9 @@ func (r *OverviewRepository) nodeSummary(ctx context.Context) (model.NodeSummary
 			continue
 		}
 		if err != nil {
-			return model.NodeSummary{}, err
+			return 0, err
 		}
 		online++
 	}
-
-	return model.NodeSummary{
-		Total:   online,
-		Online:  online,
-		Offline: 0,
-	}, nil
+	return online, nil
 }

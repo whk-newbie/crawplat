@@ -44,7 +44,4 @@ func TestNodeRepoStoresHeartbeatWithTTL(t *testing.T) {
 	}
 }
 
-var _ interface {
-	UpsertHeartbeat(context.Context, string, []string) (service.Node, error)
-	ListOnline(context.Context) ([]service.Node, error)
-} = (*RedisRepository)(nil)
+var _ service.LiveRepository = (*RedisRepository)(nil)
