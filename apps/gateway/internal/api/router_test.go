@@ -148,6 +148,74 @@ func TestAuthRoutesBypassJWTWhenEnabled(t *testing.T) {
 	}
 }
 
+func TestPublicRoutesDoNotRateLimitWhenDisabled(t *testing.T) {
+	t.Setenv("GATEWAY_ENFORCE_JWT", "false")
+	t.Setenv("GATEWAY_RATE_LIMIT_ENABLED", "false")
+	t.Setenv("JWT_SECRET", "test-secret")
+	router := NewRouter()
+
+	for i := 0; i < 3; i++ {
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/projects", nil)
+		req.Header.Set("X-Forwarded-For", "10.0.0.1")
+		w := &closeNotifyRecorder{ResponseRecorder: httptest.NewRecorder()}
+		router.ServeHTTP(w, req)
+
+		if w.Code == http.StatusTooManyRequests {
+			t.Fatalf("expected no rate limit when disabled, request #%d got 429", i+1)
+		}
+	}
+}
+
+func TestPublicRoutesRateLimitWhenEnabled(t *testing.T) {
+	t.Setenv("GATEWAY_ENFORCE_JWT", "false")
+	t.Setenv("GATEWAY_RATE_LIMIT_ENABLED", "true")
+	t.Setenv("GATEWAY_RATE_LIMIT_WINDOW_SECONDS", "60")
+	t.Setenv("GATEWAY_RATE_LIMIT_MAX_REQUESTS", "1")
+	t.Setenv("JWT_SECRET", "test-secret")
+	router := NewRouter()
+
+	firstReq := httptest.NewRequest(http.MethodGet, "/api/v1/projects", nil)
+	firstReq.Header.Set("X-Forwarded-For", "10.0.0.2")
+	first := &closeNotifyRecorder{ResponseRecorder: httptest.NewRecorder()}
+	router.ServeHTTP(first, firstReq)
+	if first.Code == http.StatusTooManyRequests {
+		t.Fatalf("expected first request to pass rate limit, got 429")
+	}
+
+	secondReq := httptest.NewRequest(http.MethodGet, "/api/v1/projects", nil)
+	secondReq.Header.Set("X-Forwarded-For", "10.0.0.2")
+	second := httptest.NewRecorder()
+	router.ServeHTTP(second, secondReq)
+	if second.Code != http.StatusTooManyRequests {
+		t.Fatalf("expected second request to hit rate limit, got %d", second.Code)
+	}
+}
+
+func TestPublicRoutesRateLimitIsPerClientKey(t *testing.T) {
+	t.Setenv("GATEWAY_ENFORCE_JWT", "false")
+	t.Setenv("GATEWAY_RATE_LIMIT_ENABLED", "true")
+	t.Setenv("GATEWAY_RATE_LIMIT_WINDOW_SECONDS", "60")
+	t.Setenv("GATEWAY_RATE_LIMIT_MAX_REQUESTS", "1")
+	t.Setenv("JWT_SECRET", "test-secret")
+	router := NewRouter()
+
+	reqA := httptest.NewRequest(http.MethodGet, "/api/v1/projects", nil)
+	reqA.Header.Set("X-Forwarded-For", "10.0.0.3")
+	wA := &closeNotifyRecorder{ResponseRecorder: httptest.NewRecorder()}
+	router.ServeHTTP(wA, reqA)
+	if wA.Code == http.StatusTooManyRequests {
+		t.Fatalf("expected first client request to pass, got 429")
+	}
+
+	reqB := httptest.NewRequest(http.MethodGet, "/api/v1/projects", nil)
+	reqB.Header.Set("X-Forwarded-For", "10.0.0.4")
+	wB := &closeNotifyRecorder{ResponseRecorder: httptest.NewRecorder()}
+	router.ServeHTTP(wB, reqB)
+	if wB.Code == http.StatusTooManyRequests {
+		t.Fatalf("expected different client key to have separate quota, got 429")
+	}
+}
+
 type closeNotifyRecorder struct {
 	*httptest.ResponseRecorder
 }

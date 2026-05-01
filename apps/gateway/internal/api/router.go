@@ -20,11 +20,17 @@ type authConfig struct {
 	internalToken string
 }
 
-func NewRouter() *gin.Engine {
-	return newRouter(loadAuthConfig())
+type rateLimitConfig struct {
+	enabled       bool
+	windowSeconds int
+	maxRequests   int
 }
 
-func newRouter(cfg authConfig) *gin.Engine {
+func NewRouter() *gin.Engine {
+	return newRouter(loadAuthConfig(), loadRateLimitConfig())
+}
+
+func newRouter(cfg authConfig, rlCfg rateLimitConfig) *gin.Engine {
 	router := gin.Default()
 
 	router.Any("/api/v1/auth", proxy.ProxyTo("iam-service"))
@@ -33,6 +39,9 @@ func newRouter(cfg authConfig) *gin.Engine {
 	api := router.Group("/api/v1")
 	if cfg.enforceJWT {
 		api.Use(requireJWT(cfg.jwtSecret))
+	}
+	if rlCfg.enabled {
+		api.Use(requireRateLimit(rlCfg))
 	}
 
 	api.Any("/projects", proxy.ProxyTo("project-service"))
@@ -72,12 +81,32 @@ func loadAuthConfig() authConfig {
 	}
 }
 
+func loadRateLimitConfig() rateLimitConfig {
+	return rateLimitConfig{
+		enabled:       envBool("GATEWAY_RATE_LIMIT_ENABLED", false),
+		windowSeconds: envInt("GATEWAY_RATE_LIMIT_WINDOW_SECONDS", 60),
+		maxRequests:   envInt("GATEWAY_RATE_LIMIT_MAX_REQUESTS", 120),
+	}
+}
+
 func envBool(name string, fallback bool) bool {
 	value := strings.TrimSpace(os.Getenv(name))
 	if value == "" {
 		return fallback
 	}
 	parsed, err := strconv.ParseBool(value)
+	if err != nil {
+		return fallback
+	}
+	return parsed
+}
+
+func envInt(name string, fallback int) int {
+	value := strings.TrimSpace(os.Getenv(name))
+	if value == "" {
+		return fallback
+	}
+	parsed, err := strconv.Atoi(value)
 	if err != nil {
 		return fallback
 	}
