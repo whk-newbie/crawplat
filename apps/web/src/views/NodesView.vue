@@ -69,6 +69,30 @@
           <p v-else>No heartbeat history yet.</p>
 
           <h3>Recent Executions</h3>
+          <div class="toolbar wrap">
+            <label>
+              Status
+              <select v-model="executionStatus" :disabled="loadingDetail" @change="reloadSelectedDetail">
+                <option value="">all</option>
+                <option value="queued">queued</option>
+                <option value="running">running</option>
+                <option value="succeeded">succeeded</option>
+                <option value="failed">failed</option>
+                <option value="cancelled">cancelled</option>
+              </select>
+            </label>
+            <label>
+              Limit
+              <select v-model.number="executionLimit" :disabled="loadingDetail" @change="resetExecutionPageAndReload">
+                <option :value="10">10</option>
+                <option :value="20">20</option>
+                <option :value="50">50</option>
+              </select>
+            </label>
+            <button :disabled="loadingDetail || executionOffset === 0" @click="prevExecutionsPage">Prev</button>
+            <button :disabled="loadingDetail" @click="nextExecutionsPage">Next</button>
+            <small>offset: {{ executionOffset }}</small>
+          </div>
           <ul v-if="selectedDetail.recentExecutions.length" class="simple-list">
             <li v-for="execution in selectedDetail.recentExecutions" :key="execution.id">
               <strong>{{ execution.id }}</strong>
@@ -77,6 +101,43 @@
             </li>
           </ul>
           <p v-else>No recent executions.</p>
+
+          <h3>Online Sessions</h3>
+          <div class="toolbar wrap">
+            <label>
+              Limit
+              <input
+                v-model.number="sessionLimit"
+                :disabled="loadingSessions"
+                min="1"
+                step="1"
+                type="number"
+              />
+            </label>
+            <label>
+              Gap Seconds
+              <input
+                v-model.number="sessionGapSeconds"
+                :disabled="loadingSessions"
+                min="1"
+                step="1"
+                type="number"
+              />
+            </label>
+            <button :disabled="loadingSessions" @click="reloadSelectedSessions">
+              {{ loadingSessions ? 'Loading...' : 'Load Sessions' }}
+            </button>
+          </div>
+          <p v-if="sessionsError" class="error">{{ sessionsError }}</p>
+          <ul v-else-if="sessions.length" class="simple-list">
+            <li v-for="(session, index) in sessions" :key="`${session.startedAt}-${index}`">
+              <strong>{{ session.startedAt }}</strong>
+              <span>~ {{ session.endedAt || 'now' }}</span>
+              <small>heartbeats: {{ session.heartbeatCount ?? '-' }}</small>
+              <small>duration: {{ session.durationSeconds ?? '-' }}s</small>
+            </li>
+          </ul>
+          <p v-else>No session history yet.</p>
         </template>
       </article>
     </section>
@@ -85,15 +146,30 @@
 
 <script setup lang="ts">
 import { onMounted, ref } from 'vue'
-import { getNodeDetail, listNodes, type NodeDetail, type NodeSummary } from '../api/nodes'
+import {
+  getNodeDetail,
+  getNodeSessions,
+  listNodes,
+  type NodeDetail,
+  type NodeSession,
+  type NodeSummary,
+} from '../api/nodes'
 
 const nodes = ref<NodeSummary[]>([])
 const selectedNodeId = ref('')
 const selectedDetail = ref<NodeDetail | null>(null)
 const loadingList = ref(false)
 const loadingDetail = ref(false)
+const loadingSessions = ref(false)
 const listError = ref('')
 const detailError = ref('')
+const sessionsError = ref('')
+const sessions = ref<NodeSession[]>([])
+const executionLimit = ref(20)
+const executionOffset = ref(0)
+const executionStatus = ref('')
+const sessionLimit = ref(20)
+const sessionGapSeconds = ref(90)
 
 async function loadNodes() {
   loadingList.value = true
@@ -114,17 +190,65 @@ async function loadNodes() {
 
 async function selectNode(nodeId: string) {
   selectedNodeId.value = nodeId
+  executionOffset.value = 0
   selectedDetail.value = null
+  sessions.value = []
+  await Promise.all([reloadSelectedDetail(), reloadSelectedSessions()])
+}
+
+async function reloadSelectedDetail() {
+  if (!selectedNodeId.value) {
+    return
+  }
   detailError.value = ''
   loadingDetail.value = true
-
   try {
-    selectedDetail.value = await getNodeDetail(nodeId)
+    selectedDetail.value = await getNodeDetail(selectedNodeId.value, {
+      executionLimit: executionLimit.value,
+      executionOffset: executionOffset.value,
+      executionStatus: executionStatus.value.trim() || undefined,
+    })
   } catch (err) {
     detailError.value = err instanceof Error ? err.message : 'failed to load node detail'
   } finally {
     loadingDetail.value = false
   }
+}
+
+async function reloadSelectedSessions() {
+  if (!selectedNodeId.value) {
+    return
+  }
+  sessionsError.value = ''
+  loadingSessions.value = true
+  try {
+    sessions.value = await getNodeSessions(selectedNodeId.value, {
+      limit: Math.max(1, sessionLimit.value || 20),
+      gapSeconds: Math.max(1, sessionGapSeconds.value || 90),
+    })
+  } catch (err) {
+    sessionsError.value = err instanceof Error ? err.message : 'failed to load sessions'
+  } finally {
+    loadingSessions.value = false
+  }
+}
+
+async function resetExecutionPageAndReload() {
+  executionOffset.value = 0
+  await reloadSelectedDetail()
+}
+
+async function prevExecutionsPage() {
+  if (executionOffset.value === 0) {
+    return
+  }
+  executionOffset.value = Math.max(0, executionOffset.value - executionLimit.value)
+  await reloadSelectedDetail()
+}
+
+async function nextExecutionsPage() {
+  executionOffset.value += executionLimit.value
+  await reloadSelectedDetail()
 }
 
 onMounted(() => {
@@ -225,10 +349,33 @@ onMounted(() => {
   display: flex;
   gap: 0.5rem;
   align-items: baseline;
+  flex-wrap: wrap;
 }
 
 .error {
   color: #b42318;
+}
+
+.toolbar {
+  display: flex;
+  gap: 0.75rem;
+  align-items: end;
+  margin-bottom: 0.75rem;
+}
+
+.toolbar label {
+  display: grid;
+  gap: 0.25rem;
+  font-size: 0.85rem;
+}
+
+.toolbar select,
+.toolbar input {
+  min-width: 6rem;
+}
+
+.toolbar.wrap {
+  flex-wrap: wrap;
 }
 
 @media (max-width: 960px) {

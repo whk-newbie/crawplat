@@ -78,13 +78,16 @@ func TestPostgresNodeRepositoryUpsertAndListCatalog(t *testing.T) {
 
 	startedAt := seenAt.Add(10 * time.Second)
 	finishedAt := seenAt.Add(40 * time.Second)
-	mock.ExpectQuery(`SELECT id, project_id, spider_id, status, trigger_source, created_at, started_at, finished_at FROM executions WHERE node_id = \$1 ORDER BY created_at DESC LIMIT \$2`).
-		WithArgs("node-1", 3).
+	mock.ExpectQuery(`SELECT id, project_id, spider_id, status, trigger_source, created_at, started_at, finished_at FROM executions WHERE node_id = \$1 ORDER BY created_at DESC LIMIT \$2 OFFSET \$3`).
+		WithArgs("node-1", 3, 0).
 		WillReturnRows(sqlmock.NewRows([]string{"id", "project_id", "spider_id", "status", "trigger_source", "created_at", "started_at", "finished_at"}).
 			AddRow("exec-1", "project-1", "spider-1", "succeeded", "manual", seenAt, startedAt, finishedAt).
 			AddRow("exec-2", "project-1", "spider-2", "failed", "scheduled", seenAt.Add(-time.Minute), nil, nil))
 
-	executions, err := repo.ListRecentExecutions(context.Background(), "node-1", 3)
+	executions, err := repo.ListRecentExecutions(context.Background(), "node-1", service.ExecutionQuery{
+		Limit:  3,
+		Offset: 0,
+	})
 	if err != nil {
 		t.Fatalf("ListRecentExecutions returned error: %v", err)
 	}
@@ -96,6 +99,19 @@ func TestPostgresNodeRepositoryUpsertAndListCatalog(t *testing.T) {
 	}
 	if executions[1].StartedAt != nil || executions[1].FinishedAt != nil {
 		t.Fatalf("expected nil startedAt/finishedAt on second execution, got %#v", executions[1])
+	}
+
+	mock.ExpectQuery(`SELECT id, project_id, spider_id, status, trigger_source, created_at, started_at, finished_at FROM executions WHERE node_id = \$1 AND status = \$2 ORDER BY created_at DESC LIMIT \$3 OFFSET \$4`).
+		WithArgs("node-1", "failed", 5, 10).
+		WillReturnRows(sqlmock.NewRows([]string{"id", "project_id", "spider_id", "status", "trigger_source", "created_at", "started_at", "finished_at"}))
+
+	_, err = repo.ListRecentExecutions(context.Background(), "node-1", service.ExecutionQuery{
+		Limit:  5,
+		Offset: 10,
+		Status: "failed",
+	})
+	if err != nil {
+		t.Fatalf("ListRecentExecutions with status filter returned error: %v", err)
 	}
 
 	if err := mock.ExpectationsWereMet(); err != nil {

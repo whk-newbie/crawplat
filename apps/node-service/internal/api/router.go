@@ -52,17 +52,31 @@ func NewRouter(nodeService *service.NodeService) *gin.Engine {
 			return
 		}
 
-		limit := 20
-		if raw := c.Query("limit"); raw != "" {
-			parsed, err := strconv.Atoi(raw)
-			if err != nil || parsed <= 0 {
-				c.JSON(http.StatusBadRequest, gin.H{"error": "limit must be a positive integer"})
-				return
-			}
-			limit = parsed
+		heartbeatLimit, err := parsePositiveIntQuery(c, "limit", 20)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "limit must be a positive integer"})
+			return
 		}
+		executionLimit, err := parsePositiveIntQuery(c, "executionLimit", 20)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "executionLimit must be a positive integer"})
+			return
+		}
+		executionOffset, err := parseNonNegativeIntQuery(c, "executionOffset", 0)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "executionOffset must be a non-negative integer"})
+			return
+		}
+		executionStatus := c.Query("executionStatus")
 
-		detail, err := nodeService.Detail(id, limit)
+		detail, err := nodeService.Detail(id, service.DetailQuery{
+			HeartbeatLimit: heartbeatLimit,
+			ExecutionQuery: service.ExecutionQuery{
+				Limit:  executionLimit,
+				Offset: executionOffset,
+				Status: executionStatus,
+			},
+		})
 		if err != nil {
 			if errors.Is(err, service.ErrNodeNotFound) {
 				c.JSON(http.StatusNotFound, gin.H{"error": "node not found"})
@@ -74,7 +88,74 @@ func NewRouter(nodeService *service.NodeService) *gin.Engine {
 		c.JSON(http.StatusOK, detail)
 	})
 
+	router.GET("/api/v1/nodes/:id/sessions", func(c *gin.Context) {
+		id := c.Param("id")
+		if err := validateNodeID(id); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
+
+		limit, err := parsePositiveIntQuery(c, "limit", 20)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "limit must be a positive integer"})
+			return
+		}
+
+		gapSeconds, err := parseIntRangeQuery(c, "gapSeconds", 60, 1, 3600)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "gapSeconds must be an integer between 1 and 3600"})
+			return
+		}
+
+		sessions, err := nodeService.Sessions(id, limit, gapSeconds)
+		if err != nil {
+			if errors.Is(err, service.ErrNodeNotFound) {
+				c.JSON(http.StatusNotFound, gin.H{"error": "node not found"})
+				return
+			}
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+		c.JSON(http.StatusOK, sessions)
+	})
+
 	return router
+}
+
+func parsePositiveIntQuery(c *gin.Context, key string, defaultValue int) (int, error) {
+	raw := c.Query(key)
+	if raw == "" {
+		return defaultValue, nil
+	}
+	parsed, err := strconv.Atoi(raw)
+	if err != nil || parsed <= 0 {
+		return 0, errors.New("invalid positive int")
+	}
+	return parsed, nil
+}
+
+func parseNonNegativeIntQuery(c *gin.Context, key string, defaultValue int) (int, error) {
+	raw := c.Query(key)
+	if raw == "" {
+		return defaultValue, nil
+	}
+	parsed, err := strconv.Atoi(raw)
+	if err != nil || parsed < 0 {
+		return 0, errors.New("invalid non-negative int")
+	}
+	return parsed, nil
+}
+
+func parseIntRangeQuery(c *gin.Context, key string, defaultValue int, min int, max int) (int, error) {
+	raw := c.Query(key)
+	if raw == "" {
+		return defaultValue, nil
+	}
+	parsed, err := strconv.Atoi(raw)
+	if err != nil || parsed < min || parsed > max {
+		return 0, errors.New("out of range")
+	}
+	return parsed, nil
 }
 
 func validateNodeID(id string) error {

@@ -5,6 +5,8 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"fmt"
+	"strings"
 	"time"
 
 	"crawler-platform/apps/node-service/internal/service"
@@ -140,14 +142,27 @@ func (r *PostgresNodeRepository) ListHeartbeatHistory(ctx context.Context, nodeI
 	return history, nil
 }
 
-func (r *PostgresNodeRepository) ListRecentExecutions(ctx context.Context, nodeID string, limit int) ([]service.NodeExecution, error) {
-	rows, err := r.db.QueryContext(ctx, `
+func (r *PostgresNodeRepository) ListRecentExecutions(ctx context.Context, nodeID string, query service.ExecutionQuery) ([]service.NodeExecution, error) {
+	args := []any{nodeID}
+	where := []string{"node_id = $1"}
+	argPos := 2
+	if strings.TrimSpace(query.Status) != "" {
+		where = append(where, fmt.Sprintf("status = $%d", argPos))
+		args = append(args, query.Status)
+		argPos++
+	}
+
+	sqlQuery := fmt.Sprintf(`
 		SELECT id, project_id, spider_id, status, trigger_source, created_at, started_at, finished_at
 		FROM executions
-		WHERE node_id = $1
+		WHERE %s
 		ORDER BY created_at DESC
-		LIMIT $2
-	`, nodeID, limit)
+		LIMIT $%d
+		OFFSET $%d
+	`, strings.Join(where, " AND "), argPos, argPos+1)
+	args = append(args, query.Limit, query.Offset)
+
+	rows, err := r.db.QueryContext(ctx, sqlQuery, args...)
 	if err != nil {
 		return nil, err
 	}

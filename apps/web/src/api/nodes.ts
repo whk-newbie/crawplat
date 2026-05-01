@@ -10,6 +10,7 @@ export type NodeSummary = {
 
 export type NodeHeartbeat = {
   seenAt: string
+  status?: string
   capabilities?: string[]
 }
 
@@ -26,6 +27,24 @@ export type NodeDetail = NodeSummary & {
   recentExecutions: NodeRecentExecution[]
 }
 
+export type NodeSession = {
+  startedAt: string
+  endedAt?: string
+  durationSeconds?: number
+  heartbeatCount?: number
+}
+
+export type NodeDetailQuery = {
+  executionLimit?: number
+  executionOffset?: number
+  executionStatus?: string
+}
+
+export type NodeSessionsQuery = {
+  limit?: number
+  gapSeconds?: number
+}
+
 export function listNodes() {
   return apiFetch<NodeSummary[]>('/nodes')
 }
@@ -34,10 +53,17 @@ type NodeDetailResponse = {
   node: NodeSummary
   heartbeatHistory: Array<{
     seenAt: string
+    status?: string
     capabilities?: string[]
   }>
   recentExecutions: NodeRecentExecution[]
 }
+
+type NodeSessionsResponse =
+  | NodeSession[]
+  | {
+      sessions?: NodeSession[]
+    }
 
 function buildFallbackDetail(node: NodeSummary): NodeDetail {
   return {
@@ -47,18 +73,38 @@ function buildFallbackDetail(node: NodeSummary): NodeDetail {
   }
 }
 
-export async function getNodeDetail(nodeId: string) {
+function shouldFallbackByError(err: unknown) {
+  const message = err instanceof Error ? err.message : ''
+  return /404|not found/i.test(message)
+}
+
+function buildQueryString(input: Record<string, string>) {
+  const params = new URLSearchParams()
+  for (const [key, value] of Object.entries(input)) {
+    if (value !== '') {
+      params.set(key, value)
+    }
+  }
+  const query = params.toString()
+  return query ? `?${query}` : ''
+}
+
+export async function getNodeDetail(nodeId: string, query: NodeDetailQuery = {}) {
+  const requestQuery = buildQueryString({
+    executionLimit: query.executionLimit ? String(query.executionLimit) : '',
+    executionOffset: query.executionOffset ? String(query.executionOffset) : '',
+    executionStatus: query.executionStatus ?? '',
+  })
+
   try {
-    const detail = await apiFetch<NodeDetailResponse>(`/nodes/${encodeURIComponent(nodeId)}`)
+    const detail = await apiFetch<NodeDetailResponse>(`/nodes/${encodeURIComponent(nodeId)}${requestQuery}`)
     return {
       ...detail.node,
       heartbeats: detail.heartbeatHistory,
       recentExecutions: detail.recentExecutions,
     }
   } catch (err) {
-    const message = err instanceof Error ? err.message : ''
-    const shouldFallback = /404|not found/i.test(message)
-    if (!shouldFallback) {
+    if (!shouldFallbackByError(err)) {
       throw err
     }
 
@@ -68,5 +114,27 @@ export async function getNodeDetail(nodeId: string) {
       throw err
     }
     return buildFallbackDetail(node)
+  }
+}
+
+export async function getNodeSessions(nodeId: string, query: NodeSessionsQuery = {}) {
+  const requestQuery = buildQueryString({
+    limit: query.limit ? String(query.limit) : '',
+    gapSeconds: query.gapSeconds ? String(query.gapSeconds) : '',
+  })
+
+  try {
+    const response = await apiFetch<NodeSessionsResponse>(
+      `/nodes/${encodeURIComponent(nodeId)}/sessions${requestQuery}`,
+    )
+    if (Array.isArray(response)) {
+      return response
+    }
+    return response.sessions ?? []
+  } catch (err) {
+    if (shouldFallbackByError(err)) {
+      return []
+    }
+    throw err
   }
 }

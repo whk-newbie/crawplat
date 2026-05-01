@@ -106,7 +106,7 @@ func TestNodeDetailRouteReturnsNodeDetail(t *testing.T) {
 	}
 	router := NewRouter(svc)
 
-	req := httptest.NewRequest(http.MethodGet, "/api/v1/nodes/node-a?limit=5", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/nodes/node-a?limit=5&executionLimit=3&executionOffset=0&executionStatus=succeeded", nil)
 	w := httptest.NewRecorder()
 
 	router.ServeHTTP(w, req)
@@ -169,5 +169,71 @@ func TestNodeDetailRouteRejectsInvalidLimit(t *testing.T) {
 	router.ServeHTTP(w2, req2)
 	if w2.Code != http.StatusBadRequest {
 		t.Fatalf("expected status 400 for non-positive limit, got %d", w2.Code)
+	}
+
+	req3 := httptest.NewRequest(http.MethodGet, "/api/v1/nodes/node-a?executionLimit=-1", nil)
+	w3 := httptest.NewRecorder()
+	router.ServeHTTP(w3, req3)
+	if w3.Code != http.StatusBadRequest {
+		t.Fatalf("expected status 400 for executionLimit, got %d", w3.Code)
+	}
+
+	req4 := httptest.NewRequest(http.MethodGet, "/api/v1/nodes/node-a?executionOffset=-1", nil)
+	w4 := httptest.NewRecorder()
+	router.ServeHTTP(w4, req4)
+	if w4.Code != http.StatusBadRequest {
+		t.Fatalf("expected status 400 for executionOffset, got %d", w4.Code)
+	}
+}
+
+func TestNodeSessionsRouteReturnsSessions(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	svc := service.NewNodeService()
+	if _, err := svc.Heartbeat("node-a", []string{"go"}); err != nil {
+		t.Fatalf("Heartbeat returned error: %v", err)
+	}
+	router := NewRouter(svc)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/nodes/node-a/sessions?limit=2&gapSeconds=60", nil)
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d, body=%s", w.Code, w.Body.String())
+	}
+
+	var sessions []service.NodeSession
+	if err := json.Unmarshal(w.Body.Bytes(), &sessions); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+	if len(sessions) == 0 {
+		t.Fatalf("expected non-empty sessions")
+	}
+}
+
+func TestNodeSessionsRouteRejectsInvalidParams(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	router := NewRouter(service.NewNodeService())
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/nodes/node-a/sessions?limit=0", nil)
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("expected status 400 for limit=0, got %d", w.Code)
+	}
+
+	req2 := httptest.NewRequest(http.MethodGet, "/api/v1/nodes/node-a/sessions?gapSeconds=0", nil)
+	w2 := httptest.NewRecorder()
+	router.ServeHTTP(w2, req2)
+	if w2.Code != http.StatusBadRequest {
+		t.Fatalf("expected status 400 for gapSeconds=0, got %d", w2.Code)
+	}
+
+	req3 := httptest.NewRequest(http.MethodGet, "/api/v1/nodes/node-a/sessions?gapSeconds=3601", nil)
+	w3 := httptest.NewRecorder()
+	router.ServeHTTP(w3, req3)
+	if w3.Code != http.StatusBadRequest {
+		t.Fatalf("expected status 400 for gapSeconds=3601, got %d", w3.Code)
 	}
 }

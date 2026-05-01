@@ -31,10 +31,28 @@ type NodeExecution struct {
 	FinishedAt    *time.Time `json:"finishedAt,omitempty"`
 }
 
+type NodeSession struct {
+	StartedAt       time.Time `json:"startedAt"`
+	EndedAt         time.Time `json:"endedAt"`
+	HeartbeatCount  int       `json:"heartbeatCount"`
+	DurationSeconds int64     `json:"durationSeconds"`
+}
+
 type NodeDetail struct {
 	Node             Node            `json:"node"`
 	HeartbeatHistory []NodeHeartbeat `json:"heartbeatHistory"`
 	RecentExecutions []NodeExecution `json:"recentExecutions"`
+}
+
+type ExecutionQuery struct {
+	Limit  int
+	Offset int
+	Status string
+}
+
+type DetailQuery struct {
+	HeartbeatLimit int
+	ExecutionQuery ExecutionQuery
 }
 
 var ErrNodeNotFound = errors.New("node not found")
@@ -54,7 +72,7 @@ type CatalogRepository interface {
 	ListCatalog(ctx context.Context) ([]Node, error)
 	GetByID(ctx context.Context, nodeID string) (Node, error)
 	ListHeartbeatHistory(ctx context.Context, nodeID string, limit int) ([]NodeHeartbeat, error)
-	ListRecentExecutions(ctx context.Context, nodeID string, limit int) ([]NodeExecution, error)
+	ListRecentExecutions(ctx context.Context, nodeID string, query ExecutionQuery) ([]NodeExecution, error)
 }
 
 type memoryRepository struct {
@@ -151,7 +169,7 @@ func (r *memoryRepository) ListHeartbeatHistory(ctx context.Context, nodeID stri
 	return history[:limit], nil
 }
 
-func (r *memoryRepository) ListRecentExecutions(_ context.Context, nodeID string, _ int) ([]NodeExecution, error) {
+func (r *memoryRepository) ListRecentExecutions(_ context.Context, nodeID string, _ ExecutionQuery) ([]NodeExecution, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
@@ -241,7 +259,7 @@ func (s *NodeService) List() ([]Node, error) {
 	return nodes, nil
 }
 
-func (s *NodeService) Detail(id string, limit int) (NodeDetail, error) {
+func (s *NodeService) Detail(id string, query DetailQuery) (NodeDetail, error) {
 	node, err := s.catalogRepo.GetByID(context.Background(), id)
 	if err != nil {
 		return NodeDetail{}, err
@@ -266,11 +284,11 @@ func (s *NodeService) Detail(id string, limit int) (NodeDetail, error) {
 		break
 	}
 
-	history, err := s.catalogRepo.ListHeartbeatHistory(context.Background(), id, limit)
+	history, err := s.catalogRepo.ListHeartbeatHistory(context.Background(), id, query.HeartbeatLimit)
 	if err != nil {
 		return NodeDetail{}, err
 	}
-	recentExecutions, err := s.catalogRepo.ListRecentExecutions(context.Background(), id, limit)
+	recentExecutions, err := s.catalogRepo.ListRecentExecutions(context.Background(), id, query.ExecutionQuery)
 	if err != nil {
 		return NodeDetail{}, err
 	}
@@ -280,4 +298,66 @@ func (s *NodeService) Detail(id string, limit int) (NodeDetail, error) {
 		HeartbeatHistory: history,
 		RecentExecutions: recentExecutions,
 	}, nil
+}
+
+func (s *NodeService) Sessions(id string, limit int, gapSeconds int) ([]NodeSession, error) {
+	if _, err := s.catalogRepo.GetByID(context.Background(), id); err != nil {
+		return nil, err
+	}
+
+	historyLimit := limit * 20
+	if historyLimit < 200 {
+		historyLimit = 200
+	}
+	if historyLimit > 5000 {
+		historyLimit = 5000
+	}
+
+	history, err := s.catalogRepo.ListHeartbeatHistory(context.Background(), id, historyLimit)
+	if err != nil {
+		return nil, err
+	}
+	sessions := aggregateSessions(history, time.Duration(gapSeconds)*time.Second)
+	if len(sessions) > limit {
+		return sessions[:limit], nil
+	}
+	return sessions, nil
+}
+
+func aggregateSessions(history []NodeHeartbeat, gap time.Duration) []NodeSession {
+	if len(history) == 0 {
+		return []NodeSession{}
+	}
+
+	sessions := make([]NodeSession, 0)
+	current := NodeSession{
+		StartedAt:      history[0].SeenAt,
+		EndedAt:        history[0].SeenAt,
+		HeartbeatCount: 1,
+	}
+	prevSeenAt := history[0].SeenAt
+
+	for i := 1; i < len(history); i++ {
+		seenAt := history[i].SeenAt
+		if prevSeenAt.Sub(seenAt) <= gap {
+			current.StartedAt = seenAt
+			current.HeartbeatCount++
+			prevSeenAt = seenAt
+			continue
+		}
+
+		current.DurationSeconds = int64(current.EndedAt.Sub(current.StartedAt).Seconds())
+		sessions = append(sessions, current)
+
+		current = NodeSession{
+			StartedAt:      seenAt,
+			EndedAt:        seenAt,
+			HeartbeatCount: 1,
+		}
+		prevSeenAt = seenAt
+	}
+
+	current.DurationSeconds = int64(current.EndedAt.Sub(current.StartedAt).Seconds())
+	sessions = append(sessions, current)
+	return sessions
 }
