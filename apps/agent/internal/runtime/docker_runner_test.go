@@ -19,8 +19,14 @@ func (c *fakeCommand) CombinedOutput() ([]byte, error) {
 }
 
 func TestDockerRunnerBuildsExpectedCommand(t *testing.T) {
-	cmd := buildDockerRunCommand("crawler/go-echo:latest", []string{"./go-echo"})
-	want := []string{"docker", "run", "--rm", "crawler/go-echo:latest", "./go-echo"}
+	cmd := buildDockerRunCommand(poller.ClaimedExecution{
+		Image:          "crawler/go-echo:latest",
+		Command:        []string{"./go-echo"},
+		CPUCores:       1.5,
+		MemoryMB:       768,
+		TimeoutSeconds: 60,
+	})
+	want := []string{"docker", "run", "--rm", "--cpus", "1.5", "--memory", "768m", "crawler/go-echo:latest", "./go-echo"}
 	if !reflect.DeepEqual(cmd, want) {
 		t.Fatalf("unexpected docker command: %#v", cmd)
 	}
@@ -37,9 +43,12 @@ func TestDockerRunnerEmitsOutputLines(t *testing.T) {
 
 	var logs []string
 	err := runner.Run(context.Background(), poller.ClaimedExecution{
-		ID:      "exec-1",
-		Image:   "crawler/go-echo:latest",
-		Command: []string{"./go-echo"},
+		ID:             "exec-1",
+		Image:          "crawler/go-echo:latest",
+		Command:        []string{"./go-echo"},
+		CPUCores:       2,
+		MemoryMB:       1024,
+		TimeoutSeconds: 120,
 	}, func(line string) {
 		logs = append(logs, line)
 	})
@@ -49,7 +58,7 @@ func TestDockerRunnerEmitsOutputLines(t *testing.T) {
 	if gotName != "docker" {
 		t.Fatalf("unexpected command name: %q", gotName)
 	}
-	if want := []string{"run", "--rm", "crawler/go-echo:latest", "./go-echo"}; !reflect.DeepEqual(gotArgs, want) {
+	if want := []string{"run", "--rm", "--cpus", "2", "--memory", "1024m", "crawler/go-echo:latest", "./go-echo"}; !reflect.DeepEqual(gotArgs, want) {
 		t.Fatalf("unexpected command args: %#v", gotArgs)
 	}
 	if !reflect.DeepEqual(logs, []string{"line one", "line two"}) {

@@ -26,9 +26,9 @@ func (r *ExecutionRepository) Create(ctx context.Context, exec model.Execution) 
 	}
 
 	_, err = r.db.ExecContext(ctx, `
-		INSERT INTO executions (id, project_id, spider_id, node_id, status, trigger_source, image, command, retry_limit, retry_count, retry_delay_seconds, retry_of_execution_id, started_at, finished_at, error_message, retried_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
-	`, exec.ID, exec.ProjectID, exec.SpiderID, nullableString(exec.NodeID), exec.Status, exec.TriggerSource, exec.Image, string(command), exec.RetryLimit, exec.RetryCount, exec.RetryDelaySeconds, nullableString(exec.RetryOfExecutionID), exec.StartedAt, exec.FinishedAt, nullableString(exec.ErrorMessage), exec.RetriedAt)
+		INSERT INTO executions (id, project_id, spider_id, node_id, status, trigger_source, image, command, cpu_cores, memory_mb, timeout_seconds, retry_limit, retry_count, retry_delay_seconds, retry_of_execution_id, started_at, finished_at, error_message, retried_at)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)
+	`, exec.ID, exec.ProjectID, exec.SpiderID, nullableString(exec.NodeID), exec.Status, exec.TriggerSource, exec.Image, string(command), exec.CPUCores, exec.MemoryMB, exec.TimeoutSeconds, exec.RetryLimit, exec.RetryCount, exec.RetryDelaySeconds, nullableString(exec.RetryOfExecutionID), exec.StartedAt, exec.FinishedAt, nullableString(exec.ErrorMessage), exec.RetriedAt)
 	if err != nil {
 		return model.Execution{}, err
 	}
@@ -39,17 +39,17 @@ func (r *ExecutionRepository) Create(ctx context.Context, exec model.Execution) 
 func (r *ExecutionRepository) Get(ctx context.Context, id string) (model.Execution, error) {
 	var exec model.Execution
 	var (
-		nodeID       sql.NullString
-		commandRaw   []byte
-		errorMessage sql.NullString
+		nodeID             sql.NullString
+		commandRaw         []byte
+		errorMessage       sql.NullString
 		retryOfExecutionID sql.NullString
-		startedAt    sql.NullTime
-		finishedAt   sql.NullTime
-		retriedAt    sql.NullTime
+		startedAt          sql.NullTime
+		finishedAt         sql.NullTime
+		retriedAt          sql.NullTime
 	)
 
 	err := r.db.QueryRowContext(ctx, `
-		SELECT id, project_id, spider_id, node_id, status, trigger_source, image, command, error_message, created_at, started_at, finished_at, retry_limit, retry_count, retry_delay_seconds, retry_of_execution_id, retried_at
+		SELECT id, project_id, spider_id, node_id, status, trigger_source, image, command, cpu_cores, memory_mb, timeout_seconds, error_message, created_at, started_at, finished_at, retry_limit, retry_count, retry_delay_seconds, retry_of_execution_id, retried_at
 		FROM executions
 		WHERE id = $1
 	`, id).Scan(
@@ -61,6 +61,9 @@ func (r *ExecutionRepository) Get(ctx context.Context, id string) (model.Executi
 		&exec.TriggerSource,
 		&exec.Image,
 		&commandRaw,
+		&exec.CPUCores,
+		&exec.MemoryMB,
+		&exec.TimeoutSeconds,
 		&errorMessage,
 		&exec.CreatedAt,
 		&startedAt,
@@ -162,13 +165,13 @@ func (r *ExecutionRepository) Delete(ctx context.Context, id string) error {
 func (r *ExecutionRepository) ClaimNextRetryCandidate(ctx context.Context, now time.Time) (model.Execution, bool, error) {
 	var exec model.Execution
 	var (
-		nodeID            sql.NullString
-		commandRaw        []byte
-		errorMessage      sql.NullString
-		startedAt         sql.NullTime
-		finishedAt        sql.NullTime
+		nodeID             sql.NullString
+		commandRaw         []byte
+		errorMessage       sql.NullString
+		startedAt          sql.NullTime
+		finishedAt         sql.NullTime
 		retryOfExecutionID sql.NullString
-		retriedAt         sql.NullTime
+		retriedAt          sql.NullTime
 	)
 
 	err := r.db.QueryRowContext(ctx, `
@@ -185,7 +188,7 @@ func (r *ExecutionRepository) ClaimNextRetryCandidate(ctx context.Context, now t
 			ORDER BY finished_at ASC, id ASC
 			LIMIT 1
 		)
-		RETURNING id, project_id, spider_id, node_id, status, trigger_source, image, command, error_message, created_at, started_at, finished_at, retry_limit, retry_count, retry_delay_seconds, retry_of_execution_id, retried_at
+		RETURNING id, project_id, spider_id, node_id, status, trigger_source, image, command, cpu_cores, memory_mb, timeout_seconds, error_message, created_at, started_at, finished_at, retry_limit, retry_count, retry_delay_seconds, retry_of_execution_id, retried_at
 	`, now, now).Scan(
 		&exec.ID,
 		&exec.ProjectID,
@@ -195,6 +198,9 @@ func (r *ExecutionRepository) ClaimNextRetryCandidate(ctx context.Context, now t
 		&exec.TriggerSource,
 		&exec.Image,
 		&commandRaw,
+		&exec.CPUCores,
+		&exec.MemoryMB,
+		&exec.TimeoutSeconds,
 		&errorMessage,
 		&exec.CreatedAt,
 		&startedAt,
