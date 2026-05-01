@@ -26,12 +26,22 @@ type rateLimitConfig struct {
 	maxRequests   int
 }
 
-func NewRouter() *gin.Engine {
-	return newRouter(loadAuthConfig(), loadRateLimitConfig())
+type observabilityConfig struct {
+	requestLogEnabled bool
+	requestIDHeader   string
+	trustRequestID    bool
 }
 
-func newRouter(cfg authConfig, rlCfg rateLimitConfig) *gin.Engine {
+func NewRouter() *gin.Engine {
+	return newRouter(loadAuthConfig(), loadRateLimitConfig(), loadObservabilityConfig())
+}
+
+func newRouter(cfg authConfig, rlCfg rateLimitConfig, obsCfg observabilityConfig) *gin.Engine {
 	router := gin.Default()
+	router.Use(attachRequestID(obsCfg))
+	if obsCfg.requestLogEnabled {
+		router.Use(logRequest(obsCfg))
+	}
 
 	router.Any("/api/v1/auth", proxy.ProxyTo("iam-service"))
 	router.Any("/api/v1/auth/*path", proxy.ProxyTo("iam-service"))
@@ -86,6 +96,18 @@ func loadRateLimitConfig() rateLimitConfig {
 		enabled:       envBool("GATEWAY_RATE_LIMIT_ENABLED", false),
 		windowSeconds: envInt("GATEWAY_RATE_LIMIT_WINDOW_SECONDS", 60),
 		maxRequests:   envInt("GATEWAY_RATE_LIMIT_MAX_REQUESTS", 120),
+	}
+}
+
+func loadObservabilityConfig() observabilityConfig {
+	header := strings.TrimSpace(os.Getenv("GATEWAY_REQUEST_ID_HEADER"))
+	if header == "" {
+		header = "X-Request-Id"
+	}
+	return observabilityConfig{
+		requestLogEnabled: envBool("GATEWAY_REQUEST_LOG_ENABLED", true),
+		requestIDHeader:   header,
+		trustRequestID:    envBool("GATEWAY_TRUST_REQUEST_ID", true),
 	}
 }
 

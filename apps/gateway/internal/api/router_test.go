@@ -216,6 +216,56 @@ func TestPublicRoutesRateLimitIsPerClientKey(t *testing.T) {
 	}
 }
 
+func TestGatewaySetsRequestIDHeaderWhenMissing(t *testing.T) {
+	t.Setenv("GATEWAY_ENFORCE_JWT", "false")
+	t.Setenv("JWT_SECRET", "test-secret")
+	router := NewRouter()
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/projects", nil)
+	w := &closeNotifyRecorder{ResponseRecorder: httptest.NewRecorder()}
+	router.ServeHTTP(w, req)
+
+	requestID := strings.TrimSpace(w.Header().Get("X-Request-Id"))
+	if requestID == "" {
+		t.Fatal("expected gateway to set X-Request-Id header")
+	}
+}
+
+func TestGatewayTrustsIncomingRequestIDByDefault(t *testing.T) {
+	t.Setenv("GATEWAY_ENFORCE_JWT", "false")
+	t.Setenv("JWT_SECRET", "test-secret")
+	router := NewRouter()
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/projects", nil)
+	req.Header.Set("X-Request-Id", "req-fixed-123")
+	w := &closeNotifyRecorder{ResponseRecorder: httptest.NewRecorder()}
+	router.ServeHTTP(w, req)
+
+	if got := w.Header().Get("X-Request-Id"); got != "req-fixed-123" {
+		t.Fatalf("expected gateway to preserve incoming request id, got %q", got)
+	}
+}
+
+func TestGatewayCanDisableTrustIncomingRequestID(t *testing.T) {
+	t.Setenv("GATEWAY_ENFORCE_JWT", "false")
+	t.Setenv("GATEWAY_TRUST_REQUEST_ID", "false")
+	t.Setenv("JWT_SECRET", "test-secret")
+	router := NewRouter()
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/projects", nil)
+	req.Header.Set("X-Request-Id", "req-fixed-override-me")
+	w := &closeNotifyRecorder{ResponseRecorder: httptest.NewRecorder()}
+	router.ServeHTTP(w, req)
+
+	got := strings.TrimSpace(w.Header().Get("X-Request-Id"))
+	if got == "" {
+		t.Fatal("expected generated request id when trust incoming is disabled")
+	}
+	if got == "req-fixed-override-me" {
+		t.Fatalf("expected gateway to override incoming request id, got %q", got)
+	}
+}
+
 type closeNotifyRecorder struct {
 	*httptest.ResponseRecorder
 }
