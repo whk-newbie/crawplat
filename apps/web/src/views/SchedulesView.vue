@@ -151,6 +151,7 @@ function applySelectedVersion() {
   if (!selected) {
     return
   }
+  form.registryAuthRef = selected.registryAuthRef ?? ''
   form.image = selected.image
   form.command = Array.isArray(selected.command) ? selected.command.join(' ') : ''
 }
