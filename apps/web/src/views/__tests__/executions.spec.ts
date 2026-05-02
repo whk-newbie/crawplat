@@ -75,6 +75,16 @@ describe('execution detail view', () => {
       .mockResolvedValueOnce({
         ok: true,
         status: 200,
+        json: async () => ({
+          items: [],
+          total: 0,
+          limit: 20,
+          offset: 0,
+        }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
         json: async () => ([
           {
             id: 'v3',
@@ -145,9 +155,10 @@ describe('execution detail view', () => {
     ;(confirmButton as HTMLButtonElement).click()
     await flushPromises()
 
-    expect(fetchMock).toHaveBeenNthCalledWith(1, '/api/v1/spiders/spider-1/versions', expect.any(Object))
+    expect(fetchMock).toHaveBeenNthCalledWith(1, '/api/v1/executions?projectId=project-1&limit=20&offset=0', expect.any(Object))
+    expect(fetchMock).toHaveBeenNthCalledWith(2, '/api/v1/spiders/spider-1/versions', expect.any(Object))
     expect(fetchMock).toHaveBeenNthCalledWith(
-      2,
+      3,
       '/api/v1/executions',
       expect.objectContaining({
         method: 'POST',

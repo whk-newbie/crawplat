@@ -29,6 +29,8 @@ type SpiderVersionResolver interface {
 
 type ExecutionRepository interface {
 	Create(ctx context.Context, exec model.Execution) (model.Execution, error)
+	ListByProject(ctx context.Context, projectID string, limit, offset int) ([]model.Execution, error)
+	CountByProject(ctx context.Context, projectID string) (int64, error)
 	Get(ctx context.Context, id string) (model.Execution, error)
 	MarkRunning(ctx context.Context, id, nodeID string, startedAt time.Time) (model.Execution, error)
 	Complete(ctx context.Context, id string, finishedAt time.Time) (model.Execution, error)
@@ -215,6 +217,18 @@ func (s *ExecutionService) Get(ctx context.Context, id string) (model.Execution,
 	}
 	exec.Logs = logs
 	return exec, nil
+}
+
+func (s *ExecutionService) List(ctx context.Context, projectID string, limit, offset int) ([]model.Execution, int64, error) {
+	items, err := s.execRepo.ListByProject(ctx, projectID, limit, offset)
+	if err != nil {
+		return nil, 0, err
+	}
+	total, err := s.execRepo.CountByProject(ctx, projectID)
+	if err != nil {
+		return nil, 0, err
+	}
+	return items, total, nil
 }
 
 func (s *ExecutionService) AppendLog(ctx context.Context, executionID, message string) (model.ExecutionLog, error) {

@@ -5,8 +5,10 @@ import (
 	"errors"
 	"net/http"
 	"os"
+	"strconv"
 
 	"crawler-platform/apps/execution-service/internal/service"
+	"crawler-platform/packages/go-common/httpx"
 	"github.com/gin-gonic/gin"
 )
 
@@ -118,6 +120,28 @@ func NewRouter(executionService *service.ExecutionService) *gin.Engine {
 	}
 
 	router.POST("/api/v1/executions", createExecutionHandler)
+	router.GET("/api/v1/executions", func(c *gin.Context) {
+		projectID := c.Query("projectId")
+		if projectID == "" {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "projectId is required"})
+			return
+		}
+		limit, _ := strconv.Atoi(c.DefaultQuery("limit", "20"))
+		offset, _ := strconv.Atoi(c.DefaultQuery("offset", "0"))
+		p := httpx.DefaultPagination(limit, offset)
+
+		items, total, err := executionService.List(context.Background(), projectID, p.Limit, p.Offset)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+		c.JSON(http.StatusOK, httpx.PaginatedResponse{
+			Items:  items,
+			Total:  total,
+			Limit:  p.Limit,
+			Offset: p.Offset,
+		})
+	})
 	router.POST("/api/v1/executions/:id/logs", appendLogHandler)
 	router.GET("/api/v1/executions/:id", getExecutionHandler)
 	router.GET("/api/v1/executions/:id/logs", getLogsHandler)

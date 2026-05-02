@@ -29,6 +29,33 @@ func (r *apiFakeExecutionRepo) Create(_ context.Context, exec model.Execution) (
 	return exec, nil
 }
 
+func (r *apiFakeExecutionRepo) ListByProject(_ context.Context, projectID string, limit, offset int) ([]model.Execution, error) {
+	all := make([]model.Execution, 0)
+	for _, exec := range r.executions {
+		if exec.ProjectID == projectID {
+			all = append(all, exec)
+		}
+	}
+	if offset >= len(all) {
+		return []model.Execution{}, nil
+	}
+	end := offset + limit
+	if end > len(all) {
+		end = len(all)
+	}
+	return append([]model.Execution(nil), all[offset:end]...), nil
+}
+
+func (r *apiFakeExecutionRepo) CountByProject(_ context.Context, projectID string) (int64, error) {
+	var total int64
+	for _, exec := range r.executions {
+		if exec.ProjectID == projectID {
+			total++
+		}
+	}
+	return total, nil
+}
+
 func (r *apiFakeExecutionRepo) Get(_ context.Context, id string) (model.Execution, error) {
 	exec, ok := r.executions[id]
 	if !ok {
@@ -272,6 +299,71 @@ func TestCreateExecutionAcceptsRetryMetadata(t *testing.T) {
 	}
 	if exec.CPUCores != 2 || exec.MemoryMB != 1024 || exec.TimeoutSeconds != 180 {
 		t.Fatalf("expected resource limits in response, got %+v", exec)
+	}
+}
+
+func TestListExecutionsByProject(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	svc, execRepo, _, _ := newAPITestService()
+	_, _ = svc.Create(context.Background(), service.CreateExecutionInput{
+		ProjectID: "project-1",
+		SpiderID:  "spider-1",
+		Image:     "crawler/go:v1",
+		Command:   []string{"./crawler"},
+	})
+	_, _ = svc.Create(context.Background(), service.CreateExecutionInput{
+		ProjectID: "project-2",
+		SpiderID:  "spider-2",
+		Image:     "crawler/go:v2",
+		Command:   []string{"./crawler"},
+	})
+	if len(execRepo.executions) < 2 {
+		t.Fatalf("expected seeded executions, got %d", len(execRepo.executions))
+	}
+
+	router := NewRouter(svc)
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/executions?projectId=project-1&limit=20&offset=0", nil)
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d body=%s", w.Code, w.Body.String())
+	}
+
+	var payload struct {
+		Items  []model.Execution `json:"items"`
+		Total  int64             `json:"total"`
+		Limit  int               `json:"limit"`
+		Offset int               `json:"offset"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+	if payload.Total != 1 || len(payload.Items) != 1 {
+		t.Fatalf("unexpected paginated payload: %+v", payload)
+	}
+	if payload.Items[0].ProjectID != "project-1" {
+		t.Fatalf("expected project-1 execution, got %+v", payload.Items[0])
+	}
+}
+
+func TestListExecutionsRequiresProjectID(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	router := NewRouter(func() *service.ExecutionService {
+		svc, _, _, _ := newAPITestService()
+		return svc
+	}())
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/executions", nil)
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("expected status 400, got %d", w.Code)
+	}
+	if !strings.Contains(w.Body.String(), "projectId is required") {
+		t.Fatalf("expected projectId error, got %s", w.Body.String())
 	}
 }
 

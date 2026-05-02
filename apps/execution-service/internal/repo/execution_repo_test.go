@@ -54,6 +54,64 @@ func TestExecutionRepositoryCreate(t *testing.T) {
 	}
 }
 
+func TestExecutionRepositoryListByProjectAndCount(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	if err != nil {
+		t.Fatalf("sqlmock.New returned error: %v", err)
+	}
+	defer db.Close()
+
+	repo := NewExecutionRepository(db)
+	now := time.Date(2026, 5, 2, 13, 0, 0, 0, time.UTC)
+
+	rows := sqlmock.NewRows([]string{"id", "project_id", "spider_id", "spider_version", "registry_auth_ref", "node_id", "status", "trigger_source", "image", "command", "cpu_cores", "memory_mb", "timeout_seconds", "error_message", "created_at", "started_at", "finished_at", "retry_limit", "retry_count", "retry_delay_seconds", "retry_of_execution_id", "retried_at"}).
+		AddRow("e2", "p1", "s2", 2, "ghcr-prod", nil, "pending", "manual", "crawler/go:v2", `["./crawler","--v2"]`, 0.5, 512, 120, nil, now, nil, nil, 0, 0, 0, nil, nil).
+		AddRow("e1", "p1", "s1", 1, nil, "node-a", "running", "scheduled", "crawler/go:v1", `["./crawler"]`, 1.0, 1024, 300, nil, now.Add(-time.Minute), now.Add(-time.Minute), nil, 2, 1, 30, nil, nil)
+
+	mock.ExpectQuery(regexp.QuoteMeta(`
+		SELECT id, project_id, spider_id, spider_version, registry_auth_ref, node_id, status, trigger_source, image, command, cpu_cores, memory_mb, timeout_seconds, error_message, created_at, started_at, finished_at, retry_limit, retry_count, retry_delay_seconds, retry_of_execution_id, retried_at
+		FROM executions
+		WHERE project_id = $1
+		ORDER BY created_at DESC, id DESC
+		LIMIT $2 OFFSET $3
+	`)).
+		WithArgs("p1", 20, 0).
+		WillReturnRows(rows)
+
+	mock.ExpectQuery(regexp.QuoteMeta(`
+		SELECT COUNT(1)
+		FROM executions
+		WHERE project_id = $1
+	`)).
+		WithArgs("p1").
+		WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(int64(2)))
+
+	items, err := repo.ListByProject(context.Background(), "p1", 20, 0)
+	if err != nil {
+		t.Fatalf("ListByProject returned error: %v", err)
+	}
+	if len(items) != 2 {
+		t.Fatalf("expected 2 items, got %d", len(items))
+	}
+	if items[0].ID != "e2" || items[0].RegistryAuthRef != "ghcr-prod" {
+		t.Fatalf("unexpected first item: %+v", items[0])
+	}
+	if items[1].ID != "e1" || items[1].NodeID != "node-a" || items[1].Status != "running" {
+		t.Fatalf("unexpected second item: %+v", items[1])
+	}
+
+	total, err := repo.CountByProject(context.Background(), "p1")
+	if err != nil {
+		t.Fatalf("CountByProject returned error: %v", err)
+	}
+	if total != 2 {
+		t.Fatalf("expected total 2, got %d", total)
+	}
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Fatalf("ExpectationsWereMet returned error: %v", err)
+	}
+}
+
 func TestExecutionRepositoryClaimNextRetryCandidate(t *testing.T) {
 	db, mock, err := sqlmock.New()
 	if err != nil {

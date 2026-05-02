@@ -29,6 +29,33 @@ func (r *fakeExecutionRepo) Create(_ context.Context, exec model.Execution) (mod
 	return exec, nil
 }
 
+func (r *fakeExecutionRepo) ListByProject(_ context.Context, projectID string, limit, offset int) ([]model.Execution, error) {
+	all := make([]model.Execution, 0)
+	for _, exec := range r.executions {
+		if exec.ProjectID == projectID {
+			all = append(all, exec)
+		}
+	}
+	if offset >= len(all) {
+		return []model.Execution{}, nil
+	}
+	end := offset + limit
+	if end > len(all) {
+		end = len(all)
+	}
+	return append([]model.Execution(nil), all[offset:end]...), nil
+}
+
+func (r *fakeExecutionRepo) CountByProject(_ context.Context, projectID string) (int64, error) {
+	var total int64
+	for _, exec := range r.executions {
+		if exec.ProjectID == projectID {
+			total++
+		}
+	}
+	return total, nil
+}
+
 func (r *fakeExecutionRepo) Get(_ context.Context, id string) (model.Execution, error) {
 	exec, ok := r.executions[id]
 	if !ok {

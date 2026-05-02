@@ -18,6 +18,39 @@
       </div>
     </el-card>
 
+    <el-card style="margin-top: 16px">
+      <template #header>
+        <div style="display: flex; align-items: center; justify-content: space-between">
+          <span>Recent Executions</span>
+          <el-button :loading="loadingList" @click="loadExecutions">Refresh</el-button>
+        </div>
+      </template>
+      <el-table v-loading="loadingList" :data="executions" stripe>
+        <el-table-column prop="id" label="Execution ID" min-width="220">
+          <template #default="{ row }">
+            <el-button link type="primary" @click="openExecutionById(row.id)">{{ row.id }}</el-button>
+          </template>
+        </el-table-column>
+        <el-table-column prop="spiderId" label="Spider" min-width="140" />
+        <el-table-column prop="status" label="Status" width="120" />
+        <el-table-column prop="triggerSource" label="Trigger" width="120" />
+        <el-table-column prop="createdAt" label="Created At" min-width="200" />
+        <template #empty>
+          <el-empty v-if="!loadingList" description="No executions" />
+        </template>
+      </el-table>
+      <div style="display: flex; justify-content: flex-end; margin-top: 12px">
+        <el-pagination
+          v-model:current-page="currentPage"
+          v-model:page-size="pageSize"
+          layout="prev, pager, next, total"
+          :total="total"
+          :page-sizes="[20]"
+          @current-change="loadExecutions"
+        />
+      </div>
+    </el-card>
+
     <el-dialog v-model="createDialogVisible" title="Create Execution" width="500px">
       <el-form :model="form" label-position="top" @submit.prevent="submit">
         <el-form-item label="Project ID" required>
@@ -71,10 +104,10 @@
 </template>
 
 <script setup lang="ts">
-import { reactive, ref } from 'vue'
+import { onMounted, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { createExecution } from '../api/executions'
+import { createExecution, listExecutions, type Execution } from '../api/executions'
 import { listRegistryAuthRefs, listSpiderVersions, type SpiderVersion } from '../api/spiders'
 
 const router = useRouter()
@@ -95,6 +128,11 @@ const loadingVersions = ref(false)
 const loadingRegistryAuthRefs = ref(false)
 const spiderVersions = ref<SpiderVersion[]>([])
 const registryAuthRefs = ref<string[]>([])
+const executions = ref<Execution[]>([])
+const loadingList = ref(false)
+const total = ref(0)
+const pageSize = ref(20)
+const currentPage = ref(1)
 
 function parseCommand(input: string) {
   return input
@@ -184,4 +222,34 @@ async function openExecution() {
   }
   await router.push(`/executions/${lookupId.value.trim()}`)
 }
+
+async function openExecutionById(executionID: string) {
+  await router.push(`/executions/${executionID}`)
+}
+
+async function loadExecutions() {
+  const projectID = form.projectId.trim()
+  if (!projectID) {
+    ElMessage.warning('Project ID is required')
+    return
+  }
+  loadingList.value = true
+  try {
+    const response = await listExecutions({
+      projectId: projectID,
+      limit: pageSize.value,
+      offset: (currentPage.value - 1) * pageSize.value,
+    })
+    executions.value = response.items
+    total.value = response.total
+  } catch (err) {
+    ElMessage.error(err instanceof Error ? err.message : 'failed to load executions')
+  } finally {
+    loadingList.value = false
+  }
+}
+
+onMounted(() => {
+  void loadExecutions()
+})
 </script>
