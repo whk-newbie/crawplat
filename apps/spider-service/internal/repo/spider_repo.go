@@ -39,8 +39,8 @@ func (r *PostgresRepository) Create(ctx context.Context, spider model.Spider) er
 	}
 
 	_, err = tx.ExecContext(ctx, `
-		INSERT INTO spider_versions (id, spider_id, version, image, command)
-		VALUES ($1, $2, 1, $3, $4)
+		INSERT INTO spider_versions (id, spider_id, version, registry_auth_ref, image, command)
+		VALUES ($1, $2, 1, '', $3, $4)
 	`, uuid.NewString(), spider.ID, spider.Image, string(command))
 	if err != nil {
 		return err
@@ -106,7 +106,7 @@ func (r *PostgresRepository) CountByProject(ctx context.Context, projectID strin
 	return count, err
 }
 
-func (r *PostgresRepository) CreateVersion(ctx context.Context, spiderID, image string, command []string) (model.SpiderVersion, error) {
+func (r *PostgresRepository) CreateVersion(ctx context.Context, spiderID, registryAuthRef, image string, command []string) (model.SpiderVersion, error) {
 	commandRaw, err := json.Marshal(command)
 	if err != nil {
 		return model.SpiderVersion{}, err
@@ -130,17 +130,18 @@ func (r *PostgresRepository) CreateVersion(ctx context.Context, spiderID, image 
 	nextVersion := currentMax + 1
 
 	created := model.SpiderVersion{
-		ID:       uuid.NewString(),
-		SpiderID: spiderID,
-		Version:  nextVersion,
-		Image:    image,
-		Command:  append([]string(nil), command...),
+		ID:              uuid.NewString(),
+		SpiderID:        spiderID,
+		Version:         nextVersion,
+		RegistryAuthRef: registryAuthRef,
+		Image:           image,
+		Command:         append([]string(nil), command...),
 	}
 	if err := tx.QueryRowContext(ctx, `
-		INSERT INTO spider_versions (id, spider_id, version, image, command)
-		VALUES ($1, $2, $3, $4, $5)
+		INSERT INTO spider_versions (id, spider_id, version, registry_auth_ref, image, command)
+		VALUES ($1, $2, $3, $4, $5, $6)
 		RETURNING created_at
-	`, created.ID, created.SpiderID, created.Version, created.Image, string(commandRaw)).Scan(&created.CreatedAt); err != nil {
+	`, created.ID, created.SpiderID, created.Version, created.RegistryAuthRef, created.Image, string(commandRaw)).Scan(&created.CreatedAt); err != nil {
 		return model.SpiderVersion{}, err
 	}
 
@@ -161,7 +162,7 @@ func (r *PostgresRepository) CreateVersion(ctx context.Context, spiderID, image 
 
 func (r *PostgresRepository) ListVersions(ctx context.Context, spiderID string) ([]model.SpiderVersion, error) {
 	rows, err := r.db.QueryContext(ctx, `
-		SELECT id, spider_id, version, image, command, created_at
+		SELECT id, spider_id, version, registry_auth_ref, image, command, created_at
 		FROM spider_versions
 		WHERE spider_id = $1
 		ORDER BY version DESC
@@ -176,7 +177,7 @@ func (r *PostgresRepository) ListVersions(ctx context.Context, spiderID string) 
 		var version model.SpiderVersion
 		var commandRaw []byte
 		var createdAt time.Time
-		if err := rows.Scan(&version.ID, &version.SpiderID, &version.Version, &version.Image, &commandRaw, &createdAt); err != nil {
+		if err := rows.Scan(&version.ID, &version.SpiderID, &version.Version, &version.RegistryAuthRef, &version.Image, &commandRaw, &createdAt); err != nil {
 			return nil, err
 		}
 		if err := json.Unmarshal(commandRaw, &version.Command); err != nil {

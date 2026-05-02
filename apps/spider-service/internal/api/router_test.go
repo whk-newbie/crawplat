@@ -175,7 +175,7 @@ func TestSpiderVersionRoutes(t *testing.T) {
 	}
 	router := NewRouter(svc)
 
-	createVersionReq := httptest.NewRequest(http.MethodPost, "/api/v1/spiders/"+spider.ID+"/versions", strings.NewReader(`{"image":"crawler/go:v2","command":["./crawler-a","--fast"]}`))
+	createVersionReq := httptest.NewRequest(http.MethodPost, "/api/v1/spiders/"+spider.ID+"/versions", strings.NewReader(`{"registryAuthRef":"ghcr-prod","image":"crawler/go:v2","command":["./crawler-a","--fast"]}`))
 	createVersionReq.Header.Set("Content-Type", "application/json")
 	createVersionResp := httptest.NewRecorder()
 	router.ServeHTTP(createVersionResp, createVersionReq)
@@ -184,6 +184,9 @@ func TestSpiderVersionRoutes(t *testing.T) {
 	}
 	if !strings.Contains(createVersionResp.Body.String(), `"version":2`) {
 		t.Fatalf("expected created version 2, got %s", createVersionResp.Body.String())
+	}
+	if !strings.Contains(createVersionResp.Body.String(), `"registryAuthRef":"ghcr-prod"`) {
+		t.Fatalf("expected created version to include registryAuthRef, got %s", createVersionResp.Body.String())
 	}
 
 	listVersionsReq := httptest.NewRequest(http.MethodGet, "/api/v1/spiders/"+spider.ID+"/versions", nil)
@@ -194,5 +197,8 @@ func TestSpiderVersionRoutes(t *testing.T) {
 	}
 	if !strings.Contains(listVersionsResp.Body.String(), `"version":2`) || !strings.Contains(listVersionsResp.Body.String(), `"version":1`) {
 		t.Fatalf("expected version list with v2 and v1, got %s", listVersionsResp.Body.String())
+	}
+	if !strings.Contains(listVersionsResp.Body.String(), `"registryAuthRef":"ghcr-prod"`) {
+		t.Fatalf("expected version list to include registryAuthRef, got %s", listVersionsResp.Body.String())
 	}
 }

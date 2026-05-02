@@ -192,17 +192,18 @@ func (q *fakeQueue) Release(_ context.Context, executionID string) error {
 }
 
 type fakeSpiderVersionResolver struct {
-	version int
-	image   string
-	command []string
-	err     error
+	version         int
+	registryAuthRef string
+	image           string
+	command         []string
+	err             error
 }
 
-func (r *fakeSpiderVersionResolver) Resolve(_ context.Context, _ string, _ int) (int, string, []string, error) {
+func (r *fakeSpiderVersionResolver) Resolve(_ context.Context, _ string, _ int) (int, string, string, []string, error) {
 	if r.err != nil {
-		return 0, "", nil, r.err
+		return 0, "", "", nil, r.err
 	}
-	return r.version, r.image, append([]string(nil), r.command...), nil
+	return r.version, r.registryAuthRef, r.image, append([]string(nil), r.command...), nil
 }
 
 func TestCreateManualEnqueuesPendingExecution(t *testing.T) {
@@ -295,9 +296,10 @@ func TestCreateExecutionResolvesSpiderVersionWhenImageAndCommandMissing(t *testi
 	logRepo := newFakeLogRepo()
 	queue := &fakeQueue{}
 	resolver := &fakeSpiderVersionResolver{
-		version: 3,
-		image:   "crawler/go:v3",
-		command: []string{"./crawler", "--v3"},
+		version:         3,
+		registryAuthRef: "ghcr-prod",
+		image:           "crawler/go:v3",
+		command:         []string{"./crawler", "--v3"},
 	}
 	svc := NewExecutionService(execRepo, logRepo, queue).WithSpiderVersionResolver(resolver)
 
@@ -315,6 +317,36 @@ func TestCreateExecutionResolvesSpiderVersionWhenImageAndCommandMissing(t *testi
 	}
 	if len(exec.Command) != 2 || exec.Command[0] != "./crawler" || exec.Command[1] != "--v3" {
 		t.Fatalf("expected resolved command, got %+v", exec.Command)
+	}
+	if exec.RegistryAuthRef != "ghcr-prod" {
+		t.Fatalf("expected resolved registry auth ref, got %+v", exec)
+	}
+}
+
+func TestCreateExecutionKeepsProvidedRegistryAuthRefOverResolvedOne(t *testing.T) {
+	execRepo := newFakeExecutionRepo()
+	logRepo := newFakeLogRepo()
+	queue := &fakeQueue{}
+	resolver := &fakeSpiderVersionResolver{
+		version:         3,
+		registryAuthRef: "ghcr-default",
+		image:           "crawler/go:v3",
+		command:         []string{"./crawler", "--v3"},
+	}
+	svc := NewExecutionService(execRepo, logRepo, queue).WithSpiderVersionResolver(resolver)
+
+	exec, err := svc.Create(context.Background(), CreateExecutionInput{
+		ProjectID:       "project-1",
+		SpiderID:        "spider-1",
+		SpiderVersion:   3,
+		RegistryAuthRef: "ghcr-override",
+		TriggerSource:   "manual",
+	})
+	if err != nil {
+		t.Fatalf("Create returned error: %v", err)
+	}
+	if exec.RegistryAuthRef != "ghcr-override" {
+		t.Fatalf("expected explicit registry auth ref to win, got %+v", exec)
 	}
 }
 

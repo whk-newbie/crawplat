@@ -13,10 +13,11 @@ type Spider struct {
 }
 
 type SpiderVersion struct {
-	ID        string    `json:"id"`
-	SpiderID  string    `json:"spiderId"`
-	Version   int       `json:"version"`
-	Image     string    `json:"image"`
-	Command   []string  `json:"command"`
-	CreatedAt time.Time `json:"createdAt"`
+	ID              string    `json:"id"`
+	SpiderID        string    `json:"spiderId"`
+	Version         int       `json:"version"`
+	RegistryAuthRef string    `json:"registryAuthRef,omitempty"`
+	Image           string    `json:"image"`
+	Command         []string  `json:"command"`
+	CreatedAt       time.Time `json:"createdAt"`
 }

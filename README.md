@@ -32,11 +32,13 @@
 - Spider version management is now available:
   - `POST /api/v1/spiders/:spiderId/versions`
   - `GET /api/v1/spiders/:spiderId/versions`
+  - spider versions now persist optional `registryAuthRef` for private registry credentials.
   - `SpidersView` supports listing versions and creating a new version.
 - Private image pull integration is now available in agent runtime:
   - set `IMAGE_REGISTRY_AUTH_MAP` as JSON map `{ "<registry-host>": { "username": "...", "password": "...", "server": "..." } }`
   - when execution image host matches configured registry, agent runs `docker login` + `docker pull` before `docker run`.
   - execution/schedule APIs now support optional `registryAuthRef` to select a named credential directly.
+  - execution creation now auto-inherits `registryAuthRef` from resolved spider version when request-level `registryAuthRef` is empty.
 
 ## Containerized Dev Workflow
 

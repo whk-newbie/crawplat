@@ -27,7 +27,7 @@ type Repository interface {
 	ListByProject(ctx context.Context, projectID string, limit, offset int) ([]model.Spider, error)
 	CountByProject(ctx context.Context, projectID string) (int64, error)
 	Get(ctx context.Context, id string) (model.Spider, bool, error)
-	CreateVersion(ctx context.Context, spiderID, image string, command []string) (model.SpiderVersion, error)
+	CreateVersion(ctx context.Context, spiderID, registryAuthRef, image string, command []string) (model.SpiderVersion, error)
 	ListVersions(ctx context.Context, spiderID string) ([]model.SpiderVersion, error)
 }
 
@@ -46,12 +46,13 @@ func (r *memoryRepository) Create(_ context.Context, spider model.Spider) error 
 		r.versions = map[string][]model.SpiderVersion{}
 	}
 	r.versions[spider.ID] = []model.SpiderVersion{{
-		ID:        uuid.NewString(),
-		SpiderID:  spider.ID,
-		Version:   1,
-		Image:     spider.Image,
-		Command:   append([]string(nil), spider.Command...),
-		CreatedAt: time.Now().UTC(),
+		ID:              uuid.NewString(),
+		SpiderID:        spider.ID,
+		Version:         1,
+		RegistryAuthRef: "",
+		Image:           spider.Image,
+		Command:         append([]string(nil), spider.Command...),
+		CreatedAt:       time.Now().UTC(),
 	}}
 	return nil
 }
@@ -102,7 +103,7 @@ func (r *memoryRepository) Get(_ context.Context, id string) (model.Spider, bool
 	return model.Spider{}, false, nil
 }
 
-func (r *memoryRepository) CreateVersion(_ context.Context, spiderID, image string, command []string) (model.SpiderVersion, error) {
+func (r *memoryRepository) CreateVersion(_ context.Context, spiderID, registryAuthRef, image string, command []string) (model.SpiderVersion, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
@@ -116,12 +117,13 @@ func (r *memoryRepository) CreateVersion(_ context.Context, spiderID, image stri
 			nextVersion = existing[0].Version + 1
 		}
 		created := model.SpiderVersion{
-			ID:        uuid.NewString(),
-			SpiderID:  spiderID,
-			Version:   nextVersion,
-			Image:     image,
-			Command:   append([]string(nil), command...),
-			CreatedAt: time.Now().UTC(),
+			ID:              uuid.NewString(),
+			SpiderID:        spiderID,
+			Version:         nextVersion,
+			RegistryAuthRef: registryAuthRef,
+			Image:           image,
+			Command:         append([]string(nil), command...),
+			CreatedAt:       time.Now().UTC(),
 		}
 		r.versions[spiderID] = append([]model.SpiderVersion{created}, existing...)
 		r.spiders[i].Image = image
@@ -191,7 +193,7 @@ func (s *SpiderService) List(projectID string, limit, offset int) ([]model.Spide
 	return spiders, total, nil
 }
 
-func (s *SpiderService) CreateVersion(spiderID, image string, command []string) (model.SpiderVersion, error) {
+func (s *SpiderService) CreateVersion(spiderID, registryAuthRef, image string, command []string) (model.SpiderVersion, error) {
 	spider, found, err := s.repo.Get(context.Background(), spiderID)
 	if err != nil {
 		return model.SpiderVersion{}, err
@@ -211,7 +213,7 @@ func (s *SpiderService) CreateVersion(spiderID, image string, command []string) 
 		command = spider.Command
 	}
 
-	return s.repo.CreateVersion(context.Background(), spiderID, trimmedImage, append([]string(nil), command...))
+	return s.repo.CreateVersion(context.Background(), spiderID, strings.TrimSpace(registryAuthRef), trimmedImage, append([]string(nil), command...))
 }
 
 func (s *SpiderService) ListVersions(spiderID string) ([]model.SpiderVersion, error) {

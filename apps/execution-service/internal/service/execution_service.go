@@ -24,7 +24,7 @@ type ExecutionService struct {
 }
 
 type SpiderVersionResolver interface {
-	Resolve(ctx context.Context, spiderID string, requestedVersion int) (resolvedVersion int, image string, command []string, err error)
+	Resolve(ctx context.Context, spiderID string, requestedVersion int) (resolvedVersion int, registryAuthRef string, image string, command []string, err error)
 }
 
 type ExecutionRepository interface {
@@ -106,12 +106,15 @@ func (s *ExecutionService) CreateManual(ctx context.Context, input CreateManualI
 
 func (s *ExecutionService) Create(ctx context.Context, input CreateExecutionInput) (model.Execution, error) {
 	if strings.TrimSpace(input.Image) == "" && s.spiderVersionResolver != nil {
-		version, image, command, err := s.spiderVersionResolver.Resolve(ctx, input.SpiderID, input.SpiderVersion)
+		version, registryAuthRef, image, command, err := s.spiderVersionResolver.Resolve(ctx, input.SpiderID, input.SpiderVersion)
 		if err != nil {
 			return model.Execution{}, err
 		}
 		if input.SpiderVersion == 0 && version > 0 {
 			input.SpiderVersion = version
+		}
+		if strings.TrimSpace(input.RegistryAuthRef) == "" {
+			input.RegistryAuthRef = registryAuthRef
 		}
 		input.Image = image
 		if len(input.Command) == 0 {

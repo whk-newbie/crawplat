@@ -59,15 +59,16 @@ func NewRouter(spiderService *service.SpiderService) *gin.Engine {
 
 	router.POST("/api/v1/spiders/:spiderId/versions", func(c *gin.Context) {
 		var req struct {
-			Image   string   `json:"image"`
-			Command []string `json:"command"`
+			RegistryAuthRef string   `json:"registryAuthRef"`
+			Image           string   `json:"image"`
+			Command         []string `json:"command"`
 		}
 		if err := c.ShouldBindJSON(&req); err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 			return
 		}
 
-		version, err := spiderService.CreateVersion(c.Param("spiderId"), req.Image, req.Command)
+		version, err := spiderService.CreateVersion(c.Param("spiderId"), req.RegistryAuthRef, req.Image, req.Command)
 		if err != nil {
 			switch err {
 			case service.ErrSpiderNotFound:

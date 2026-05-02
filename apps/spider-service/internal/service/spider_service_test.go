@@ -67,7 +67,7 @@ func (r *fakeSpiderRepo) Get(_ context.Context, id string) (model.Spider, bool, 
 	return model.Spider{}, false, nil
 }
 
-func (r *fakeSpiderRepo) CreateVersion(_ context.Context, spiderID, image string, command []string) (model.SpiderVersion, error) {
+func (r *fakeSpiderRepo) CreateVersion(_ context.Context, spiderID, registryAuthRef, image string, command []string) (model.SpiderVersion, error) {
 	for i := range r.spiders {
 		if r.spiders[i].ID != spiderID {
 			continue
@@ -78,12 +78,13 @@ func (r *fakeSpiderRepo) CreateVersion(_ context.Context, spiderID, image string
 			nextVersion = existing[0].Version + 1
 		}
 		created := model.SpiderVersion{
-			ID:        uuid.NewString(),
-			SpiderID:  spiderID,
-			Version:   nextVersion,
-			Image:     image,
-			Command:   append([]string(nil), command...),
-			CreatedAt: time.Now().UTC(),
+			ID:              uuid.NewString(),
+			SpiderID:        spiderID,
+			Version:         nextVersion,
+			RegistryAuthRef: registryAuthRef,
+			Image:           image,
+			Command:         append([]string(nil), command...),
+			CreatedAt:       time.Now().UTC(),
 		}
 		r.versions[spiderID] = append([]model.SpiderVersion{created}, existing...)
 		r.spiders[i].Image = image
@@ -195,12 +196,15 @@ func TestCreateVersionAppendsSequentialVersion(t *testing.T) {
 		t.Fatalf("Create returned error: %v", err)
 	}
 
-	version, err := svc.CreateVersion(spider.ID, "crawler/go:v2", []string{"./crawler-a", "--fast"})
+	version, err := svc.CreateVersion(spider.ID, "ghcr-prod", "crawler/go:v2", []string{"./crawler-a", "--fast"})
 	if err != nil {
 		t.Fatalf("CreateVersion returned error: %v", err)
 	}
 	if version.Version != 2 || version.Image != "crawler/go:v2" {
 		t.Fatalf("unexpected created version: %+v", version)
+	}
+	if version.RegistryAuthRef != "ghcr-prod" {
+		t.Fatalf("expected registry auth ref to persist, got %+v", version)
 	}
 
 	versions, err := svc.ListVersions(spider.ID)
@@ -212,5 +216,8 @@ func TestCreateVersionAppendsSequentialVersion(t *testing.T) {
 	}
 	if versions[0].Version != 2 || versions[1].Version != 1 {
 		t.Fatalf("expected desc order by version, got %+v", versions)
+	}
+	if versions[0].RegistryAuthRef != "ghcr-prod" {
+		t.Fatalf("expected latest version to carry registry auth ref, got %+v", versions[0])
 	}
 }

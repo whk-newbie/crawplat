@@ -36,8 +36,8 @@ func TestPostgresRepositoryCreate(t *testing.T) {
 		WithArgs(spider.ID, spider.ProjectID, spider.Name, spider.Language, spider.Runtime, spider.Image, `["./crawler"]`).
 		WillReturnResult(sqlmock.NewResult(1, 1))
 	mock.ExpectExec(regexp.QuoteMeta(`
-		INSERT INTO spider_versions (id, spider_id, version, image, command)
-		VALUES ($1, $2, 1, $3, $4)
+		INSERT INTO spider_versions (id, spider_id, version, registry_auth_ref, image, command)
+		VALUES ($1, $2, 1, '', $3, $4)
 	`)).
 		WithArgs(sqlmock.AnyArg(), spider.ID, spider.Image, `["./crawler"]`).
 		WillReturnResult(sqlmock.NewResult(1, 1))
@@ -67,11 +67,11 @@ func TestPostgresRepositoryCreateVersion(t *testing.T) {
 		WithArgs("s1").
 		WillReturnRows(sqlmock.NewRows([]string{"coalesce"}).AddRow(1))
 	mock.ExpectQuery(regexp.QuoteMeta(`
-		INSERT INTO spider_versions (id, spider_id, version, image, command)
-		VALUES ($1, $2, $3, $4, $5)
+		INSERT INTO spider_versions (id, spider_id, version, registry_auth_ref, image, command)
+		VALUES ($1, $2, $3, $4, $5, $6)
 		RETURNING created_at
 	`)).
-		WithArgs(sqlmock.AnyArg(), "s1", 2, "crawler/go:v2", `["./crawler","--fast"]`).
+		WithArgs(sqlmock.AnyArg(), "s1", 2, "ghcr-prod", "crawler/go:v2", `["./crawler","--fast"]`).
 		WillReturnRows(sqlmock.NewRows([]string{"created_at"}).AddRow(time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)))
 	mock.ExpectExec(regexp.QuoteMeta(`
 		UPDATE spiders
@@ -82,12 +82,15 @@ func TestPostgresRepositoryCreateVersion(t *testing.T) {
 		WillReturnResult(sqlmock.NewResult(1, 1))
 	mock.ExpectCommit()
 
-	version, err := repo.CreateVersion(context.Background(), "s1", "crawler/go:v2", []string{"./crawler", "--fast"})
+	version, err := repo.CreateVersion(context.Background(), "s1", "ghcr-prod", "crawler/go:v2", []string{"./crawler", "--fast"})
 	if err != nil {
 		t.Fatalf("CreateVersion returned error: %v", err)
 	}
 	if version.SpiderID != "s1" || version.Version != 2 || version.Image != "crawler/go:v2" {
 		t.Fatalf("unexpected version: %+v", version)
+	}
+	if version.RegistryAuthRef != "ghcr-prod" {
+		t.Fatalf("unexpected registry auth ref: %+v", version)
 	}
 	if err := mock.ExpectationsWereMet(); err != nil {
 		t.Fatalf("ExpectationsWereMet returned error: %v", err)
@@ -102,11 +105,11 @@ func TestPostgresRepositoryListVersions(t *testing.T) {
 	defer db.Close()
 
 	repo := NewPostgresRepository(db)
-	rows := sqlmock.NewRows([]string{"id", "spider_id", "version", "image", "command", "created_at"}).
-		AddRow("v2", "s1", 2, "crawler/go:v2", `["./crawler","--fast"]`, time.Date(2026, 1, 2, 0, 0, 0, 0, time.UTC)).
-		AddRow("v1", "s1", 1, "crawler/go:latest", `["./crawler"]`, time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC))
+	rows := sqlmock.NewRows([]string{"id", "spider_id", "version", "registry_auth_ref", "image", "command", "created_at"}).
+		AddRow("v2", "s1", 2, "ghcr-prod", "crawler/go:v2", `["./crawler","--fast"]`, time.Date(2026, 1, 2, 0, 0, 0, 0, time.UTC)).
+		AddRow("v1", "s1", 1, "", "crawler/go:latest", `["./crawler"]`, time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC))
 	mock.ExpectQuery(regexp.QuoteMeta(`
-		SELECT id, spider_id, version, image, command, created_at
+		SELECT id, spider_id, version, registry_auth_ref, image, command, created_at
 		FROM spider_versions
 		WHERE spider_id = $1
 		ORDER BY version DESC
@@ -120,6 +123,9 @@ func TestPostgresRepositoryListVersions(t *testing.T) {
 	}
 	if len(versions) != 2 || versions[0].Version != 2 || versions[1].Version != 1 {
 		t.Fatalf("unexpected versions: %+v", versions)
+	}
+	if versions[0].RegistryAuthRef != "ghcr-prod" {
+		t.Fatalf("unexpected registry auth ref: %+v", versions[0])
 	}
 	if err := mock.ExpectationsWereMet(); err != nil {
 		t.Fatalf("ExpectationsWereMet returned error: %v", err)
