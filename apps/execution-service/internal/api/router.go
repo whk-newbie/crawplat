@@ -20,6 +20,7 @@ func NewRouter(executionService *service.ExecutionService) *gin.Engine {
 			ProjectID          string   `json:"projectId" binding:"required"`
 			SpiderID           string   `json:"spiderId" binding:"required"`
 			SpiderVersion      int      `json:"spiderVersion"`
+			RegistryAuthRef    string   `json:"registryAuthRef"`
 			Image              string   `json:"image"`
 			Command            []string `json:"command"`
 			CPUCores           float64  `json:"cpuCores"`
@@ -40,6 +41,7 @@ func NewRouter(executionService *service.ExecutionService) *gin.Engine {
 			ProjectID:          req.ProjectID,
 			SpiderID:           req.SpiderID,
 			SpiderVersion:      req.SpiderVersion,
+			RegistryAuthRef:    req.RegistryAuthRef,
 			Image:              req.Image,
 			Command:            req.Command,
 			CPUCores:           req.CPUCores,

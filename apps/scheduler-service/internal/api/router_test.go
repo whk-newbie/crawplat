@@ -70,7 +70,7 @@ func TestCreateScheduleAcceptsSpiderVersionWithoutImage(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
 	router := NewRouter(service.NewSchedulerService(nil, nil))
-	req := httptest.NewRequest(http.MethodPost, "/api/v1/schedules", strings.NewReader(`{"projectId":"project-1","spiderId":"spider-1","spiderVersion":2,"name":"nightly","cronExpr":"0 * * * *","enabled":true}`))
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/schedules", strings.NewReader(`{"projectId":"project-1","spiderId":"spider-1","spiderVersion":2,"registryAuthRef":"ghcr-prod","name":"nightly","cronExpr":"0 * * * *","enabled":true}`))
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
 
@@ -87,13 +87,16 @@ func TestCreateScheduleAcceptsSpiderVersionWithoutImage(t *testing.T) {
 	if schedule.SpiderVersion != 2 {
 		t.Fatalf("expected spiderVersion=2, got %+v", schedule)
 	}
+	if schedule.RegistryAuthRef != "ghcr-prod" {
+		t.Fatalf("expected registryAuthRef, got %+v", schedule)
+	}
 }
 
 func TestListSchedulesReturnsLowerCaseJSON(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
 	svc := service.NewSchedulerService(nil, nil)
-	if _, err := svc.Create("project-1", "spider-1", 0, "nightly", "0 * * * *", "crawler/go-echo:latest", []string{"./go-echo"}, true, 0, 0); err != nil {
+	if _, err := svc.Create("project-1", "spider-1", 0, "", "nightly", "0 * * * *", "crawler/go-echo:latest", []string{"./go-echo"}, true, 0, 0); err != nil {
 		t.Fatalf("Create returned error: %v", err)
 	}
 	router := NewRouter(svc)
@@ -132,7 +135,7 @@ func TestListSchedulesRespectsPaginationParams(t *testing.T) {
 
 	svc := service.NewSchedulerService(nil, nil)
 	for i := 0; i < 3; i++ {
-		if _, err := svc.Create("project-1", "spider-1", 0, "nightly", "0 * * * *", "crawler/go-echo:latest", []string{"./go-echo"}, true, 0, 0); err != nil {
+		if _, err := svc.Create("project-1", "spider-1", 0, "", "nightly", "0 * * * *", "crawler/go-echo:latest", []string{"./go-echo"}, true, 0, 0); err != nil {
 			t.Fatalf("Create returned error: %v", err)
 		}
 	}

@@ -254,6 +254,7 @@ func TestCreateExecutionUsesProvidedTriggerSource(t *testing.T) {
 		ProjectID:          "project-1",
 		SpiderID:           "spider-1",
 		SpiderVersion:      2,
+		RegistryAuthRef:    "ghcr-prod",
 		Image:              "crawler/go-echo:latest",
 		Command:            []string{"./go-echo"},
 		TriggerSource:      "scheduled",
@@ -280,6 +281,9 @@ func TestCreateExecutionUsesProvidedTriggerSource(t *testing.T) {
 	}
 	if exec.SpiderVersion != 2 {
 		t.Fatalf("expected spider version to persist, got %+v", exec)
+	}
+	if exec.RegistryAuthRef != "ghcr-prod" {
+		t.Fatalf("expected registry auth ref to persist, got %+v", exec)
 	}
 	if queue.lastEnqueued != exec.ID {
 		t.Fatalf("expected execution %s to be enqueued, got %s", exec.ID, queue.lastEnqueued)

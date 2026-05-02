@@ -43,6 +43,7 @@ type CreateExecutionInput struct {
 	ProjectID         string
 	SpiderID          string
 	SpiderVersion     int
+	RegistryAuthRef   string
 	Image             string
 	Command           []string
 	TriggerSource     string
@@ -141,6 +142,7 @@ func (c *HTTPExecutionClient) Create(ctx context.Context, input CreateExecutionI
 		"projectId":         input.ProjectID,
 		"spiderId":          input.SpiderID,
 		"spiderVersion":     input.SpiderVersion,
+		"registryAuthRef":   input.RegistryAuthRef,
 		"image":             input.Image,
 		"command":           input.Command,
 		"triggerSource":     input.TriggerSource,
@@ -236,7 +238,7 @@ func NewSchedulerService(repo Repository, executionClient ExecutionClient, optio
 	return svc
 }
 
-func (s *SchedulerService) Create(projectID, spiderID string, spiderVersion int, name, cronExpr, image string, command []string, enabled bool, retryLimit, retryDelaySeconds int) (model.Schedule, error) {
+func (s *SchedulerService) Create(projectID, spiderID string, spiderVersion int, registryAuthRef, name, cronExpr, image string, command []string, enabled bool, retryLimit, retryDelaySeconds int) (model.Schedule, error) {
 	if projectID == "" || spiderID == "" || name == "" || cronExpr == "" {
 		return model.Schedule{}, ErrInvalidSchedule
 	}
@@ -250,6 +252,7 @@ func (s *SchedulerService) Create(projectID, spiderID string, spiderVersion int,
 		ProjectID:         projectID,
 		SpiderID:          spiderID,
 		SpiderVersion:     spiderVersion,
+		RegistryAuthRef:   registryAuthRef,
 		Name:              name,
 		CronExpr:          cronExpr,
 		Enabled:           enabled,
@@ -329,6 +332,7 @@ func (s *SchedulerService) MaterializeDue(ctx context.Context) (int, error) {
 				ProjectID:         schedule.ProjectID,
 				SpiderID:          schedule.SpiderID,
 				SpiderVersion:     schedule.SpiderVersion,
+				RegistryAuthRef:   schedule.RegistryAuthRef,
 				Image:             schedule.Image,
 				Command:           append([]string(nil), schedule.Command...),
 				TriggerSource:     "scheduled",

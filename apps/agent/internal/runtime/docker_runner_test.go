@@ -108,9 +108,10 @@ func TestDockerRunnerPerformsLoginAndPullWhenCredentialExists(t *testing.T) {
 
 	var logs []string
 	err := runner.Run(context.Background(), poller.ClaimedExecution{
-		ID:      "exec-1",
-		Image:   "ghcr.io/acme/crawler:latest",
-		Command: []string{"./crawler"},
+		ID:              "exec-1",
+		RegistryAuthRef: "ghcr.io",
+		Image:           "ghcr.io/acme/crawler:latest",
+		Command:         []string{"./crawler"},
 	}, func(line string) {
 		logs = append(logs, line)
 	})
@@ -132,5 +133,35 @@ func TestDockerRunnerPerformsLoginAndPullWhenCredentialExists(t *testing.T) {
 	}
 	if !reflect.DeepEqual(logs, []string{"login ok", "pull ok", "run ok"}) {
 		t.Fatalf("unexpected logs: %#v", logs)
+	}
+}
+
+func TestDockerRunnerUsesRegistryAuthRefOverImageHost(t *testing.T) {
+	var invocations [][]string
+	runner := NewDockerRunner(func(_ context.Context, name string, args ...string) command {
+		invocations = append(invocations, append([]string{name}, args...))
+		return &fakeCommand{}
+	}, map[string]RegistryCredential{
+		"my-ghcr": {
+			Server:   "ghcr.io",
+			Username: "user",
+			Password: "pass",
+		},
+	})
+
+	err := runner.Run(context.Background(), poller.ClaimedExecution{
+		ID:              "exec-1",
+		RegistryAuthRef: "my-ghcr",
+		Image:           "ghcr.io/acme/crawler:latest",
+		Command:         []string{"./crawler"},
+	}, func(string) {})
+	if err != nil {
+		t.Fatalf("Run returned error: %v", err)
+	}
+	if len(invocations) == 0 {
+		t.Fatalf("expected invocations, got %#v", invocations)
+	}
+	if !reflect.DeepEqual(invocations[0], []string{"docker", "login", "ghcr.io", "-u", "user", "-p", "pass"}) {
+		t.Fatalf("expected login by auth ref, got %#v", invocations[0])
 	}
 }

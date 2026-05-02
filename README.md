@@ -36,6 +36,7 @@
 - Private image pull integration is now available in agent runtime:
   - set `IMAGE_REGISTRY_AUTH_MAP` as JSON map `{ "<registry-host>": { "username": "...", "password": "...", "server": "..." } }`
   - when execution image host matches configured registry, agent runs `docker login` + `docker pull` before `docker run`.
+  - execution/schedule APIs now support optional `registryAuthRef` to select a named credential directly.
 
 ## Containerized Dev Workflow
 

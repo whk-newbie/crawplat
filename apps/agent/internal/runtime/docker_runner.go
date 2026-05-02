@@ -46,7 +46,7 @@ func (r *DockerRunner) Run(ctx context.Context, exec poller.ClaimedExecution, on
 	}
 	defer cancel()
 
-	if cred, ok := r.findCredential(exec.Image); ok {
+	if cred, ok := r.findCredential(exec); ok {
 		login := buildDockerLoginCommand(cred)
 		if err := r.runCommand(runCtx, login, onLog); err != nil {
 			return err
@@ -108,11 +108,20 @@ func (r *DockerRunner) runCommand(ctx context.Context, cmd []string, onLog func(
 	return err
 }
 
-func (r *DockerRunner) findCredential(image string) (RegistryCredential, bool) {
+func (r *DockerRunner) findCredential(exec poller.ClaimedExecution) (RegistryCredential, bool) {
 	if len(r.creds) == 0 {
 		return RegistryCredential{}, false
 	}
-	host := registryHostFromImage(image)
+	if ref := strings.TrimSpace(strings.ToLower(exec.RegistryAuthRef)); ref != "" {
+		cred, ok := r.creds[ref]
+		if ok {
+			if strings.TrimSpace(cred.Server) == "" {
+				cred.Server = ref
+			}
+			return cred, true
+		}
+	}
+	host := registryHostFromImage(exec.Image)
 	cred, ok := r.creds[host]
 	if ok {
 		if strings.TrimSpace(cred.Server) == "" {

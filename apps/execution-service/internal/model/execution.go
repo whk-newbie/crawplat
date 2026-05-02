@@ -7,6 +7,7 @@ type Execution struct {
 	ProjectID          string         `json:"projectId"`
 	SpiderID           string         `json:"spiderId"`
 	SpiderVersion      int            `json:"spiderVersion,omitempty"`
+	RegistryAuthRef    string         `json:"registryAuthRef,omitempty"`
 	NodeID             string         `json:"nodeId,omitempty"`
 	Status             string         `json:"status"`
 	TriggerSource      string         `json:"triggerSource"`

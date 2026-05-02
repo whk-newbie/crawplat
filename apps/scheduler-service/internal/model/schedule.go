@@ -7,6 +7,7 @@ type Schedule struct {
 	ProjectID          string     `json:"projectId"`
 	SpiderID           string     `json:"spiderId"`
 	SpiderVersion      int        `json:"spiderVersion,omitempty"`
+	RegistryAuthRef    string     `json:"registryAuthRef,omitempty"`
 	Name               string     `json:"name"`
 	CronExpr           string     `json:"cronExpr"`
 	Enabled            bool       `json:"enabled"`

@@ -40,10 +40,10 @@ func TestExecutionRepositoryCreate(t *testing.T) {
 	}
 
 	mock.ExpectExec(regexp.QuoteMeta(`
-		INSERT INTO executions (id, project_id, spider_id, spider_version, node_id, status, trigger_source, image, command, cpu_cores, memory_mb, timeout_seconds, retry_limit, retry_count, retry_delay_seconds, retry_of_execution_id, started_at, finished_at, error_message, retried_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20)
+		INSERT INTO executions (id, project_id, spider_id, spider_version, registry_auth_ref, node_id, status, trigger_source, image, command, cpu_cores, memory_mb, timeout_seconds, retry_limit, retry_count, retry_delay_seconds, retry_of_execution_id, started_at, finished_at, error_message, retried_at)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21)
 	`)).
-		WithArgs(exec.ID, exec.ProjectID, exec.SpiderID, exec.SpiderVersion, nil, exec.Status, exec.TriggerSource, exec.Image, `["./crawler"]`, exec.CPUCores, exec.MemoryMB, exec.TimeoutSeconds, exec.RetryLimit, exec.RetryCount, exec.RetryDelaySeconds, exec.RetryOfExecutionID, exec.StartedAt, exec.FinishedAt, nil, nil).
+		WithArgs(exec.ID, exec.ProjectID, exec.SpiderID, exec.SpiderVersion, nil, nil, exec.Status, exec.TriggerSource, exec.Image, `["./crawler"]`, exec.CPUCores, exec.MemoryMB, exec.TimeoutSeconds, exec.RetryLimit, exec.RetryCount, exec.RetryDelaySeconds, exec.RetryOfExecutionID, exec.StartedAt, exec.FinishedAt, nil, nil).
 		WillReturnResult(sqlmock.NewResult(1, 1))
 
 	if _, err := repo.Create(context.Background(), exec); err != nil {
@@ -66,8 +66,8 @@ func TestExecutionRepositoryClaimNextRetryCandidate(t *testing.T) {
 	finishedAt := now.Add(-time.Minute)
 	retriedAt := now
 
-	rows := sqlmock.NewRows([]string{"id", "project_id", "spider_id", "spider_version", "node_id", "status", "trigger_source", "image", "command", "cpu_cores", "memory_mb", "timeout_seconds", "error_message", "created_at", "started_at", "finished_at", "retry_limit", "retry_count", "retry_delay_seconds", "retry_of_execution_id", "retried_at"}).
-		AddRow("e1", "p1", "s1", 1, nil, "failed", "scheduled", "crawler/go:latest", `["./crawler"]`, 0.5, 512, 90, "boom", now.Add(-2*time.Minute), nil, finishedAt, 3, 0, 30, nil, retriedAt)
+	rows := sqlmock.NewRows([]string{"id", "project_id", "spider_id", "spider_version", "registry_auth_ref", "node_id", "status", "trigger_source", "image", "command", "cpu_cores", "memory_mb", "timeout_seconds", "error_message", "created_at", "started_at", "finished_at", "retry_limit", "retry_count", "retry_delay_seconds", "retry_of_execution_id", "retried_at"}).
+		AddRow("e1", "p1", "s1", 1, nil, nil, "failed", "scheduled", "crawler/go:latest", `["./crawler"]`, 0.5, 512, 90, "boom", now.Add(-2*time.Minute), nil, finishedAt, 3, 0, 30, nil, retriedAt)
 
 	mock.ExpectQuery(regexp.QuoteMeta(`
 		UPDATE executions
@@ -83,7 +83,7 @@ func TestExecutionRepositoryClaimNextRetryCandidate(t *testing.T) {
 			ORDER BY finished_at ASC, id ASC
 			LIMIT 1
 		)
-		RETURNING id, project_id, spider_id, spider_version, node_id, status, trigger_source, image, command, cpu_cores, memory_mb, timeout_seconds, error_message, created_at, started_at, finished_at, retry_limit, retry_count, retry_delay_seconds, retry_of_execution_id, retried_at
+		RETURNING id, project_id, spider_id, spider_version, registry_auth_ref, node_id, status, trigger_source, image, command, cpu_cores, memory_mb, timeout_seconds, error_message, created_at, started_at, finished_at, retry_limit, retry_count, retry_delay_seconds, retry_of_execution_id, retried_at
 	`)).
 		WithArgs(now, now).
 		WillReturnRows(rows)
@@ -114,7 +114,7 @@ func TestExecutionRepositoryGetReturnsBackendError(t *testing.T) {
 	expectedErr := errors.New("postgres unavailable")
 
 	mock.ExpectQuery(regexp.QuoteMeta(`
-		SELECT id, project_id, spider_id, spider_version, node_id, status, trigger_source, image, command, cpu_cores, memory_mb, timeout_seconds, error_message, created_at, started_at, finished_at, retry_limit, retry_count, retry_delay_seconds, retry_of_execution_id, retried_at
+		SELECT id, project_id, spider_id, spider_version, registry_auth_ref, node_id, status, trigger_source, image, command, cpu_cores, memory_mb, timeout_seconds, error_message, created_at, started_at, finished_at, retry_limit, retry_count, retry_delay_seconds, retry_of_execution_id, retried_at
 		FROM executions
 		WHERE id = $1
 	`)).
@@ -140,12 +140,12 @@ func TestExecutionRepositoryGetMapsNoRowsToNotFound(t *testing.T) {
 	repo := NewExecutionRepository(db)
 
 	mock.ExpectQuery(regexp.QuoteMeta(`
-		SELECT id, project_id, spider_id, spider_version, node_id, status, trigger_source, image, command, cpu_cores, memory_mb, timeout_seconds, error_message, created_at, started_at, finished_at, retry_limit, retry_count, retry_delay_seconds, retry_of_execution_id, retried_at
+		SELECT id, project_id, spider_id, spider_version, registry_auth_ref, node_id, status, trigger_source, image, command, cpu_cores, memory_mb, timeout_seconds, error_message, created_at, started_at, finished_at, retry_limit, retry_count, retry_delay_seconds, retry_of_execution_id, retried_at
 		FROM executions
 		WHERE id = $1
 	`)).
 		WithArgs("missing").
-		WillReturnRows(sqlmock.NewRows([]string{"id", "project_id", "spider_id", "spider_version", "node_id", "status", "trigger_source", "image", "command", "cpu_cores", "memory_mb", "timeout_seconds", "error_message", "created_at", "started_at", "finished_at", "retry_limit", "retry_count", "retry_delay_seconds", "retry_of_execution_id", "retried_at"}))
+		WillReturnRows(sqlmock.NewRows([]string{"id", "project_id", "spider_id", "spider_version", "registry_auth_ref", "node_id", "status", "trigger_source", "image", "command", "cpu_cores", "memory_mb", "timeout_seconds", "error_message", "created_at", "started_at", "finished_at", "retry_limit", "retry_count", "retry_delay_seconds", "retry_of_execution_id", "retried_at"}))
 
 	_, err = repo.Get(context.Background(), "missing")
 	if err == nil || err != service.ErrExecutionNotFound {
@@ -174,10 +174,10 @@ func TestExecutionRepositoryMarkRunning(t *testing.T) {
 		WithArgs("e1", "node-1", startedAt).
 		WillReturnResult(sqlmock.NewResult(0, 1))
 
-	rows := sqlmock.NewRows([]string{"id", "project_id", "spider_id", "spider_version", "node_id", "status", "trigger_source", "image", "command", "cpu_cores", "memory_mb", "timeout_seconds", "error_message", "created_at", "started_at", "finished_at", "retry_limit", "retry_count", "retry_delay_seconds", "retry_of_execution_id", "retried_at"}).
-		AddRow("e1", "p1", "s1", 1, "node-1", "running", "manual", "crawler/go:latest", `["./crawler"]`, 0.25, 256, 30, nil, startedAt, startedAt, nil, 0, 0, 0, nil, nil)
+	rows := sqlmock.NewRows([]string{"id", "project_id", "spider_id", "spider_version", "registry_auth_ref", "node_id", "status", "trigger_source", "image", "command", "cpu_cores", "memory_mb", "timeout_seconds", "error_message", "created_at", "started_at", "finished_at", "retry_limit", "retry_count", "retry_delay_seconds", "retry_of_execution_id", "retried_at"}).
+		AddRow("e1", "p1", "s1", 1, nil, "node-1", "running", "manual", "crawler/go:latest", `["./crawler"]`, 0.25, 256, 30, nil, startedAt, startedAt, nil, 0, 0, 0, nil, nil)
 	mock.ExpectQuery(regexp.QuoteMeta(`
-		SELECT id, project_id, spider_id, spider_version, node_id, status, trigger_source, image, command, cpu_cores, memory_mb, timeout_seconds, error_message, created_at, started_at, finished_at, retry_limit, retry_count, retry_delay_seconds, retry_of_execution_id, retried_at
+		SELECT id, project_id, spider_id, spider_version, registry_auth_ref, node_id, status, trigger_source, image, command, cpu_cores, memory_mb, timeout_seconds, error_message, created_at, started_at, finished_at, retry_limit, retry_count, retry_delay_seconds, retry_of_execution_id, retried_at
 		FROM executions
 		WHERE id = $1
 	`)).
@@ -214,10 +214,10 @@ func TestExecutionRepositoryComplete(t *testing.T) {
 		WithArgs("e1", finishedAt).
 		WillReturnResult(sqlmock.NewResult(0, 1))
 
-	rows := sqlmock.NewRows([]string{"id", "project_id", "spider_id", "spider_version", "node_id", "status", "trigger_source", "image", "command", "cpu_cores", "memory_mb", "timeout_seconds", "error_message", "created_at", "started_at", "finished_at", "retry_limit", "retry_count", "retry_delay_seconds", "retry_of_execution_id", "retried_at"}).
-		AddRow("e1", "p1", "s1", 1, "node-1", "succeeded", "manual", "crawler/go:latest", `["./crawler"]`, 1.0, 1024, 600, nil, finishedAt, nil, finishedAt, 0, 0, 0, nil, nil)
+	rows := sqlmock.NewRows([]string{"id", "project_id", "spider_id", "spider_version", "registry_auth_ref", "node_id", "status", "trigger_source", "image", "command", "cpu_cores", "memory_mb", "timeout_seconds", "error_message", "created_at", "started_at", "finished_at", "retry_limit", "retry_count", "retry_delay_seconds", "retry_of_execution_id", "retried_at"}).
+		AddRow("e1", "p1", "s1", 1, nil, "node-1", "succeeded", "manual", "crawler/go:latest", `["./crawler"]`, 1.0, 1024, 600, nil, finishedAt, nil, finishedAt, 0, 0, 0, nil, nil)
 	mock.ExpectQuery(regexp.QuoteMeta(`
-		SELECT id, project_id, spider_id, spider_version, node_id, status, trigger_source, image, command, cpu_cores, memory_mb, timeout_seconds, error_message, created_at, started_at, finished_at, retry_limit, retry_count, retry_delay_seconds, retry_of_execution_id, retried_at
+		SELECT id, project_id, spider_id, spider_version, registry_auth_ref, node_id, status, trigger_source, image, command, cpu_cores, memory_mb, timeout_seconds, error_message, created_at, started_at, finished_at, retry_limit, retry_count, retry_delay_seconds, retry_of_execution_id, retried_at
 		FROM executions
 		WHERE id = $1
 	`)).
@@ -254,10 +254,10 @@ func TestExecutionRepositoryFail(t *testing.T) {
 		WithArgs("e1", finishedAt, "exit status 1").
 		WillReturnResult(sqlmock.NewResult(0, 1))
 
-	rows := sqlmock.NewRows([]string{"id", "project_id", "spider_id", "spider_version", "node_id", "status", "trigger_source", "image", "command", "cpu_cores", "memory_mb", "timeout_seconds", "error_message", "created_at", "started_at", "finished_at", "retry_limit", "retry_count", "retry_delay_seconds", "retry_of_execution_id", "retried_at"}).
-		AddRow("e1", "p1", "s1", 1, "node-1", "failed", "manual", "crawler/go:latest", `["./crawler"]`, 2.0, 2048, 1200, "exit status 1", finishedAt, nil, finishedAt, 0, 0, 0, nil, nil)
+	rows := sqlmock.NewRows([]string{"id", "project_id", "spider_id", "spider_version", "registry_auth_ref", "node_id", "status", "trigger_source", "image", "command", "cpu_cores", "memory_mb", "timeout_seconds", "error_message", "created_at", "started_at", "finished_at", "retry_limit", "retry_count", "retry_delay_seconds", "retry_of_execution_id", "retried_at"}).
+		AddRow("e1", "p1", "s1", 1, nil, "node-1", "failed", "manual", "crawler/go:latest", `["./crawler"]`, 2.0, 2048, 1200, "exit status 1", finishedAt, nil, finishedAt, 0, 0, 0, nil, nil)
 	mock.ExpectQuery(regexp.QuoteMeta(`
-		SELECT id, project_id, spider_id, spider_version, node_id, status, trigger_source, image, command, cpu_cores, memory_mb, timeout_seconds, error_message, created_at, started_at, finished_at, retry_limit, retry_count, retry_delay_seconds, retry_of_execution_id, retried_at
+		SELECT id, project_id, spider_id, spider_version, registry_auth_ref, node_id, status, trigger_source, image, command, cpu_cores, memory_mb, timeout_seconds, error_message, created_at, started_at, finished_at, retry_limit, retry_count, retry_delay_seconds, retry_of_execution_id, retried_at
 		FROM executions
 		WHERE id = $1
 	`)).
@@ -294,10 +294,10 @@ func TestExecutionRepositoryCompleteReturnsInvalidStateWhenNotRunning(t *testing
 		WithArgs("e1", finishedAt).
 		WillReturnResult(sqlmock.NewResult(0, 0))
 
-	rows := sqlmock.NewRows([]string{"id", "project_id", "spider_id", "spider_version", "node_id", "status", "trigger_source", "image", "command", "cpu_cores", "memory_mb", "timeout_seconds", "error_message", "created_at", "started_at", "finished_at", "retry_limit", "retry_count", "retry_delay_seconds", "retry_of_execution_id", "retried_at"}).
-		AddRow("e1", "p1", "s1", 1, "node-1", "pending", "manual", "crawler/go:latest", `["./crawler"]`, 0.1, 128, 10, nil, finishedAt, nil, nil, 0, 0, 0, nil, nil)
+	rows := sqlmock.NewRows([]string{"id", "project_id", "spider_id", "spider_version", "registry_auth_ref", "node_id", "status", "trigger_source", "image", "command", "cpu_cores", "memory_mb", "timeout_seconds", "error_message", "created_at", "started_at", "finished_at", "retry_limit", "retry_count", "retry_delay_seconds", "retry_of_execution_id", "retried_at"}).
+		AddRow("e1", "p1", "s1", 1, nil, "node-1", "pending", "manual", "crawler/go:latest", `["./crawler"]`, 0.1, 128, 10, nil, finishedAt, nil, nil, 0, 0, 0, nil, nil)
 	mock.ExpectQuery(regexp.QuoteMeta(`
-		SELECT id, project_id, spider_id, spider_version, node_id, status, trigger_source, image, command, cpu_cores, memory_mb, timeout_seconds, error_message, created_at, started_at, finished_at, retry_limit, retry_count, retry_delay_seconds, retry_of_execution_id, retried_at
+		SELECT id, project_id, spider_id, spider_version, registry_auth_ref, node_id, status, trigger_source, image, command, cpu_cores, memory_mb, timeout_seconds, error_message, created_at, started_at, finished_at, retry_limit, retry_count, retry_delay_seconds, retry_of_execution_id, retried_at
 		FROM executions
 		WHERE id = $1
 	`)).

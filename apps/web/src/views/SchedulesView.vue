@@ -76,6 +76,9 @@
             />
           </el-select>
         </el-form-item>
+        <el-form-item label="Registry Auth Ref">
+          <el-input v-model="form.registryAuthRef" placeholder="optional credential ref (e.g. ghcr-prod)" />
+        </el-form-item>
         <el-form-item label="Image">
           <el-input v-model="form.image" name="image" placeholder="crawler/go-echo:latest" />
         </el-form-item>
@@ -123,6 +126,7 @@ const form = reactive({
   projectId: 'project-1',
   spiderId: '',
   spiderVersion: undefined as number | undefined,
+  registryAuthRef: '',
   name: '',
   cronExpr: '*/5 * * * *',
   enabled: true,
@@ -170,6 +174,7 @@ async function submit() {
       projectId: form.projectId,
       spiderId: form.spiderId,
       spiderVersion: form.spiderVersion,
+      registryAuthRef: form.registryAuthRef.trim() || undefined,
       name: form.name,
       cronExpr: form.cronExpr,
       enabled: form.enabled,

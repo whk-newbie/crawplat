@@ -5,6 +5,7 @@ export type Schedule = {
   projectId: string
   spiderId: string
   spiderVersion?: number
+  registryAuthRef?: string
   name: string
   cronExpr: string
   enabled: boolean
@@ -18,6 +19,7 @@ export type CreateScheduleInput = {
   projectId: string
   spiderId: string
   spiderVersion?: number
+  registryAuthRef?: string
   name: string
   cronExpr: string
   enabled: boolean

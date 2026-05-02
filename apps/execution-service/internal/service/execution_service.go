@@ -52,20 +52,22 @@ type Queue interface {
 }
 
 type CreateManualInput struct {
-	ProjectID      string
-	SpiderID       string
-	SpiderVersion  int
-	Image          string
-	Command        []string
-	CPUCores       float64
-	MemoryMB       int
-	TimeoutSeconds int
+	ProjectID       string
+	SpiderID        string
+	SpiderVersion   int
+	RegistryAuthRef string
+	Image           string
+	Command         []string
+	CPUCores        float64
+	MemoryMB        int
+	TimeoutSeconds  int
 }
 
 type CreateExecutionInput struct {
 	ProjectID          string
 	SpiderID           string
 	SpiderVersion      int
+	RegistryAuthRef    string
 	Image              string
 	Command            []string
 	CPUCores           float64
@@ -89,15 +91,16 @@ func (s *ExecutionService) WithSpiderVersionResolver(resolver SpiderVersionResol
 
 func (s *ExecutionService) CreateManual(ctx context.Context, input CreateManualInput) (model.Execution, error) {
 	return s.Create(ctx, CreateExecutionInput{
-		ProjectID:      input.ProjectID,
-		SpiderID:       input.SpiderID,
-		SpiderVersion:  input.SpiderVersion,
-		Image:          input.Image,
-		Command:        input.Command,
-		CPUCores:       input.CPUCores,
-		MemoryMB:       input.MemoryMB,
-		TimeoutSeconds: input.TimeoutSeconds,
-		TriggerSource:  "manual",
+		ProjectID:       input.ProjectID,
+		SpiderID:        input.SpiderID,
+		SpiderVersion:   input.SpiderVersion,
+		RegistryAuthRef: input.RegistryAuthRef,
+		Image:           input.Image,
+		Command:         input.Command,
+		CPUCores:        input.CPUCores,
+		MemoryMB:        input.MemoryMB,
+		TimeoutSeconds:  input.TimeoutSeconds,
+		TriggerSource:   "manual",
 	})
 }
 
@@ -130,6 +133,7 @@ func (s *ExecutionService) Create(ctx context.Context, input CreateExecutionInpu
 		ProjectID:          input.ProjectID,
 		SpiderID:           input.SpiderID,
 		SpiderVersion:      input.SpiderVersion,
+		RegistryAuthRef:    strings.TrimSpace(input.RegistryAuthRef),
 		Status:             "pending",
 		TriggerSource:      triggerSource,
 		Image:              input.Image,
@@ -168,6 +172,7 @@ func (s *ExecutionService) MaterializeRetry(ctx context.Context) (model.Executio
 		ProjectID:          candidate.ProjectID,
 		SpiderID:           candidate.SpiderID,
 		SpiderVersion:      candidate.SpiderVersion,
+		RegistryAuthRef:    candidate.RegistryAuthRef,
 		Image:              candidate.Image,
 		Command:            candidate.Command,
 		CPUCores:           candidate.CPUCores,
