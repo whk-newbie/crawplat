@@ -350,6 +350,40 @@ func TestCreateExecutionKeepsProvidedRegistryAuthRefOverResolvedOne(t *testing.T
 	}
 }
 
+func TestCreateExecutionResolvesRegistryAuthRefWhenImageProvided(t *testing.T) {
+	execRepo := newFakeExecutionRepo()
+	logRepo := newFakeLogRepo()
+	queue := &fakeQueue{}
+	resolver := &fakeSpiderVersionResolver{
+		version:         3,
+		registryAuthRef: "ghcr-derived",
+		image:           "crawler/go:v3-from-resolver",
+		command:         []string{"./crawler", "--resolver"},
+	}
+	svc := NewExecutionService(execRepo, logRepo, queue).WithSpiderVersionResolver(resolver)
+
+	exec, err := svc.Create(context.Background(), CreateExecutionInput{
+		ProjectID:     "project-1",
+		SpiderID:      "spider-1",
+		SpiderVersion: 3,
+		Image:         "crawler/go:v3-explicit",
+		Command:       []string{"./crawler", "--explicit"},
+		TriggerSource: "manual",
+	})
+	if err != nil {
+		t.Fatalf("Create returned error: %v", err)
+	}
+	if exec.RegistryAuthRef != "ghcr-derived" {
+		t.Fatalf("expected registry auth ref from resolver, got %+v", exec)
+	}
+	if exec.Image != "crawler/go:v3-explicit" {
+		t.Fatalf("expected explicit image to remain unchanged, got %+v", exec)
+	}
+	if len(exec.Command) != 2 || exec.Command[1] != "--explicit" {
+		t.Fatalf("expected explicit command to remain unchanged, got %+v", exec.Command)
+	}
+}
+
 func TestMaterializeRetryCreatesNextAttempt(t *testing.T) {
 	execRepo := newFakeExecutionRepo()
 	logRepo := newFakeLogRepo()

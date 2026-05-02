@@ -105,7 +105,8 @@ func (s *ExecutionService) CreateManual(ctx context.Context, input CreateManualI
 }
 
 func (s *ExecutionService) Create(ctx context.Context, input CreateExecutionInput) (model.Execution, error) {
-	if strings.TrimSpace(input.Image) == "" && s.spiderVersionResolver != nil {
+	shouldResolve := s.spiderVersionResolver != nil && (strings.TrimSpace(input.Image) == "" || (strings.TrimSpace(input.RegistryAuthRef) == "" && input.SpiderVersion > 0))
+	if shouldResolve {
 		version, registryAuthRef, image, command, err := s.spiderVersionResolver.Resolve(ctx, input.SpiderID, input.SpiderVersion)
 		if err != nil {
 			return model.Execution{}, err
@@ -116,7 +117,9 @@ func (s *ExecutionService) Create(ctx context.Context, input CreateExecutionInpu
 		if strings.TrimSpace(input.RegistryAuthRef) == "" {
 			input.RegistryAuthRef = registryAuthRef
 		}
-		input.Image = image
+		if strings.TrimSpace(input.Image) == "" {
+			input.Image = image
+		}
 		if len(input.Command) == 0 {
 			input.Command = command
 		}
