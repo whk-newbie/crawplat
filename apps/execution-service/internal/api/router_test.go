@@ -272,6 +272,36 @@ func TestCreateExecutionAcceptsRetryMetadata(t *testing.T) {
 	}
 }
 
+func TestCreateExecutionResolvesSpiderVersionWhenImageMissing(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	svc, _, _, _ := newAPITestService()
+	svc = svc.WithSpiderVersionResolver(&service.StaticSpiderVersionResolver{
+		Version: 4,
+		Image:   "crawler/go:v4",
+		Command: []string{"./crawler", "--v4"},
+	})
+	router := NewRouter(svc)
+
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/executions", strings.NewReader(`{"projectId":"project-1","spiderId":"spider-1","spiderVersion":4}`))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+
+	router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusCreated {
+		t.Fatalf("expected status 201, got %d body=%s", w.Code, w.Body.String())
+	}
+
+	var exec model.Execution
+	if err := json.Unmarshal(w.Body.Bytes(), &exec); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+	if exec.SpiderVersion != 4 || exec.Image != "crawler/go:v4" {
+		t.Fatalf("expected resolved execution payload, got %+v", exec)
+	}
+}
+
 func TestClaimNextExecutionMarksRunning(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	t.Setenv("JWT_SECRET", "test-token")

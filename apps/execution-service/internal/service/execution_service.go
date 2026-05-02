@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"crawler-platform/apps/execution-service/internal/model"
@@ -12,11 +13,18 @@ import (
 
 var ErrExecutionNotFound = errors.New("execution not found")
 var ErrInvalidExecutionState = errors.New("invalid execution state transition")
+var ErrExecutionImageRequired = errors.New("image is required")
+var ErrSpiderVersionNotFound = errors.New("spider version not found")
 
 type ExecutionService struct {
-	execRepo ExecutionRepository
-	logRepo  LogRepository
-	queue    Queue
+	execRepo              ExecutionRepository
+	logRepo               LogRepository
+	queue                 Queue
+	spiderVersionResolver SpiderVersionResolver
+}
+
+type SpiderVersionResolver interface {
+	Resolve(ctx context.Context, spiderID string, requestedVersion int) (resolvedVersion int, image string, command []string, err error)
 }
 
 type ExecutionRepository interface {
@@ -74,6 +82,11 @@ func NewExecutionService(execRepo ExecutionRepository, logRepo LogRepository, qu
 	return &ExecutionService{execRepo: execRepo, logRepo: logRepo, queue: queue}
 }
 
+func (s *ExecutionService) WithSpiderVersionResolver(resolver SpiderVersionResolver) *ExecutionService {
+	s.spiderVersionResolver = resolver
+	return s
+}
+
 func (s *ExecutionService) CreateManual(ctx context.Context, input CreateManualInput) (model.Execution, error) {
 	return s.Create(ctx, CreateExecutionInput{
 		ProjectID:      input.ProjectID,
@@ -89,6 +102,24 @@ func (s *ExecutionService) CreateManual(ctx context.Context, input CreateManualI
 }
 
 func (s *ExecutionService) Create(ctx context.Context, input CreateExecutionInput) (model.Execution, error) {
+	if strings.TrimSpace(input.Image) == "" && s.spiderVersionResolver != nil {
+		version, image, command, err := s.spiderVersionResolver.Resolve(ctx, input.SpiderID, input.SpiderVersion)
+		if err != nil {
+			return model.Execution{}, err
+		}
+		if input.SpiderVersion == 0 && version > 0 {
+			input.SpiderVersion = version
+		}
+		input.Image = image
+		if len(input.Command) == 0 {
+			input.Command = command
+		}
+	}
+	input.Image = strings.TrimSpace(input.Image)
+	if input.Image == "" {
+		return model.Execution{}, ErrExecutionImageRequired
+	}
+
 	triggerSource := input.TriggerSource
 	if triggerSource == "" {
 		triggerSource = "manual"

@@ -191,6 +191,20 @@ func (q *fakeQueue) Release(_ context.Context, executionID string) error {
 	return q.err
 }
 
+type fakeSpiderVersionResolver struct {
+	version int
+	image   string
+	command []string
+	err     error
+}
+
+func (r *fakeSpiderVersionResolver) Resolve(_ context.Context, _ string, _ int) (int, string, []string, error) {
+	if r.err != nil {
+		return 0, "", nil, r.err
+	}
+	return r.version, r.image, append([]string(nil), r.command...), nil
+}
+
 func TestCreateManualEnqueuesPendingExecution(t *testing.T) {
 	execRepo := newFakeExecutionRepo()
 	logRepo := newFakeLogRepo()
@@ -269,6 +283,34 @@ func TestCreateExecutionUsesProvidedTriggerSource(t *testing.T) {
 	}
 	if queue.lastEnqueued != exec.ID {
 		t.Fatalf("expected execution %s to be enqueued, got %s", exec.ID, queue.lastEnqueued)
+	}
+}
+
+func TestCreateExecutionResolvesSpiderVersionWhenImageAndCommandMissing(t *testing.T) {
+	execRepo := newFakeExecutionRepo()
+	logRepo := newFakeLogRepo()
+	queue := &fakeQueue{}
+	resolver := &fakeSpiderVersionResolver{
+		version: 3,
+		image:   "crawler/go:v3",
+		command: []string{"./crawler", "--v3"},
+	}
+	svc := NewExecutionService(execRepo, logRepo, queue).WithSpiderVersionResolver(resolver)
+
+	exec, err := svc.Create(context.Background(), CreateExecutionInput{
+		ProjectID:     "project-1",
+		SpiderID:      "spider-1",
+		SpiderVersion: 3,
+		TriggerSource: "manual",
+	})
+	if err != nil {
+		t.Fatalf("Create returned error: %v", err)
+	}
+	if exec.SpiderVersion != 3 || exec.Image != "crawler/go:v3" {
+		t.Fatalf("expected resolved spider version/image, got %+v", exec)
+	}
+	if len(exec.Command) != 2 || exec.Command[0] != "./crawler" || exec.Command[1] != "--v3" {
+		t.Fatalf("expected resolved command, got %+v", exec.Command)
 	}
 }
 

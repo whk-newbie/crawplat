@@ -20,7 +20,7 @@ func NewRouter(executionService *service.ExecutionService) *gin.Engine {
 			ProjectID          string   `json:"projectId" binding:"required"`
 			SpiderID           string   `json:"spiderId" binding:"required"`
 			SpiderVersion      int      `json:"spiderVersion"`
-			Image              string   `json:"image" binding:"required"`
+			Image              string   `json:"image"`
 			Command            []string `json:"command"`
 			CPUCores           float64  `json:"cpuCores"`
 			MemoryMB           int      `json:"memoryMB"`
@@ -52,7 +52,14 @@ func NewRouter(executionService *service.ExecutionService) *gin.Engine {
 			RetryOfExecutionID: req.RetryOfExecutionID,
 		})
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			switch {
+			case errors.Is(err, service.ErrExecutionImageRequired):
+				c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			case errors.Is(err, service.ErrSpiderVersionNotFound):
+				c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
+			default:
+				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			}
 			return
 		}
 		c.JSON(http.StatusCreated, exec)
