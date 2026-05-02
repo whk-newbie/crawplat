@@ -83,7 +83,17 @@
         </el-form-item>
         <el-form-item label="Registry Auth Ref">
           <div style="display: flex; gap: 8px; width: 100%">
-            <el-input v-model="form.registryAuthRef" placeholder="optional credential ref (e.g. ghcr-prod)" />
+            <el-select
+              v-model="form.registryAuthRef"
+              filterable
+              allow-create
+              default-first-option
+              clearable
+              placeholder="optional credential ref (e.g. ghcr-prod)"
+              style="width: 100%"
+            >
+              <el-option v-for="item in registryAuthRefs" :key="item" :label="item" :value="item" />
+            </el-select>
             <el-button :loading="loadingRegistryAuthRefs" @click="loadRegistryAuthRefs">Load Registry Refs</el-button>
           </div>
         </el-form-item>
@@ -130,6 +140,7 @@ const dialogVisible = ref(false)
 const loadingVersions = ref(false)
 const loadingRegistryAuthRefs = ref(false)
 const spiderVersions = ref<SpiderVersion[]>([])
+const registryAuthRefs = ref<string[]>([])
 
 const form = reactive({
   projectId: 'project-1',
@@ -232,6 +243,7 @@ async function loadRegistryAuthRefs() {
   loadingRegistryAuthRefs.value = true
   try {
     const refs = await listRegistryAuthRefs(projectID)
+    registryAuthRefs.value = refs
     if (!form.registryAuthRef.trim() && refs.length > 0) {
       form.registryAuthRef = refs[0]
     }

@@ -75,11 +75,17 @@
       <el-form :inline="true" :model="versionForm" @submit.prevent="submitVersion">
         <el-form-item label="Registry Auth Ref">
           <div style="display: flex; gap: 8px; width: 360px">
-            <el-input
+            <el-select
               v-model="versionForm.registryAuthRef"
+              filterable
+              allow-create
+              default-first-option
+              clearable
               placeholder="optional credential ref (e.g. ghcr-prod)"
               style="width: 260px"
-            />
+            >
+              <el-option v-for="item in registryAuthRefs" :key="item" :label="item" :value="item" />
+            </el-select>
             <el-button :loading="loadingRegistryAuthRefs" @click="loadRegistryAuthRefs">Load Refs</el-button>
           </div>
         </el-form-item>
@@ -143,6 +149,7 @@ const loading = ref(false)
 const versionsLoading = ref(false)
 const versionsSubmitting = ref(false)
 const loadingRegistryAuthRefs = ref(false)
+const registryAuthRefs = ref<string[]>([])
 const selectedSpider = ref<Spider | null>(null)
 const versionForm = reactive({
   registryAuthRef: '',
@@ -194,12 +201,12 @@ async function loadSpiders() {
 }
 
 async function openVersions(spider: Spider) {
-	selectedSpider.value = spider
-	versionForm.registryAuthRef = ''
-	versionForm.image = spider.image ?? ''
-	versionForm.command = Array.isArray(spider.command) ? spider.command.join(' ') : ''
-	versionsDialogVisible.value = true
-	await loadVersions()
+  selectedSpider.value = spider
+  versionForm.registryAuthRef = ''
+  versionForm.image = spider.image ?? ''
+  versionForm.command = Array.isArray(spider.command) ? spider.command.join(' ') : ''
+  versionsDialogVisible.value = true
+  await loadVersions()
 }
 
 async function loadVersions() {
@@ -213,24 +220,25 @@ async function loadVersions() {
     ElMessage.error(err instanceof Error ? err.message : 'failed to load spider versions')
   } finally {
     versionsLoading.value = false
-	}
+  }
 }
 
 async function loadRegistryAuthRefs() {
-	if (!selectedSpider.value) {
-		return
-	}
-	loadingRegistryAuthRefs.value = true
-	try {
-		const refs = await listRegistryAuthRefs(selectedSpider.value.projectId)
-		if (!versionForm.registryAuthRef.trim() && refs.length > 0) {
-			versionForm.registryAuthRef = refs[0]
-		}
-	} catch (err) {
-		ElMessage.error(err instanceof Error ? err.message : 'failed to load registry auth refs')
-	} finally {
-		loadingRegistryAuthRefs.value = false
-	}
+  if (!selectedSpider.value) {
+    return
+  }
+  loadingRegistryAuthRefs.value = true
+  try {
+    const refs = await listRegistryAuthRefs(selectedSpider.value.projectId)
+    registryAuthRefs.value = refs
+    if (!versionForm.registryAuthRef.trim() && refs.length > 0) {
+      versionForm.registryAuthRef = refs[0]
+    }
+  } catch (err) {
+    ElMessage.error(err instanceof Error ? err.message : 'failed to load registry auth refs')
+  } finally {
+    loadingRegistryAuthRefs.value = false
+  }
 }
 
 async function submitVersion() {

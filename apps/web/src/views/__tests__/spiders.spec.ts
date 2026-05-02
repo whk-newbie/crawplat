@@ -117,6 +117,11 @@ describe('spiders view', () => {
       })
       .mockResolvedValueOnce({
         ok: true,
+        status: 200,
+        json: async () => (['ghcr-prod']),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
         status: 201,
         json: async () => ({
           id: 'v2',
@@ -186,12 +191,13 @@ describe('spiders view', () => {
     ;(versionsButton as HTMLButtonElement).click()
     await flushPromises()
 
+    const loadRefsButton = [...container.querySelectorAll('button')].find((button) => button.textContent?.includes('Load Refs'))
+    ;(loadRefsButton as HTMLButtonElement).click()
+    await flushPromises()
+
     const inputs = [...container.querySelectorAll('input')]
-    const registryAuthInput = inputs.find((input) => input.getAttribute('placeholder')?.includes('ghcr-prod'))
     const imageInput = inputs.find((input) => input.getAttribute('placeholder') === 'crawler/go:v2')
     const commandInput = inputs.find((input) => input.getAttribute('placeholder') === './crawler --fast')
-    ;(registryAuthInput as HTMLInputElement).value = 'ghcr-prod'
-    registryAuthInput?.dispatchEvent(new Event('input'))
     ;(imageInput as HTMLInputElement).value = 'crawler/go:v2'
     imageInput?.dispatchEvent(new Event('input'))
     ;(commandInput as HTMLInputElement).value = './crawler --fast'
@@ -204,7 +210,7 @@ describe('spiders view', () => {
     ;(createVersionButton as HTMLButtonElement).click()
     await flushPromises()
 
-    const createCall = fetchMock.mock.calls[2]
+    const createCall = fetchMock.mock.calls[3]
     expect(createCall[0]).toBe('/api/v1/spiders/spider-1/versions')
     expect(createCall[1]).toMatchObject({
       method: 'POST',
