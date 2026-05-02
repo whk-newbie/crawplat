@@ -86,7 +86,11 @@ func TestExecutionRepositoryListByProjectAndCount(t *testing.T) {
 		WithArgs("p1").
 		WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(int64(2)))
 
-	items, err := repo.ListByProject(context.Background(), "p1", 20, 0)
+	items, err := repo.ListByProject(context.Background(), service.ListExecutionsQuery{
+		ProjectID: "p1",
+		Limit:     20,
+		Offset:    0,
+	})
 	if err != nil {
 		t.Fatalf("ListByProject returned error: %v", err)
 	}
@@ -100,12 +104,71 @@ func TestExecutionRepositoryListByProjectAndCount(t *testing.T) {
 		t.Fatalf("unexpected second item: %+v", items[1])
 	}
 
-	total, err := repo.CountByProject(context.Background(), "p1")
+	total, err := repo.CountByProject(context.Background(), service.ListExecutionsQuery{ProjectID: "p1"})
 	if err != nil {
 		t.Fatalf("CountByProject returned error: %v", err)
 	}
 	if total != 2 {
 		t.Fatalf("expected total 2, got %d", total)
+	}
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Fatalf("ExpectationsWereMet returned error: %v", err)
+	}
+}
+
+func TestExecutionRepositoryListByProjectAndCountWithFilters(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	if err != nil {
+		t.Fatalf("sqlmock.New returned error: %v", err)
+	}
+	defer db.Close()
+
+	repo := NewExecutionRepository(db)
+	from := time.Date(2026, 5, 2, 12, 0, 0, 0, time.UTC)
+	to := time.Date(2026, 5, 2, 14, 0, 0, 0, time.UTC)
+
+	rows := sqlmock.NewRows([]string{"id", "project_id", "spider_id", "spider_version", "registry_auth_ref", "node_id", "status", "trigger_source", "image", "command", "cpu_cores", "memory_mb", "timeout_seconds", "error_message", "created_at", "started_at", "finished_at", "retry_limit", "retry_count", "retry_delay_seconds", "retry_of_execution_id", "retried_at"}).
+		AddRow("e3", "p1", "s3", 3, nil, nil, "failed", "manual", "crawler/go:v3", `["./crawler"]`, 1.0, 512, 120, "boom", from.Add(30*time.Minute), nil, nil, 0, 0, 0, nil, nil)
+
+	mock.ExpectQuery(regexp.QuoteMeta(`
+		SELECT id, project_id, spider_id, spider_version, registry_auth_ref, node_id, status, trigger_source, image, command, cpu_cores, memory_mb, timeout_seconds, error_message, created_at, started_at, finished_at, retry_limit, retry_count, retry_delay_seconds, retry_of_execution_id, retried_at
+		FROM executions
+		WHERE project_id = $1 AND status = $2 AND created_at >= $3 AND created_at <= $4
+		ORDER BY created_at DESC, id DESC
+		LIMIT $5 OFFSET $6
+	`)).
+		WithArgs("p1", "failed", from, to, 10, 0).
+		WillReturnRows(rows)
+
+	mock.ExpectQuery(regexp.QuoteMeta(`
+		SELECT COUNT(1)
+		FROM executions
+		WHERE project_id = $1 AND status = $2 AND created_at >= $3 AND created_at <= $4
+	`)).
+		WithArgs("p1", "failed", from, to).
+		WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(int64(1)))
+
+	query := service.ListExecutionsQuery{
+		ProjectID: "p1",
+		Status:    "failed",
+		From:      &from,
+		To:        &to,
+		Limit:     10,
+		Offset:    0,
+	}
+	items, err := repo.ListByProject(context.Background(), query)
+	if err != nil {
+		t.Fatalf("ListByProject returned error: %v", err)
+	}
+	if len(items) != 1 || items[0].ID != "e3" {
+		t.Fatalf("unexpected filtered items: %+v", items)
+	}
+	total, err := repo.CountByProject(context.Background(), query)
+	if err != nil {
+		t.Fatalf("CountByProject returned error: %v", err)
+	}
+	if total != 1 {
+		t.Fatalf("expected total 1, got %d", total)
 	}
 	if err := mock.ExpectationsWereMet(); err != nil {
 		t.Fatalf("ExpectationsWereMet returned error: %v", err)

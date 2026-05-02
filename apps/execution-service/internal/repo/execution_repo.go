@@ -5,6 +5,8 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"fmt"
+	"strings"
 	"time"
 
 	"crawler-platform/apps/execution-service/internal/model"
@@ -49,14 +51,34 @@ func (r *ExecutionRepository) Get(ctx context.Context, id string) (model.Executi
 	`, id), errIfNoRows)
 }
 
-func (r *ExecutionRepository) ListByProject(ctx context.Context, projectID string, limit, offset int) ([]model.Execution, error) {
-	rows, err := r.db.QueryContext(ctx, `
+func (r *ExecutionRepository) ListByProject(ctx context.Context, query service.ListExecutionsQuery) ([]model.Execution, error) {
+	args := []any{query.ProjectID}
+	where := []string{"project_id = $1"}
+	argPos := 2
+	if strings.TrimSpace(query.Status) != "" {
+		where = append(where, fmt.Sprintf("status = $%d", argPos))
+		args = append(args, query.Status)
+		argPos++
+	}
+	if query.From != nil {
+		where = append(where, fmt.Sprintf("created_at >= $%d", argPos))
+		args = append(args, *query.From)
+		argPos++
+	}
+	if query.To != nil {
+		where = append(where, fmt.Sprintf("created_at <= $%d", argPos))
+		args = append(args, *query.To)
+		argPos++
+	}
+	sqlQuery := fmt.Sprintf(`
 		SELECT id, project_id, spider_id, spider_version, registry_auth_ref, node_id, status, trigger_source, image, command, cpu_cores, memory_mb, timeout_seconds, error_message, created_at, started_at, finished_at, retry_limit, retry_count, retry_delay_seconds, retry_of_execution_id, retried_at
 		FROM executions
-		WHERE project_id = $1
+		WHERE %s
 		ORDER BY created_at DESC, id DESC
-		LIMIT $2 OFFSET $3
-	`, projectID, limit, offset)
+		LIMIT $%d OFFSET $%d
+	`, strings.Join(where, " AND "), argPos, argPos+1)
+	args = append(args, query.Limit, query.Offset)
+	rows, err := r.db.QueryContext(ctx, sqlQuery, args...)
 	if err != nil {
 		return nil, err
 	}
@@ -76,13 +98,31 @@ func (r *ExecutionRepository) ListByProject(ctx context.Context, projectID strin
 	return result, nil
 }
 
-func (r *ExecutionRepository) CountByProject(ctx context.Context, projectID string) (int64, error) {
+func (r *ExecutionRepository) CountByProject(ctx context.Context, query service.ListExecutionsQuery) (int64, error) {
+	args := []any{query.ProjectID}
+	where := []string{"project_id = $1"}
+	argPos := 2
+	if strings.TrimSpace(query.Status) != "" {
+		where = append(where, fmt.Sprintf("status = $%d", argPos))
+		args = append(args, query.Status)
+		argPos++
+	}
+	if query.From != nil {
+		where = append(where, fmt.Sprintf("created_at >= $%d", argPos))
+		args = append(args, *query.From)
+		argPos++
+	}
+	if query.To != nil {
+		where = append(where, fmt.Sprintf("created_at <= $%d", argPos))
+		args = append(args, *query.To)
+		argPos++
+	}
 	var total int64
-	if err := r.db.QueryRowContext(ctx, `
+	if err := r.db.QueryRowContext(ctx, fmt.Sprintf(`
 		SELECT COUNT(1)
 		FROM executions
-		WHERE project_id = $1
-	`, projectID).Scan(&total); err != nil {
+		WHERE %s
+	`, strings.Join(where, " AND ")), args...).Scan(&total); err != nil {
 		return 0, err
 	}
 	return total, nil

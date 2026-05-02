@@ -25,6 +25,23 @@
           <el-button :loading="loadingList" @click="loadExecutions">Refresh</el-button>
         </div>
       </template>
+      <div style="display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px">
+        <el-select v-model="executionStatus" clearable placeholder="status" style="width: 180px">
+          <el-option label="pending" value="pending" />
+          <el-option label="running" value="running" />
+          <el-option label="succeeded" value="succeeded" />
+          <el-option label="failed" value="failed" />
+        </el-select>
+        <el-date-picker
+          v-model="executionTimeRange"
+          type="datetimerange"
+          start-placeholder="from"
+          end-placeholder="to"
+          style="width: 380px"
+        />
+        <el-button @click="applyExecutionFilters">Apply Filters</el-button>
+        <el-button @click="resetExecutionFilters">Reset</el-button>
+      </div>
       <el-table v-loading="loadingList" :data="executions" stripe>
         <el-table-column prop="id" label="Execution ID" min-width="220">
           <template #default="{ row }">
@@ -133,6 +150,8 @@ const loadingList = ref(false)
 const total = ref(0)
 const pageSize = ref(20)
 const currentPage = ref(1)
+const executionStatus = ref('')
+const executionTimeRange = ref<[Date, Date] | null>(null)
 
 function parseCommand(input: string) {
   return input
@@ -233,12 +252,21 @@ async function loadExecutions() {
     ElMessage.warning('Project ID is required')
     return
   }
+  let executionFrom: string | undefined
+  let executionTo: string | undefined
+  if (executionTimeRange.value && executionTimeRange.value.length === 2) {
+    executionFrom = executionTimeRange.value[0].toISOString()
+    executionTo = executionTimeRange.value[1].toISOString()
+  }
   loadingList.value = true
   try {
     const response = await listExecutions({
       projectId: projectID,
       limit: pageSize.value,
       offset: (currentPage.value - 1) * pageSize.value,
+      executionStatus: executionStatus.value || undefined,
+      executionFrom,
+      executionTo,
     })
     executions.value = response.items
     total.value = response.total
@@ -247,6 +275,18 @@ async function loadExecutions() {
   } finally {
     loadingList.value = false
   }
+}
+
+async function applyExecutionFilters() {
+  currentPage.value = 1
+  await loadExecutions()
+}
+
+async function resetExecutionFilters() {
+  executionStatus.value = ''
+  executionTimeRange.value = null
+  currentPage.value = 1
+  await loadExecutions()
 }
 
 onMounted(() => {

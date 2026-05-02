@@ -48,12 +48,29 @@ export function createExecution(input: CreateExecutionInput) {
   })
 }
 
-export function listExecutions(input: { projectId: string; limit?: number; offset?: number }) {
-  const limit = input.limit ?? 20
-  const offset = input.offset ?? 0
-  return apiFetch<PaginatedExecutions>(
-    `/executions?projectId=${encodeURIComponent(input.projectId)}&limit=${limit}&offset=${offset}`
-  )
+export function listExecutions(input: {
+  projectId: string
+  limit?: number
+  offset?: number
+  executionStatus?: string
+  executionFrom?: string
+  executionTo?: string
+}) {
+  const params = new URLSearchParams({
+    projectId: input.projectId,
+    limit: String(input.limit ?? 20),
+    offset: String(input.offset ?? 0),
+  })
+  if (input.executionStatus?.trim()) {
+    params.set('executionStatus', input.executionStatus.trim())
+  }
+  if (input.executionFrom?.trim()) {
+    params.set('executionFrom', input.executionFrom.trim())
+  }
+  if (input.executionTo?.trim()) {
+    params.set('executionTo', input.executionTo.trim())
+  }
+  return apiFetch<PaginatedExecutions>(`/executions?${params.toString()}`)
 }
 
 export function getExecution(executionId: string) {

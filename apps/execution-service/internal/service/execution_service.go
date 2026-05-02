@@ -29,8 +29,8 @@ type SpiderVersionResolver interface {
 
 type ExecutionRepository interface {
 	Create(ctx context.Context, exec model.Execution) (model.Execution, error)
-	ListByProject(ctx context.Context, projectID string, limit, offset int) ([]model.Execution, error)
-	CountByProject(ctx context.Context, projectID string) (int64, error)
+	ListByProject(ctx context.Context, query ListExecutionsQuery) ([]model.Execution, error)
+	CountByProject(ctx context.Context, query ListExecutionsQuery) (int64, error)
 	Get(ctx context.Context, id string) (model.Execution, error)
 	MarkRunning(ctx context.Context, id, nodeID string, startedAt time.Time) (model.Execution, error)
 	Complete(ctx context.Context, id string, finishedAt time.Time) (model.Execution, error)
@@ -80,6 +80,15 @@ type CreateExecutionInput struct {
 	RetryCount         int
 	RetryDelaySeconds  int
 	RetryOfExecutionID string
+}
+
+type ListExecutionsQuery struct {
+	ProjectID string
+	Status    string
+	From      *time.Time
+	To        *time.Time
+	Limit     int
+	Offset    int
 }
 
 func NewExecutionService(execRepo ExecutionRepository, logRepo LogRepository, queue Queue) *ExecutionService {
@@ -219,12 +228,12 @@ func (s *ExecutionService) Get(ctx context.Context, id string) (model.Execution,
 	return exec, nil
 }
 
-func (s *ExecutionService) List(ctx context.Context, projectID string, limit, offset int) ([]model.Execution, int64, error) {
-	items, err := s.execRepo.ListByProject(ctx, projectID, limit, offset)
+func (s *ExecutionService) List(ctx context.Context, query ListExecutionsQuery) ([]model.Execution, int64, error) {
+	items, err := s.execRepo.ListByProject(ctx, query)
 	if err != nil {
 		return nil, 0, err
 	}
-	total, err := s.execRepo.CountByProject(ctx, projectID)
+	total, err := s.execRepo.CountByProject(ctx, query)
 	if err != nil {
 		return nil, 0, err
 	}

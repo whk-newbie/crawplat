@@ -29,29 +29,51 @@ func (r *fakeExecutionRepo) Create(_ context.Context, exec model.Execution) (mod
 	return exec, nil
 }
 
-func (r *fakeExecutionRepo) ListByProject(_ context.Context, projectID string, limit, offset int) ([]model.Execution, error) {
+func (r *fakeExecutionRepo) ListByProject(_ context.Context, query ListExecutionsQuery) ([]model.Execution, error) {
 	all := make([]model.Execution, 0)
 	for _, exec := range r.executions {
-		if exec.ProjectID == projectID {
+		if exec.ProjectID != query.ProjectID {
+			continue
+		}
+		if query.Status != "" && exec.Status != query.Status {
+			continue
+		}
+		if query.From != nil && exec.CreatedAt.Before(*query.From) {
+			continue
+		}
+		if query.To != nil && exec.CreatedAt.After(*query.To) {
+			continue
+		}
+		{
 			all = append(all, exec)
 		}
 	}
-	if offset >= len(all) {
+	if query.Offset >= len(all) {
 		return []model.Execution{}, nil
 	}
-	end := offset + limit
+	end := query.Offset + query.Limit
 	if end > len(all) {
 		end = len(all)
 	}
-	return append([]model.Execution(nil), all[offset:end]...), nil
+	return append([]model.Execution(nil), all[query.Offset:end]...), nil
 }
 
-func (r *fakeExecutionRepo) CountByProject(_ context.Context, projectID string) (int64, error) {
+func (r *fakeExecutionRepo) CountByProject(_ context.Context, query ListExecutionsQuery) (int64, error) {
 	var total int64
 	for _, exec := range r.executions {
-		if exec.ProjectID == projectID {
-			total++
+		if exec.ProjectID != query.ProjectID {
+			continue
 		}
+		if query.Status != "" && exec.Status != query.Status {
+			continue
+		}
+		if query.From != nil && exec.CreatedAt.Before(*query.From) {
+			continue
+		}
+		if query.To != nil && exec.CreatedAt.After(*query.To) {
+			continue
+		}
+		total++
 	}
 	return total, nil
 }

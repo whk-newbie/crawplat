@@ -6,6 +6,8 @@ import (
 	"net/http"
 	"os"
 	"strconv"
+	"strings"
+	"time"
 
 	"crawler-platform/apps/execution-service/internal/service"
 	"crawler-platform/packages/go-common/httpx"
@@ -129,8 +131,30 @@ func NewRouter(executionService *service.ExecutionService) *gin.Engine {
 		limit, _ := strconv.Atoi(c.DefaultQuery("limit", "20"))
 		offset, _ := strconv.Atoi(c.DefaultQuery("offset", "0"))
 		p := httpx.DefaultPagination(limit, offset)
+		status := strings.TrimSpace(c.Query("executionStatus"))
+		executionFrom, err := parseRFC3339Query(c, "executionFrom")
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "executionFrom must be RFC3339"})
+			return
+		}
+		executionTo, err := parseRFC3339Query(c, "executionTo")
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "executionTo must be RFC3339"})
+			return
+		}
+		if executionFrom != nil && executionTo != nil && executionFrom.After(*executionTo) {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "executionFrom must be before or equal to executionTo"})
+			return
+		}
 
-		items, total, err := executionService.List(context.Background(), projectID, p.Limit, p.Offset)
+		items, total, err := executionService.List(context.Background(), service.ListExecutionsQuery{
+			ProjectID: projectID,
+			Status:    status,
+			From:      executionFrom,
+			To:        executionTo,
+			Limit:     p.Limit,
+			Offset:    p.Offset,
+		})
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
@@ -256,6 +280,18 @@ func NewRouter(executionService *service.ExecutionService) *gin.Engine {
 	})
 
 	return router
+}
+
+func parseRFC3339Query(c *gin.Context, key string) (*time.Time, error) {
+	raw := c.Query(key)
+	if raw == "" {
+		return nil, nil
+	}
+	parsed, err := time.Parse(time.RFC3339, raw)
+	if err != nil {
+		return nil, err
+	}
+	return &parsed, nil
 }
 
 func requireInternalToken() gin.HandlerFunc {

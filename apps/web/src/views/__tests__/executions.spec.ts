@@ -133,11 +133,12 @@ describe('execution detail view', () => {
     ;(createButton as HTMLButtonElement).click()
     await flushPromises()
 
-    const inputs = [...document.querySelectorAll('input')]
-    const noPlaceholderInputs = inputs.filter((input) => input.getAttribute('placeholder') == null)
+    const dialogBody = document.querySelector('.el-dialog__body') as HTMLElement
+    const dialogInputs = [...dialogBody.querySelectorAll('input')]
+    const noPlaceholderInputs = dialogInputs.filter((input) => input.getAttribute('placeholder') == null)
     const spiderIDInput = noPlaceholderInputs[1]
-    const imageInput = inputs.find((input) => input.getAttribute('placeholder') === 'crawler/go-echo:latest')
-    const commandInput = inputs.find((input) => input.getAttribute('placeholder') === './go-echo')
+    const imageInput = dialogInputs.find((input) => input.getAttribute('placeholder') === 'crawler/go-echo:latest')
+    const commandInput = dialogInputs.find((input) => input.getAttribute('placeholder') === './go-echo')
     ;(spiderIDInput as HTMLInputElement).value = 'spider-1'
     spiderIDInput?.dispatchEvent(new Event('input'))
     await flushPromises()
