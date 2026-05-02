@@ -6,6 +6,7 @@ type Execution struct {
 	ID                 string         `json:"id"`
 	ProjectID          string         `json:"projectId"`
 	SpiderID           string         `json:"spiderId"`
+	SpiderVersion      int            `json:"spiderVersion,omitempty"`
 	NodeID             string         `json:"nodeId,omitempty"`
 	Status             string         `json:"status"`
 	TriggerSource      string         `json:"triggerSource"`

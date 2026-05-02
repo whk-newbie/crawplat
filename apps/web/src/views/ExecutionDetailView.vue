@@ -14,6 +14,7 @@
         </el-descriptions-item>
         <el-descriptions-item label="Node">{{ execution.nodeId || 'unassigned' }}</el-descriptions-item>
         <el-descriptions-item label="Trigger">{{ execution.triggerSource }}</el-descriptions-item>
+        <el-descriptions-item label="Spider Version">{{ execution.spiderVersion || '-' }}</el-descriptions-item>
         <el-descriptions-item label="Image">{{ execution.image }}</el-descriptions-item>
         <el-descriptions-item label="Command">{{ execution.command.join(' ') || '-' }}</el-descriptions-item>
         <el-descriptions-item v-if="execution.startedAt" label="Started">{{ execution.startedAt }}</el-descriptions-item>

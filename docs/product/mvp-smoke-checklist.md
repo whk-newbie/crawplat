@@ -37,3 +37,7 @@ The script waits for the gateway to begin serving traffic on `http://localhost:8
 
 - The Compose stack enables `IAM_ENABLE_SEED_ADMIN=true` and provides a development `JWT_SECRET` so the seeded login is available without extra setup.
 - The agent uses `NODE_SERVICE_URL=http://node-service:8084` and `NODE_NAME=mvp-node` so it can resolve the node service over normal Compose DNS.
+- Gateway upstreams also resolve over Compose DNS by default; override a service with `GATEWAY_UPSTREAM_<SERVICE>` if needed.
+- Monitor alert polling supports separate cadence controls:
+  - `MONITOR_ALERT_POLL_INTERVAL` (default `15s`, generic alert checks)
+  - `MONITOR_NODE_OFFLINE_ALERT_POLL_INTERVAL` (default `5s`, faster node-offline checks)

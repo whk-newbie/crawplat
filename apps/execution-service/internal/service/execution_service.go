@@ -46,6 +46,7 @@ type Queue interface {
 type CreateManualInput struct {
 	ProjectID      string
 	SpiderID       string
+	SpiderVersion  int
 	Image          string
 	Command        []string
 	CPUCores       float64
@@ -56,6 +57,7 @@ type CreateManualInput struct {
 type CreateExecutionInput struct {
 	ProjectID          string
 	SpiderID           string
+	SpiderVersion      int
 	Image              string
 	Command            []string
 	CPUCores           float64
@@ -76,6 +78,7 @@ func (s *ExecutionService) CreateManual(ctx context.Context, input CreateManualI
 	return s.Create(ctx, CreateExecutionInput{
 		ProjectID:      input.ProjectID,
 		SpiderID:       input.SpiderID,
+		SpiderVersion:  input.SpiderVersion,
 		Image:          input.Image,
 		Command:        input.Command,
 		CPUCores:       input.CPUCores,
@@ -95,6 +98,7 @@ func (s *ExecutionService) Create(ctx context.Context, input CreateExecutionInpu
 		ID:                 uuid.NewString(),
 		ProjectID:          input.ProjectID,
 		SpiderID:           input.SpiderID,
+		SpiderVersion:      input.SpiderVersion,
 		Status:             "pending",
 		TriggerSource:      triggerSource,
 		Image:              input.Image,
@@ -132,6 +136,7 @@ func (s *ExecutionService) MaterializeRetry(ctx context.Context) (model.Executio
 	created, err := s.Create(ctx, CreateExecutionInput{
 		ProjectID:          candidate.ProjectID,
 		SpiderID:           candidate.SpiderID,
+		SpiderVersion:      candidate.SpiderVersion,
 		Image:              candidate.Image,
 		Command:            candidate.Command,
 		CPUCores:           candidate.CPUCores,

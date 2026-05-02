@@ -26,6 +26,19 @@
         <el-form-item label="Spider ID" required>
           <el-input v-model="form.spiderId" />
         </el-form-item>
+        <el-form-item>
+          <el-button :loading="loadingVersions" @click="loadSpiderVersions">Load Spider Versions</el-button>
+        </el-form-item>
+        <el-form-item label="Spider Version">
+          <el-select v-model="form.spiderVersion" clearable placeholder="latest from loaded list" style="width: 100%" @change="applySelectedVersion">
+            <el-option
+              v-for="item in spiderVersions"
+              :key="item.id"
+              :label="`v${item.version} · ${item.image}`"
+              :value="item.version"
+            />
+          </el-select>
+        </el-form-item>
         <el-form-item label="Image" required>
           <el-input v-model="form.image" placeholder="crawler/go-echo:latest" />
         </el-form-item>
@@ -46,12 +59,14 @@ import { reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { createExecution } from '../api/executions'
+import { listSpiderVersions, type SpiderVersion } from '../api/spiders'
 
 const router = useRouter()
 
 const form = reactive({
   projectId: 'project-1',
   spiderId: '',
+  spiderVersion: undefined as number | undefined,
   image: '',
   command: '',
 })
@@ -59,6 +74,8 @@ const form = reactive({
 const lookupId = ref('')
 const createDialogVisible = ref(false)
 const submitting = ref(false)
+const loadingVersions = ref(false)
+const spiderVersions = ref<SpiderVersion[]>([])
 
 function parseCommand(input: string) {
   return input
@@ -73,6 +90,7 @@ async function submit() {
     const execution = await createExecution({
       projectId: form.projectId,
       spiderId: form.spiderId,
+      spiderVersion: form.spiderVersion,
       image: form.image,
       command: parseCommand(form.command),
     })
@@ -84,6 +102,38 @@ async function submit() {
     ElMessage.error(err instanceof Error ? err.message : 'failed to create execution')
   } finally {
     submitting.value = false
+  }
+}
+
+function applySelectedVersion() {
+  if (form.spiderVersion == null) {
+    return
+  }
+  const selected = spiderVersions.value.find((item) => item.version === form.spiderVersion)
+  if (!selected) {
+    return
+  }
+  form.image = selected.image
+  form.command = Array.isArray(selected.command) ? selected.command.join(' ') : ''
+}
+
+async function loadSpiderVersions() {
+  const spiderID = form.spiderId.trim()
+  if (!spiderID) {
+    ElMessage.warning('Spider ID is required')
+    return
+  }
+  loadingVersions.value = true
+  try {
+    spiderVersions.value = await listSpiderVersions(spiderID)
+    if (spiderVersions.value.length > 0) {
+      form.spiderVersion = spiderVersions.value[0].version
+      applySelectedVersion()
+    }
+  } catch (err) {
+    ElMessage.error(err instanceof Error ? err.message : 'failed to load spider versions')
+  } finally {
+    loadingVersions.value = false
   }
 }
 

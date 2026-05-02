@@ -247,7 +247,7 @@ func TestCreateExecutionAcceptsRetryMetadata(t *testing.T) {
 		svc, _, _, _ := newAPITestService()
 		return svc
 	}())
-	req := httptest.NewRequest(http.MethodPost, "/api/v1/executions", strings.NewReader(`{"projectId":"project-1","spiderId":"spider-1","image":"crawler/go-echo:latest","command":["./go-echo"],"triggerSource":"retry","retryLimit":3,"retryCount":1,"retryDelaySeconds":45,"retryOfExecutionId":"exec-root","cpuCores":2,"memoryMB":1024,"timeoutSeconds":180}`))
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/executions", strings.NewReader(`{"projectId":"project-1","spiderId":"spider-1","spiderVersion":3,"image":"crawler/go-echo:latest","command":["./go-echo"],"triggerSource":"retry","retryLimit":3,"retryCount":1,"retryDelaySeconds":45,"retryOfExecutionId":"exec-root","cpuCores":2,"memoryMB":1024,"timeoutSeconds":180}`))
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
 
@@ -263,6 +263,9 @@ func TestCreateExecutionAcceptsRetryMetadata(t *testing.T) {
 	}
 	if exec.RetryLimit != 3 || exec.RetryCount != 1 || exec.RetryDelaySeconds != 45 || exec.RetryOfExecutionID != "exec-root" {
 		t.Fatalf("expected retry metadata in response, got %+v", exec)
+	}
+	if exec.SpiderVersion != 3 {
+		t.Fatalf("expected spider version 3 in response, got %+v", exec)
 	}
 	if exec.CPUCores != 2 || exec.MemoryMB != 1024 || exec.TimeoutSeconds != 180 {
 		t.Fatalf("expected resource limits in response, got %+v", exec)

@@ -19,6 +19,7 @@ func NewRouter(executionService *service.ExecutionService) *gin.Engine {
 		var req struct {
 			ProjectID          string   `json:"projectId" binding:"required"`
 			SpiderID           string   `json:"spiderId" binding:"required"`
+			SpiderVersion      int      `json:"spiderVersion"`
 			Image              string   `json:"image" binding:"required"`
 			Command            []string `json:"command"`
 			CPUCores           float64  `json:"cpuCores"`
@@ -38,6 +39,7 @@ func NewRouter(executionService *service.ExecutionService) *gin.Engine {
 		exec, err := executionService.Create(context.Background(), service.CreateExecutionInput{
 			ProjectID:          req.ProjectID,
 			SpiderID:           req.SpiderID,
+			SpiderVersion:      req.SpiderVersion,
 			Image:              req.Image,
 			Command:            req.Command,
 			CPUCores:           req.CPUCores,

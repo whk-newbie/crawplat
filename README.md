@@ -22,10 +22,23 @@
 - This flow was exercised on 2026-04-22 with both `crawler/go-echo:latest` and `crawler/python-echo:latest`; both executions reached `succeeded` and returned logs through `GET /api/v1/executions/:id/logs`.
 - Phase 3 adds scheduled execution materialization, retry-policy orchestration, and a monitor overview route plus web page. The monitor overview is now backed by aggregated execution status counts from PostgreSQL and live node counts from Redis. Offline nodes still report as `0` because the MVP node inventory only persists currently live heartbeats.
 
+## Current Phase 7 Progress
+
+- Datasource `test` and `preview` now run real probes instead of fixed mock responses.
+- Monitor alerting now supports:
+  - rule create/list/update APIs
+  - webhook delivery event persistence
+  - split polling cadence (`MONITOR_ALERT_POLL_INTERVAL` and `MONITOR_NODE_OFFLINE_ALERT_POLL_INTERVAL`) so node-offline alerts can be checked more frequently.
+- Spider version management is now available:
+  - `POST /api/v1/spiders/:spiderId/versions`
+  - `GET /api/v1/spiders/:spiderId/versions`
+  - `SpidersView` supports listing versions and creating a new version.
+
 ## Containerized Dev Workflow
 
 - `make dev-up` uses `deploy/docker-compose/docker-compose.dev.yml`
 - Go services run inside a shared dev image with `air`, so editing `apps/*` or `packages/go-common` triggers an in-container rebuild and restart
 - the web app runs with `vite` on `http://localhost:3000`
 - `/api/*` requests from Vite are proxied to the gateway container on `http://gateway:8080`
+- Gateway upstreams resolve to Compose DNS by default; override any service with `GATEWAY_UPSTREAM_<SERVICE>`.
 - Chinese guide: `docs/product/docker-compose-dev-workflow.zh-CN.md`

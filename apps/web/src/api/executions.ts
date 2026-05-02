@@ -11,6 +11,7 @@ export type Execution = {
   id: string
   projectId: string
   spiderId: string
+  spiderVersion?: number
   nodeId?: string
   status: string
   triggerSource: string
@@ -26,6 +27,7 @@ export type Execution = {
 export type CreateExecutionInput = {
   projectId: string
   spiderId: string
+  spiderVersion?: number
   image: string
   command: string[]
 }
