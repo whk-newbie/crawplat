@@ -26,6 +26,10 @@
         </div>
       </template>
       <div style="display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px">
+        <el-select v-model="form.projectId" filterable clearable placeholder="project id" style="width: 220px">
+          <el-option v-for="item in projects" :key="item.id" :label="`${item.name} (${item.id})`" :value="item.id" />
+        </el-select>
+        <el-button :loading="loadingProjects" @click="loadProjects">Load Projects</el-button>
         <el-input v-model="executionSpiderId" clearable placeholder="spider id" style="width: 180px" />
         <el-select v-model="executionStatus" clearable placeholder="status" style="width: 180px">
           <el-option label="pending" value="pending" />
@@ -77,10 +81,20 @@
     <el-dialog v-model="createDialogVisible" title="Create Execution" width="500px">
       <el-form :model="form" label-position="top" @submit.prevent="submit">
         <el-form-item label="Project ID" required>
-          <el-input v-model="form.projectId" />
+          <el-select
+            v-model="form.projectId"
+            filterable
+            allow-create
+            default-first-option
+            clearable
+            placeholder="project id"
+            style="width: 100%"
+          >
+            <el-option v-for="item in projects" :key="item.id" :label="`${item.name} (${item.id})`" :value="item.id" />
+          </el-select>
         </el-form-item>
         <el-form-item label="Spider ID" required>
-          <el-input v-model="form.spiderId" />
+          <el-input v-model="form.spiderId" placeholder="spider id" />
         </el-form-item>
         <el-form-item>
           <el-button :loading="loadingVersions" @click="loadSpiderVersions">Load Spider Versions</el-button>
@@ -131,6 +145,7 @@ import { onMounted, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { createExecution, listExecutions, type Execution } from '../api/executions'
+import { listProjects, type Project } from '../api/projects'
 import { listRegistryAuthRefs, listSpiderVersions, type SpiderVersion } from '../api/spiders'
 
 const router = useRouter()
@@ -151,6 +166,8 @@ const loadingVersions = ref(false)
 const loadingRegistryAuthRefs = ref(false)
 const spiderVersions = ref<SpiderVersion[]>([])
 const registryAuthRefs = ref<string[]>([])
+const projects = ref<Project[]>([])
+const loadingProjects = ref(false)
 const executions = ref<Execution[]>([])
 const loadingList = ref(false)
 const total = ref(0)
@@ -243,6 +260,25 @@ async function loadRegistryAuthRefs() {
   }
 }
 
+async function loadProjects() {
+  loadingProjects.value = true
+  try {
+    const response = await listProjects()
+    projects.value = response.items
+    if (projects.value.length === 0) {
+      return
+    }
+    const selectedExists = projects.value.some((item) => item.id === form.projectId.trim())
+    if (!selectedExists) {
+      form.projectId = projects.value[0].id
+    }
+  } catch (err) {
+    ElMessage.error(err instanceof Error ? err.message : 'failed to load projects')
+  } finally {
+    loadingProjects.value = false
+  }
+}
+
 async function openExecution() {
   if (!lookupId.value.trim()) {
     return
@@ -302,6 +338,9 @@ async function resetExecutionFilters() {
 }
 
 onMounted(() => {
-  void loadExecutions()
+  void (async () => {
+    await loadProjects()
+    await loadExecutions()
+  })()
 })
 </script>
