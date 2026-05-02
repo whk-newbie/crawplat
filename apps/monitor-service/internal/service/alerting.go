@@ -13,8 +13,9 @@ import (
 )
 
 const (
-	alertBatchLimit   = 100
-	defaultPollPeriod = 15 * time.Second
+	alertBatchLimit              = 100
+	defaultPollPeriod            = 15 * time.Second
+	defaultNodeOfflinePollPeriod = 5 * time.Second
 )
 
 type webhookPayload struct {
@@ -55,6 +56,32 @@ func (d *httpWebhookDeliverer) Deliver(ctx context.Context, webhookURL string, p
 }
 
 func (s *MonitorService) StartAlertLoop(ctx context.Context, interval time.Duration) {
+	s.StartAlertLoops(ctx, interval, interval)
+}
+
+func (s *MonitorService) StartAlertLoops(ctx context.Context, executionFailedInterval, nodeOfflineInterval time.Duration) {
+	if executionFailedInterval <= 0 {
+		executionFailedInterval = defaultPollPeriod
+	}
+	if nodeOfflineInterval <= 0 {
+		nodeOfflineInterval = defaultNodeOfflinePollPeriod
+	}
+	if executionFailedInterval == nodeOfflineInterval {
+		s.startAlertTicker(ctx, executionFailedInterval, func(loopCtx context.Context) error {
+			return s.EvaluateAlerts(loopCtx)
+		})
+		return
+	}
+
+	s.startAlertTicker(ctx, executionFailedInterval, func(loopCtx context.Context) error {
+		return s.EvaluateAlertsByRuleTypes(loopCtx, model.AlertRuleTypeExecutionFailed)
+	})
+	s.startAlertTicker(ctx, nodeOfflineInterval, func(loopCtx context.Context) error {
+		return s.EvaluateAlertsByRuleTypes(loopCtx, model.AlertRuleTypeNodeOffline)
+	})
+}
+
+func (s *MonitorService) startAlertTicker(ctx context.Context, interval time.Duration, evaluate func(context.Context) error) {
 	if interval <= 0 {
 		interval = defaultPollPeriod
 	}
@@ -62,7 +89,7 @@ func (s *MonitorService) StartAlertLoop(ctx context.Context, interval time.Durat
 		ticker := time.NewTicker(interval)
 		defer ticker.Stop()
 		for {
-			_ = s.EvaluateAlerts(ctx)
+			_ = evaluate(ctx)
 			select {
 			case <-ctx.Done():
 				return
@@ -73,14 +100,29 @@ func (s *MonitorService) StartAlertLoop(ctx context.Context, interval time.Durat
 }
 
 func (s *MonitorService) EvaluateAlerts(ctx context.Context) error {
+	return s.EvaluateAlertsByRuleTypes(ctx)
+}
+
+func (s *MonitorService) EvaluateAlertsByRuleTypes(ctx context.Context, ruleTypes ...string) error {
 	rules, err := s.repo.ListAlertRules(ctx)
 	if err != nil {
 		return err
 	}
 	now := time.Now().UTC()
+	allowedRuleTypes := map[string]struct{}{}
+	for _, ruleType := range ruleTypes {
+		allowedRuleTypes[ruleType] = struct{}{}
+	}
+	filterByType := len(allowedRuleTypes) > 0
+
 	for _, rule := range rules {
 		if !rule.Enabled {
 			continue
+		}
+		if filterByType {
+			if _, ok := allowedRuleTypes[rule.RuleType]; !ok {
+				continue
+			}
 		}
 		switch rule.RuleType {
 		case model.AlertRuleTypeExecutionFailed:

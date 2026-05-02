@@ -39,7 +39,16 @@ func main() {
 			pollInterval = parsed
 		}
 	}
-	monitorService.StartAlertLoop(context.Background(), pollInterval)
+	nodeOfflinePollInterval := 5 * time.Second
+	if raw := os.Getenv("MONITOR_NODE_OFFLINE_ALERT_POLL_INTERVAL"); raw != "" {
+		parsed, err := time.ParseDuration(raw)
+		if err != nil {
+			log.Printf("invalid MONITOR_NODE_OFFLINE_ALERT_POLL_INTERVAL=%q, fallback to %s", raw, nodeOfflinePollInterval)
+		} else {
+			nodeOfflinePollInterval = parsed
+		}
+	}
+	monitorService.StartAlertLoops(context.Background(), pollInterval, nodeOfflinePollInterval)
 
 	router := api.NewRouter(monitorService)
 	if err := router.Run(cfg.HTTPAddr); err != nil {

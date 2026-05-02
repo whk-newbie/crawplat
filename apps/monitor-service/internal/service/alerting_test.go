@@ -188,6 +188,61 @@ func TestEvaluateAlertsSkipsExecutionWithinCooldown(t *testing.T) {
 	}
 }
 
+func TestEvaluateAlertsByRuleTypesOnlyEvaluatesSelectedType(t *testing.T) {
+	now := time.Now().UTC()
+	repo := &fakeAlertRepo{
+		rules: []model.AlertRule{
+			{
+				ID:                  "rule-exec",
+				Name:                "failed exec",
+				RuleType:            model.AlertRuleTypeExecutionFailed,
+				Enabled:             true,
+				WebhookURL:          "https://example.com/webhook",
+				CooldownSeconds:     120,
+				TimeoutSeconds:      5,
+				OfflineGraceSeconds: 60,
+				CreatedAt:           now.Add(-time.Hour),
+				UpdatedAt:           now.Add(-time.Hour),
+			},
+			{
+				ID:                  "rule-node",
+				Name:                "node offline",
+				RuleType:            model.AlertRuleTypeNodeOffline,
+				Enabled:             true,
+				WebhookURL:          "https://example.com/webhook",
+				CooldownSeconds:     60,
+				TimeoutSeconds:      3,
+				OfflineGraceSeconds: 30,
+				CreatedAt:           now.Add(-time.Hour),
+				UpdatedAt:           now.Add(-time.Hour),
+			},
+		},
+		failedExecutions: []model.FailedExecutionCandidate{{
+			ExecutionID: "exec-1",
+			ProjectID:   "p1",
+			SpiderID:    "s1",
+			Error:       "exit status 1",
+			OccurredAt:  now.Add(-time.Minute),
+		}},
+		offlineNodes: []model.OfflineNodeCandidate{{
+			NodeID:     "node-1",
+			NodeName:   "node-a",
+			LastSeenAt: now.Add(-5 * time.Minute),
+		}},
+	}
+	svc := NewMonitorService(repo).WithWebhookDeliverer(&fakeDeliverer{statusCode: 200})
+
+	if err := svc.EvaluateAlertsByRuleTypes(context.Background(), model.AlertRuleTypeNodeOffline); err != nil {
+		t.Fatalf("EvaluateAlertsByRuleTypes returned error: %v", err)
+	}
+	if len(repo.savedEvents) != 1 {
+		t.Fatalf("expected 1 saved alert event, got %d", len(repo.savedEvents))
+	}
+	if repo.savedEvents[0].EntityType != "node" || repo.savedEvents[0].EntityID != "node-1" {
+		t.Fatalf("expected node alert event, got %+v", repo.savedEvents[0])
+	}
+}
+
 func TestCreateAlertRuleRejectsInvalidInput(t *testing.T) {
 	repo := &fakeAlertRepo{}
 	svc := NewMonitorService(repo)
