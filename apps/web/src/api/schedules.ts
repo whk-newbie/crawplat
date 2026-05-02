@@ -4,6 +4,7 @@ export type Schedule = {
   id: string
   projectId: string
   spiderId: string
+  spiderVersion?: number
   name: string
   cronExpr: string
   enabled: boolean
@@ -16,10 +17,11 @@ export type Schedule = {
 export type CreateScheduleInput = {
   projectId: string
   spiderId: string
+  spiderVersion?: number
   name: string
   cronExpr: string
   enabled: boolean
-  image: string
+  image?: string
   command: string[]
   retryLimit: number
   retryDelaySeconds: number

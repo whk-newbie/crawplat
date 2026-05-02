@@ -15,6 +15,11 @@
 
     <el-table v-loading="loading" :data="schedules" stripe>
       <el-table-column prop="name" label="Name" />
+      <el-table-column label="Spider">
+        <template #default="{ row }">
+          {{ row.spiderId }}<span v-if="row.spiderVersion"> · v{{ row.spiderVersion }}</span>
+        </template>
+      </el-table-column>
       <el-table-column prop="cronExpr" label="Cron">
         <template #default="{ row }">
           <el-tag type="info" size="small">{{ row.cronExpr }}</el-tag>
@@ -58,7 +63,10 @@
         <el-form-item label="Cron Expression" required>
           <el-input v-model="form.cronExpr" name="cronExpr" placeholder="*/5 * * * *" />
         </el-form-item>
-        <el-form-item label="Image" required>
+        <el-form-item label="Spider Version">
+          <el-input-number v-model="form.spiderVersion" :min="0" style="width: 100%" />
+        </el-form-item>
+        <el-form-item label="Image">
           <el-input v-model="form.image" name="image" placeholder="crawler/go-echo:latest" />
         </el-form-item>
         <el-form-item label="Command">
@@ -101,6 +109,7 @@ const dialogVisible = ref(false)
 const form = reactive({
   projectId: 'project-1',
   spiderId: '',
+  spiderVersion: 0,
   name: '',
   cronExpr: '*/5 * * * *',
   enabled: true,
@@ -135,10 +144,11 @@ async function submit() {
     const schedule = await createSchedule({
       projectId: form.projectId,
       spiderId: form.spiderId,
+      spiderVersion: form.spiderVersion > 0 ? form.spiderVersion : undefined,
       name: form.name,
       cronExpr: form.cronExpr,
       enabled: form.enabled,
-      image: form.image,
+      image: form.image.trim() || undefined,
       command: parseCommand(form.command),
       retryLimit: form.retryLimit,
       retryDelaySeconds: form.retryDelaySeconds,
