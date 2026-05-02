@@ -38,6 +38,9 @@ func (r *fakeExecutionRepo) ListByProject(_ context.Context, query ListExecution
 		if query.Status != "" && exec.Status != query.Status {
 			continue
 		}
+		if query.Trigger != "" && exec.TriggerSource != query.Trigger {
+			continue
+		}
 		if query.SpiderID != "" && exec.SpiderID != query.SpiderID {
 			continue
 		}
@@ -68,6 +71,9 @@ func (r *fakeExecutionRepo) CountByProject(_ context.Context, query ListExecutio
 			continue
 		}
 		if query.Status != "" && exec.Status != query.Status {
+			continue
+		}
+		if query.Trigger != "" && exec.TriggerSource != query.Trigger {
 			continue
 		}
 		if query.SpiderID != "" && exec.SpiderID != query.SpiderID {

@@ -86,6 +86,7 @@ type ListExecutionsQuery struct {
 	ProjectID string
 	SpiderID  string
 	Status    string
+	Trigger   string
 	From      *time.Time
 	To        *time.Time
 	Limit     int

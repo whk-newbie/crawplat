@@ -33,6 +33,11 @@
           <el-option label="succeeded" value="succeeded" />
           <el-option label="failed" value="failed" />
         </el-select>
+        <el-select v-model="executionTriggerSource" clearable placeholder="trigger" style="width: 180px">
+          <el-option label="manual" value="manual" />
+          <el-option label="scheduled" value="scheduled" />
+          <el-option label="retry" value="retry" />
+        </el-select>
         <el-date-picker
           v-model="executionTimeRange"
           type="datetimerange"
@@ -153,6 +158,7 @@ const pageSize = ref(20)
 const currentPage = ref(1)
 const executionSpiderId = ref('')
 const executionStatus = ref('')
+const executionTriggerSource = ref('')
 const executionTimeRange = ref<[Date, Date] | null>(null)
 
 function parseCommand(input: string) {
@@ -268,6 +274,7 @@ async function loadExecutions() {
       offset: (currentPage.value - 1) * pageSize.value,
       spiderId: executionSpiderId.value || undefined,
       executionStatus: executionStatus.value || undefined,
+      executionTriggerSource: executionTriggerSource.value || undefined,
       executionFrom,
       executionTo,
     })
@@ -288,6 +295,7 @@ async function applyExecutionFilters() {
 async function resetExecutionFilters() {
   executionSpiderId.value = ''
   executionStatus.value = ''
+  executionTriggerSource.value = ''
   executionTimeRange.value = null
   currentPage.value = 1
   await loadExecutions()

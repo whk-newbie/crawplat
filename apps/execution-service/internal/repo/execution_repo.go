@@ -60,6 +60,11 @@ func (r *ExecutionRepository) ListByProject(ctx context.Context, query service.L
 		args = append(args, query.Status)
 		argPos++
 	}
+	if strings.TrimSpace(query.Trigger) != "" {
+		where = append(where, fmt.Sprintf("trigger_source = $%d", argPos))
+		args = append(args, query.Trigger)
+		argPos++
+	}
 	if strings.TrimSpace(query.SpiderID) != "" {
 		where = append(where, fmt.Sprintf("spider_id = $%d", argPos))
 		args = append(args, query.SpiderID)
@@ -110,6 +115,11 @@ func (r *ExecutionRepository) CountByProject(ctx context.Context, query service.
 	if strings.TrimSpace(query.Status) != "" {
 		where = append(where, fmt.Sprintf("status = $%d", argPos))
 		args = append(args, query.Status)
+		argPos++
+	}
+	if strings.TrimSpace(query.Trigger) != "" {
+		where = append(where, fmt.Sprintf("trigger_source = $%d", argPos))
+		args = append(args, query.Trigger)
 		argPos++
 	}
 	if strings.TrimSpace(query.SpiderID) != "" {

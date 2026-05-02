@@ -133,6 +133,7 @@ func NewRouter(executionService *service.ExecutionService) *gin.Engine {
 		p := httpx.DefaultPagination(limit, offset)
 		spiderID := strings.TrimSpace(c.Query("spiderId"))
 		status := strings.TrimSpace(c.Query("executionStatus"))
+		triggerSource := strings.TrimSpace(c.Query("executionTriggerSource"))
 		executionFrom, err := parseRFC3339Query(c, "executionFrom")
 		if err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "executionFrom must be RFC3339"})
@@ -152,6 +153,7 @@ func NewRouter(executionService *service.ExecutionService) *gin.Engine {
 			ProjectID: projectID,
 			SpiderID:  spiderID,
 			Status:    status,
+			Trigger:   triggerSource,
 			From:      executionFrom,
 			To:        executionTo,
 			Limit:     p.Limit,

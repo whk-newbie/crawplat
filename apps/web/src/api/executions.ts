@@ -54,6 +54,7 @@ export function listExecutions(input: {
   offset?: number
   spiderId?: string
   executionStatus?: string
+  executionTriggerSource?: string
   executionFrom?: string
   executionTo?: string
 }) {
@@ -64,6 +65,9 @@ export function listExecutions(input: {
   })
   if (input.executionStatus?.trim()) {
     params.set('executionStatus', input.executionStatus.trim())
+  }
+  if (input.executionTriggerSource?.trim()) {
+    params.set('executionTriggerSource', input.executionTriggerSource.trim())
   }
   if (input.spiderId?.trim()) {
     params.set('spiderId', input.spiderId.trim())
