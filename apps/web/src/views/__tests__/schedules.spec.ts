@@ -57,7 +57,7 @@ describe('schedules view', () => {
     expect(container.textContent).toContain('enabled')
   })
 
-  it('creates schedule with spider version and no image', async () => {
+  it('creates schedule from loaded spider versions', async () => {
     const fetchMock = vi.fn()
       .mockResolvedValueOnce({
         ok: true,
@@ -71,6 +71,20 @@ describe('schedules view', () => {
       })
       .mockResolvedValueOnce({
         ok: true,
+        status: 200,
+        json: async () => ([
+          {
+            id: 'v2',
+            spiderId: 'spider-1',
+            version: 2,
+            image: 'crawler/go:v2',
+            command: ['./crawler', '--v2'],
+            createdAt: '2026-05-01T00:00:00Z',
+          },
+        ]),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
         status: 201,
         json: async () => ({
           id: 'schedule-2',
@@ -80,8 +94,8 @@ describe('schedules view', () => {
           name: 'nightly-v2',
           cronExpr: '*/10 * * * *',
           enabled: true,
-          image: '',
-          command: [],
+          image: 'crawler/go:v2',
+          command: ['./crawler', '--v2'],
           retryLimit: 1,
           retryDelaySeconds: 20,
         }),
@@ -109,18 +123,18 @@ describe('schedules view', () => {
     cronInput.value = '*/10 * * * *'
     cronInput.dispatchEvent(new Event('input'))
 
-    const numberInputs = [...document.querySelectorAll('.el-input-number input')]
-    ;(numberInputs[0] as HTMLInputElement).value = '2'
-    ;(numberInputs[0] as HTMLInputElement).dispatchEvent(new Event('input'))
-    ;(numberInputs[0] as HTMLInputElement).dispatchEvent(new Event('change'))
+    const loadVersionsButton = [...document.querySelectorAll('button')].find((button) => button.textContent?.includes('Load Spider Versions'))
+    ;(loadVersionsButton as HTMLButtonElement).click()
+    await flushPromises()
 
     const footerButtons = [...document.querySelectorAll('.el-dialog__footer button')]
     const confirmButton = footerButtons.find((button) => button.textContent?.includes('Create'))
     ;(confirmButton as HTMLButtonElement).click()
     await flushPromises()
 
+    expect(fetchMock).toHaveBeenNthCalledWith(2, '/api/v1/spiders/spider-1/versions', expect.any(Object))
     expect(fetchMock).toHaveBeenNthCalledWith(
-      2,
+      3,
       '/api/v1/schedules',
       expect.objectContaining({
         method: 'POST',
@@ -131,7 +145,8 @@ describe('schedules view', () => {
           name: 'nightly-v2',
           cronExpr: '*/10 * * * *',
           enabled: true,
-          command: [],
+          image: 'crawler/go:v2',
+          command: ['./crawler', '--v2'],
           retryLimit: 0,
           retryDelaySeconds: 0,
         }),

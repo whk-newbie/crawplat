@@ -63,8 +63,18 @@
         <el-form-item label="Cron Expression" required>
           <el-input v-model="form.cronExpr" name="cronExpr" placeholder="*/5 * * * *" />
         </el-form-item>
+        <el-form-item>
+          <el-button :loading="loadingVersions" @click="loadSpiderVersions">Load Spider Versions</el-button>
+        </el-form-item>
         <el-form-item label="Spider Version">
-          <el-input-number v-model="form.spiderVersion" :min="0" style="width: 100%" />
+          <el-select v-model="form.spiderVersion" clearable placeholder="manual input or pick loaded version" style="width: 100%" @change="applySelectedVersion">
+            <el-option
+              v-for="item in spiderVersions"
+              :key="item.id"
+              :label="`v${item.version} · ${item.image}`"
+              :value="item.version"
+            />
+          </el-select>
         </el-form-item>
         <el-form-item label="Image">
           <el-input v-model="form.image" name="image" placeholder="crawler/go-echo:latest" />
@@ -100,16 +110,19 @@
 import { onMounted, reactive, ref } from 'vue'
 import { ElMessage } from 'element-plus'
 import { createSchedule, listSchedules, type Schedule } from '../api/schedules'
+import { listSpiderVersions, type SpiderVersion } from '../api/spiders'
 
 const schedules = ref<Schedule[]>([])
 const loading = ref(true)
 const submitting = ref(false)
 const dialogVisible = ref(false)
+const loadingVersions = ref(false)
+const spiderVersions = ref<SpiderVersion[]>([])
 
 const form = reactive({
   projectId: 'project-1',
   spiderId: '',
-  spiderVersion: 0,
+  spiderVersion: undefined as number | undefined,
   name: '',
   cronExpr: '*/5 * * * *',
   enabled: true,
@@ -124,6 +137,18 @@ function parseCommand(input: string) {
     .split(' ')
     .map((item) => item.trim())
     .filter(Boolean)
+}
+
+function applySelectedVersion() {
+  if (form.spiderVersion == null) {
+    return
+  }
+  const selected = spiderVersions.value.find((item) => item.version === form.spiderVersion)
+  if (!selected) {
+    return
+  }
+  form.image = selected.image
+  form.command = Array.isArray(selected.command) ? selected.command.join(' ') : ''
 }
 
 async function loadSchedules() {
@@ -144,7 +169,7 @@ async function submit() {
     const schedule = await createSchedule({
       projectId: form.projectId,
       spiderId: form.spiderId,
-      spiderVersion: form.spiderVersion > 0 ? form.spiderVersion : undefined,
+      spiderVersion: form.spiderVersion,
       name: form.name,
       cronExpr: form.cronExpr,
       enabled: form.enabled,
@@ -160,6 +185,26 @@ async function submit() {
     ElMessage.error(err instanceof Error ? err.message : 'failed to create schedule')
   } finally {
     submitting.value = false
+  }
+}
+
+async function loadSpiderVersions() {
+  const spiderID = form.spiderId.trim()
+  if (!spiderID) {
+    ElMessage.warning('Spider ID is required')
+    return
+  }
+  loadingVersions.value = true
+  try {
+    spiderVersions.value = await listSpiderVersions(spiderID)
+    if (spiderVersions.value.length > 0) {
+      form.spiderVersion = spiderVersions.value[0].version
+      applySelectedVersion()
+    }
+  } catch (err) {
+    ElMessage.error(err instanceof Error ? err.message : 'failed to load spider versions')
+  } finally {
+    loadingVersions.value = false
   }
 }
 
