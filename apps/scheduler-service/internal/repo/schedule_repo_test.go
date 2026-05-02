@@ -22,6 +22,7 @@ func TestPostgresRepositoryCreate(t *testing.T) {
 		ID:                "sched-1",
 		ProjectID:         "project-1",
 		SpiderID:          "spider-1",
+		SpiderVersion:     2,
 		Name:              "nightly",
 		CronExpr:          "0 * * * *",
 		Enabled:           true,
@@ -33,10 +34,10 @@ func TestPostgresRepositoryCreate(t *testing.T) {
 	}
 
 	mock.ExpectExec(regexp.QuoteMeta(`
-		INSERT INTO scheduled_tasks (id, project_id, spider_id, name, cron_expr, enabled, image, command, retry_limit, retry_delay_seconds, created_at, last_materialized_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8::jsonb, $9, $10, $11, $12)
+		INSERT INTO scheduled_tasks (id, project_id, spider_id, spider_version, name, cron_expr, enabled, image, command, retry_limit, retry_delay_seconds, created_at, last_materialized_at)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9::jsonb, $10, $11, $12, $13)
 	`)).
-		WithArgs(schedule.ID, schedule.ProjectID, schedule.SpiderID, schedule.Name, schedule.CronExpr, schedule.Enabled, schedule.Image, `["./go-echo"]`, schedule.RetryLimit, schedule.RetryDelaySeconds, schedule.CreatedAt, nil).
+		WithArgs(schedule.ID, schedule.ProjectID, schedule.SpiderID, schedule.SpiderVersion, schedule.Name, schedule.CronExpr, schedule.Enabled, schedule.Image, `["./go-echo"]`, schedule.RetryLimit, schedule.RetryDelaySeconds, schedule.CreatedAt, nil).
 		WillReturnResult(sqlmock.NewResult(1, 1))
 
 	if err := repo.Create(context.Background(), schedule); err != nil {
@@ -57,11 +58,11 @@ func TestPostgresRepositoryList(t *testing.T) {
 	repo := NewPostgresRepository(db)
 	createdAt := time.Date(2026, 4, 23, 23, 40, 0, 0, time.UTC)
 	lastMaterializedAt := createdAt.Add(5 * time.Minute)
-	rows := sqlmock.NewRows([]string{"id", "project_id", "spider_id", "name", "cron_expr", "enabled", "image", "command", "retry_limit", "retry_delay_seconds", "created_at", "last_materialized_at"}).
-		AddRow("sched-1", "project-1", "spider-1", "nightly", "0 * * * *", true, "crawler/go-echo:latest", `["./go-echo"]`, 2, 30, createdAt, lastMaterializedAt)
+	rows := sqlmock.NewRows([]string{"id", "project_id", "spider_id", "spider_version", "name", "cron_expr", "enabled", "image", "command", "retry_limit", "retry_delay_seconds", "created_at", "last_materialized_at"}).
+		AddRow("sched-1", "project-1", "spider-1", 2, "nightly", "0 * * * *", true, "crawler/go-echo:latest", `["./go-echo"]`, 2, 30, createdAt, lastMaterializedAt)
 
 	mock.ExpectQuery(regexp.QuoteMeta(`
-		SELECT id, project_id, spider_id, name, cron_expr, enabled, image, command, retry_limit, retry_delay_seconds, created_at, last_materialized_at
+		SELECT id, project_id, spider_id, spider_version, name, cron_expr, enabled, image, command, retry_limit, retry_delay_seconds, created_at, last_materialized_at
 		FROM scheduled_tasks
 		ORDER BY created_at DESC, id DESC
 	`)).WillReturnRows(rows)
@@ -75,6 +76,9 @@ func TestPostgresRepositoryList(t *testing.T) {
 	}
 	if schedules[0].RetryLimit != 2 || schedules[0].RetryDelaySeconds != 30 {
 		t.Fatalf("unexpected retry config: %#v", schedules[0])
+	}
+	if schedules[0].SpiderVersion != 2 {
+		t.Fatalf("unexpected spiderVersion: %#v", schedules[0])
 	}
 	if schedules[0].LastMaterializedAt == nil || !schedules[0].LastMaterializedAt.Equal(lastMaterializedAt) {
 		t.Fatalf("unexpected lastMaterializedAt: %#v", schedules[0].LastMaterializedAt)

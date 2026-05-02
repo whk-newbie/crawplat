@@ -29,15 +29,15 @@ func (r *PostgresRepository) Create(ctx context.Context, schedule model.Schedule
 	}
 
 	_, err = r.db.ExecContext(ctx, `
-		INSERT INTO scheduled_tasks (id, project_id, spider_id, name, cron_expr, enabled, image, command, retry_limit, retry_delay_seconds, created_at, last_materialized_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8::jsonb, $9, $10, $11, $12)
-	`, schedule.ID, schedule.ProjectID, schedule.SpiderID, schedule.Name, schedule.CronExpr, schedule.Enabled, schedule.Image, string(commandJSON), schedule.RetryLimit, schedule.RetryDelaySeconds, schedule.CreatedAt, lastMaterializedAt)
+		INSERT INTO scheduled_tasks (id, project_id, spider_id, spider_version, name, cron_expr, enabled, image, command, retry_limit, retry_delay_seconds, created_at, last_materialized_at)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9::jsonb, $10, $11, $12, $13)
+	`, schedule.ID, schedule.ProjectID, schedule.SpiderID, schedule.SpiderVersion, schedule.Name, schedule.CronExpr, schedule.Enabled, schedule.Image, string(commandJSON), schedule.RetryLimit, schedule.RetryDelaySeconds, schedule.CreatedAt, lastMaterializedAt)
 	return err
 }
 
 func (r *PostgresRepository) List(ctx context.Context) ([]model.Schedule, error) {
 	rows, err := r.db.QueryContext(ctx, `
-		SELECT id, project_id, spider_id, name, cron_expr, enabled, image, command, retry_limit, retry_delay_seconds, created_at, last_materialized_at
+		SELECT id, project_id, spider_id, spider_version, name, cron_expr, enabled, image, command, retry_limit, retry_delay_seconds, created_at, last_materialized_at
 		FROM scheduled_tasks
 		ORDER BY created_at DESC, id DESC
 	`)
@@ -51,7 +51,7 @@ func (r *PostgresRepository) List(ctx context.Context) ([]model.Schedule, error)
 		var schedule model.Schedule
 		var commandJSON string
 		var lastMaterializedAt sql.NullTime
-		if err := rows.Scan(&schedule.ID, &schedule.ProjectID, &schedule.SpiderID, &schedule.Name, &schedule.CronExpr, &schedule.Enabled, &schedule.Image, &commandJSON, &schedule.RetryLimit, &schedule.RetryDelaySeconds, &schedule.CreatedAt, &lastMaterializedAt); err != nil {
+		if err := rows.Scan(&schedule.ID, &schedule.ProjectID, &schedule.SpiderID, &schedule.SpiderVersion, &schedule.Name, &schedule.CronExpr, &schedule.Enabled, &schedule.Image, &commandJSON, &schedule.RetryLimit, &schedule.RetryDelaySeconds, &schedule.CreatedAt, &lastMaterializedAt); err != nil {
 			return nil, err
 		}
 		if err := json.Unmarshal([]byte(commandJSON), &schedule.Command); err != nil {

@@ -16,10 +16,11 @@ func NewRouter(schedulerService *service.SchedulerService) *gin.Engine {
 		var req struct {
 			ProjectID         string   `json:"projectId" binding:"required"`
 			SpiderID          string   `json:"spiderId" binding:"required"`
+			SpiderVersion     int      `json:"spiderVersion"`
 			Name              string   `json:"name" binding:"required"`
 			CronExpr          string   `json:"cronExpr" binding:"required"`
 			Enabled           bool     `json:"enabled"`
-			Image             string   `json:"image" binding:"required"`
+			Image             string   `json:"image"`
 			Command           []string `json:"command"`
 			RetryLimit        int      `json:"retryLimit"`
 			RetryDelaySeconds int      `json:"retryDelaySeconds"`
@@ -29,7 +30,7 @@ func NewRouter(schedulerService *service.SchedulerService) *gin.Engine {
 			return
 		}
 
-		schedule, err := schedulerService.Create(req.ProjectID, req.SpiderID, req.Name, req.CronExpr, req.Image, req.Command, req.Enabled, req.RetryLimit, req.RetryDelaySeconds)
+		schedule, err := schedulerService.Create(req.ProjectID, req.SpiderID, req.SpiderVersion, req.Name, req.CronExpr, req.Image, req.Command, req.Enabled, req.RetryLimit, req.RetryDelaySeconds)
 		if err != nil {
 			if err == service.ErrInvalidSchedule {
 				c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})

@@ -42,6 +42,7 @@ type CreateExecutionInput struct {
 	ScheduleID        string
 	ProjectID         string
 	SpiderID          string
+	SpiderVersion     int
 	Image             string
 	Command           []string
 	TriggerSource     string
@@ -139,6 +140,7 @@ func (c *HTTPExecutionClient) Create(ctx context.Context, input CreateExecutionI
 	body, err := json.Marshal(map[string]any{
 		"projectId":         input.ProjectID,
 		"spiderId":          input.SpiderID,
+		"spiderVersion":     input.SpiderVersion,
 		"image":             input.Image,
 		"command":           input.Command,
 		"triggerSource":     input.TriggerSource,
@@ -234,8 +236,11 @@ func NewSchedulerService(repo Repository, executionClient ExecutionClient, optio
 	return svc
 }
 
-func (s *SchedulerService) Create(projectID, spiderID, name, cronExpr, image string, command []string, enabled bool, retryLimit, retryDelaySeconds int) (model.Schedule, error) {
-	if projectID == "" || spiderID == "" || name == "" || cronExpr == "" || image == "" {
+func (s *SchedulerService) Create(projectID, spiderID string, spiderVersion int, name, cronExpr, image string, command []string, enabled bool, retryLimit, retryDelaySeconds int) (model.Schedule, error) {
+	if projectID == "" || spiderID == "" || name == "" || cronExpr == "" {
+		return model.Schedule{}, ErrInvalidSchedule
+	}
+	if spiderVersion <= 0 && image == "" {
 		return model.Schedule{}, ErrInvalidSchedule
 	}
 
@@ -244,6 +249,7 @@ func (s *SchedulerService) Create(projectID, spiderID, name, cronExpr, image str
 		ID:                uuid.NewString(),
 		ProjectID:         projectID,
 		SpiderID:          spiderID,
+		SpiderVersion:     spiderVersion,
 		Name:              name,
 		CronExpr:          cronExpr,
 		Enabled:           enabled,
@@ -322,6 +328,7 @@ func (s *SchedulerService) MaterializeDue(ctx context.Context) (int, error) {
 				ScheduleID:        schedule.ID,
 				ProjectID:         schedule.ProjectID,
 				SpiderID:          schedule.SpiderID,
+				SpiderVersion:     schedule.SpiderVersion,
 				Image:             schedule.Image,
 				Command:           append([]string(nil), schedule.Command...),
 				TriggerSource:     "scheduled",

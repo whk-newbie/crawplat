@@ -66,11 +66,34 @@ func TestCreateScheduleAcceptsRetryConfiguration(t *testing.T) {
 	}
 }
 
+func TestCreateScheduleAcceptsSpiderVersionWithoutImage(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	router := NewRouter(service.NewSchedulerService(nil, nil))
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/schedules", strings.NewReader(`{"projectId":"project-1","spiderId":"spider-1","spiderVersion":2,"name":"nightly","cronExpr":"0 * * * *","enabled":true}`))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+
+	router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusCreated {
+		t.Fatalf("expected status 201, got %d body=%s", w.Code, w.Body.String())
+	}
+
+	var schedule model.Schedule
+	if err := json.Unmarshal(w.Body.Bytes(), &schedule); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+	if schedule.SpiderVersion != 2 {
+		t.Fatalf("expected spiderVersion=2, got %+v", schedule)
+	}
+}
+
 func TestListSchedulesReturnsLowerCaseJSON(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
 	svc := service.NewSchedulerService(nil, nil)
-	if _, err := svc.Create("project-1", "spider-1", "nightly", "0 * * * *", "crawler/go-echo:latest", []string{"./go-echo"}, true, 0, 0); err != nil {
+	if _, err := svc.Create("project-1", "spider-1", 0, "nightly", "0 * * * *", "crawler/go-echo:latest", []string{"./go-echo"}, true, 0, 0); err != nil {
 		t.Fatalf("Create returned error: %v", err)
 	}
 	router := NewRouter(svc)
@@ -109,7 +132,7 @@ func TestListSchedulesRespectsPaginationParams(t *testing.T) {
 
 	svc := service.NewSchedulerService(nil, nil)
 	for i := 0; i < 3; i++ {
-		if _, err := svc.Create("project-1", "spider-1", "nightly", "0 * * * *", "crawler/go-echo:latest", []string{"./go-echo"}, true, 0, 0); err != nil {
+		if _, err := svc.Create("project-1", "spider-1", 0, "nightly", "0 * * * *", "crawler/go-echo:latest", []string{"./go-echo"}, true, 0, 0); err != nil {
 			t.Fatalf("Create returned error: %v", err)
 		}
 	}
