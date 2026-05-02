@@ -133,24 +133,25 @@ func TestExecutionRepositoryListByProjectAndCountWithFilters(t *testing.T) {
 	mock.ExpectQuery(regexp.QuoteMeta(`
 		SELECT id, project_id, spider_id, spider_version, registry_auth_ref, node_id, status, trigger_source, image, command, cpu_cores, memory_mb, timeout_seconds, error_message, created_at, started_at, finished_at, retry_limit, retry_count, retry_delay_seconds, retry_of_execution_id, retried_at
 		FROM executions
-		WHERE project_id = $1 AND status = $2 AND created_at >= $3 AND created_at <= $4
+		WHERE project_id = $1 AND status = $2 AND spider_id = $3 AND created_at >= $4 AND created_at <= $5
 		ORDER BY created_at DESC, id DESC
-		LIMIT $5 OFFSET $6
+		LIMIT $6 OFFSET $7
 	`)).
-		WithArgs("p1", "failed", from, to, 10, 0).
+		WithArgs("p1", "failed", "s3", from, to, 10, 0).
 		WillReturnRows(rows)
 
 	mock.ExpectQuery(regexp.QuoteMeta(`
 		SELECT COUNT(1)
 		FROM executions
-		WHERE project_id = $1 AND status = $2 AND created_at >= $3 AND created_at <= $4
+		WHERE project_id = $1 AND status = $2 AND spider_id = $3 AND created_at >= $4 AND created_at <= $5
 	`)).
-		WithArgs("p1", "failed", from, to).
+		WithArgs("p1", "failed", "s3", from, to).
 		WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(int64(1)))
 
 	query := service.ListExecutionsQuery{
 		ProjectID: "p1",
 		Status:    "failed",
+		SpiderID:  "s3",
 		From:      &from,
 		To:        &to,
 		Limit:     10,

@@ -38,6 +38,9 @@ func (r *apiFakeExecutionRepo) ListByProject(_ context.Context, query service.Li
 		if query.Status != "" && exec.Status != query.Status {
 			continue
 		}
+		if query.SpiderID != "" && exec.SpiderID != query.SpiderID {
+			continue
+		}
 		if query.From != nil && exec.CreatedAt.Before(*query.From) {
 			continue
 		}
@@ -63,6 +66,9 @@ func (r *apiFakeExecutionRepo) CountByProject(_ context.Context, query service.L
 			continue
 		}
 		if query.Status != "" && exec.Status != query.Status {
+			continue
+		}
+		if query.SpiderID != "" && exec.SpiderID != query.SpiderID {
 			continue
 		}
 		if query.From != nil && exec.CreatedAt.Before(*query.From) {
@@ -406,7 +412,7 @@ func TestListExecutionsByProjectWithStatusAndTimeRange(t *testing.T) {
 	}
 	router := NewRouter(svc)
 
-	req := httptest.NewRequest(http.MethodGet, "/api/v1/executions?projectId=project-1&executionStatus=failed&executionFrom=2026-05-01T00:30:00Z&executionTo=2026-05-01T01:30:00Z&limit=20&offset=0", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/executions?projectId=project-1&spiderId=spider-1&executionStatus=failed&executionFrom=2026-05-01T00:30:00Z&executionTo=2026-05-01T01:30:00Z&limit=20&offset=0", nil)
 	w := httptest.NewRecorder()
 	router.ServeHTTP(w, req)
 

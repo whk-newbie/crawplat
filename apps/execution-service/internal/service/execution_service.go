@@ -84,6 +84,7 @@ type CreateExecutionInput struct {
 
 type ListExecutionsQuery struct {
 	ProjectID string
+	SpiderID  string
 	Status    string
 	From      *time.Time
 	To        *time.Time
