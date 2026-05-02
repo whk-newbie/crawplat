@@ -132,6 +132,7 @@ func NewRouter(executionService *service.ExecutionService) *gin.Engine {
 		offset, _ := strconv.Atoi(c.DefaultQuery("offset", "0"))
 		p := httpx.DefaultPagination(limit, offset)
 		spiderID := strings.TrimSpace(c.Query("spiderId"))
+		nodeID := strings.TrimSpace(c.Query("nodeId"))
 		status := strings.TrimSpace(c.Query("executionStatus"))
 		triggerSource := strings.TrimSpace(c.Query("executionTriggerSource"))
 		executionFrom, err := parseRFC3339Query(c, "executionFrom")
@@ -152,6 +153,7 @@ func NewRouter(executionService *service.ExecutionService) *gin.Engine {
 		items, total, err := executionService.List(context.Background(), service.ListExecutionsQuery{
 			ProjectID: projectID,
 			SpiderID:  spiderID,
+			NodeID:    nodeID,
 			Status:    status,
 			Trigger:   triggerSource,
 			From:      executionFrom,

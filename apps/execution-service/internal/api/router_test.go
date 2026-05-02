@@ -44,6 +44,9 @@ func (r *apiFakeExecutionRepo) ListByProject(_ context.Context, query service.Li
 		if query.SpiderID != "" && exec.SpiderID != query.SpiderID {
 			continue
 		}
+		if query.NodeID != "" && exec.NodeID != query.NodeID {
+			continue
+		}
 		if query.From != nil && exec.CreatedAt.Before(*query.From) {
 			continue
 		}
@@ -75,6 +78,9 @@ func (r *apiFakeExecutionRepo) CountByProject(_ context.Context, query service.L
 			continue
 		}
 		if query.SpiderID != "" && exec.SpiderID != query.SpiderID {
+			continue
+		}
+		if query.NodeID != "" && exec.NodeID != query.NodeID {
 			continue
 		}
 		if query.From != nil && exec.CreatedAt.Before(*query.From) {
@@ -443,6 +449,55 @@ func TestListExecutionsByProjectWithStatusAndTimeRange(t *testing.T) {
 		t.Fatalf("failed to decode response: %v", err)
 	}
 	if payload.Total != 1 || len(payload.Items) != 1 || payload.Items[0].ID != "exec-1" {
+		t.Fatalf("unexpected filtered payload: %+v", payload)
+	}
+}
+
+func TestListExecutionsByProjectWithNodeFilter(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	svc, repo, _, _ := newAPITestService()
+	repo.executions = map[string]model.Execution{
+		"exec-1": {
+			ID:            "exec-1",
+			ProjectID:     "project-1",
+			SpiderID:      "spider-1",
+			NodeID:        "node-a",
+			Status:        "running",
+			TriggerSource: "manual",
+			Image:         "crawler/go:v1",
+			Command:       []string{"./crawler"},
+			CreatedAt:     time.Date(2026, 5, 1, 1, 0, 0, 0, time.UTC),
+		},
+		"exec-2": {
+			ID:            "exec-2",
+			ProjectID:     "project-1",
+			SpiderID:      "spider-1",
+			NodeID:        "node-b",
+			Status:        "running",
+			TriggerSource: "manual",
+			Image:         "crawler/go:v1",
+			Command:       []string{"./crawler"},
+			CreatedAt:     time.Date(2026, 5, 1, 2, 0, 0, 0, time.UTC),
+		},
+	}
+	router := NewRouter(svc)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/executions?projectId=project-1&nodeId=node-a&limit=20&offset=0", nil)
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d body=%s", w.Code, w.Body.String())
+	}
+	var payload struct {
+		Items []model.Execution `json:"items"`
+		Total int64             `json:"total"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+	if payload.Total != 1 || len(payload.Items) != 1 || payload.Items[0].NodeID != "node-a" {
 		t.Fatalf("unexpected filtered payload: %+v", payload)
 	}
 }

@@ -31,6 +31,7 @@
         </el-select>
         <el-button :loading="loadingProjects" @click="loadProjects">Load Projects</el-button>
         <el-input v-model="executionSpiderId" clearable placeholder="spider id" style="width: 180px" />
+        <el-input v-model="executionNodeId" clearable placeholder="node id" style="width: 180px" />
         <el-select v-model="executionStatus" clearable placeholder="status" style="width: 180px">
           <el-option label="pending" value="pending" />
           <el-option label="running" value="running" />
@@ -174,6 +175,7 @@ const total = ref(0)
 const pageSize = ref(20)
 const currentPage = ref(1)
 const executionSpiderId = ref('')
+const executionNodeId = ref('')
 const executionStatus = ref('')
 const executionTriggerSource = ref('')
 const executionTimeRange = ref<[Date, Date] | null>(null)
@@ -309,6 +311,7 @@ async function loadExecutions() {
       limit: pageSize.value,
       offset: (currentPage.value - 1) * pageSize.value,
       spiderId: executionSpiderId.value || undefined,
+      nodeId: executionNodeId.value || undefined,
       executionStatus: executionStatus.value || undefined,
       executionTriggerSource: executionTriggerSource.value || undefined,
       executionFrom,
@@ -330,6 +333,7 @@ async function applyExecutionFilters() {
 
 async function resetExecutionFilters() {
   executionSpiderId.value = ''
+  executionNodeId.value = ''
   executionStatus.value = ''
   executionTriggerSource.value = ''
   executionTimeRange.value = null

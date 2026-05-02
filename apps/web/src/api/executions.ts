@@ -53,6 +53,7 @@ export function listExecutions(input: {
   limit?: number
   offset?: number
   spiderId?: string
+  nodeId?: string
   executionStatus?: string
   executionTriggerSource?: string
   executionFrom?: string
@@ -71,6 +72,9 @@ export function listExecutions(input: {
   }
   if (input.spiderId?.trim()) {
     params.set('spiderId', input.spiderId.trim())
+  }
+  if (input.nodeId?.trim()) {
+    params.set('nodeId', input.nodeId.trim())
   }
   if (input.executionFrom?.trim()) {
     params.set('executionFrom', input.executionFrom.trim())

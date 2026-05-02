@@ -304,4 +304,66 @@ describe('execution detail view', () => {
       }),
     )
   })
+
+  it('applies node id filter when loading executions', async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({
+          items: [{ id: 'project-1', code: 'project-1', name: 'Project One' }],
+          total: 1,
+          limit: 20,
+          offset: 0,
+        }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({
+          items: [],
+          total: 0,
+          limit: 20,
+          offset: 0,
+        }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({
+          items: [],
+          total: 0,
+          limit: 20,
+          offset: 0,
+        }),
+      })
+
+    vi.stubGlobal('fetch', fetchMock)
+
+    const router = createRouter({
+      history: createMemoryHistory(),
+      routes: [
+        { path: '/', component: ExecutionsView },
+        { path: '/executions/:id', component: ExecutionDetailView },
+      ],
+    })
+    await router.push('/')
+    await router.isReady()
+
+    const container = document.createElement('div')
+    document.body.appendChild(container)
+    createApp(ExecutionsView).use(router).use(ElementPlus).mount(container)
+    await flushPromises()
+
+    const nodeInput = container.querySelector('input[placeholder="node id"]') as HTMLInputElement
+    nodeInput.value = 'node-a'
+    nodeInput.dispatchEvent(new Event('input'))
+    await flushPromises()
+
+    const applyButton = [...container.querySelectorAll('button')].find((button) => button.textContent?.includes('Apply Filters'))
+    ;(applyButton as HTMLButtonElement).click()
+    await flushPromises()
+
+    expect(fetchMock).toHaveBeenNthCalledWith(3, '/api/v1/executions?projectId=project-1&limit=20&offset=0&nodeId=node-a', expect.any(Object))
+  })
 })
