@@ -52,5 +52,5 @@
 ## 私有镜像拉取链路
 
 1. 执行记录可带 `registryAuthRef`（或从 spider version 继承）。
-2. agent 从 `IMAGE_REGISTRY_AUTH_MAP` 读取 registry 凭据映射。
-3. 当镜像 host 匹配映射项时，先 `docker login`/`docker pull` 再 `docker run`。
+2. agent 从 `IMAGE_REGISTRY_AUTH_MAP` 读取 registry 凭据映射（支持 host-key 与 named-ref+server）。
+3. 当镜像 host 匹配映射项，或 `registryAuthRef` 命中映射项时，先 `docker login`/`docker pull` 再 `docker run`。

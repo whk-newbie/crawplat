@@ -1,6 +1,9 @@
 package runtime
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
 func TestParseRegistryCredentials(t *testing.T) {
 	creds, err := ParseRegistryCredentials(`{"ghcr.io":{"username":"user","password":"pass"}}`)
@@ -13,6 +16,30 @@ func TestParseRegistryCredentials(t *testing.T) {
 	}
 	if cred.Server != "ghcr.io" || cred.Username != "user" || cred.Password != "pass" {
 		t.Fatalf("unexpected credential: %+v", cred)
+	}
+}
+
+func TestParseRegistryCredentialsSupportsNamedRefWithServer(t *testing.T) {
+	creds, err := ParseRegistryCredentials(`{"ghcr-prod":{"server":"ghcr.io","username":"user","password":"pass"}}`)
+	if err != nil {
+		t.Fatalf("ParseRegistryCredentials returned error: %v", err)
+	}
+	cred, ok := creds["ghcr-prod"]
+	if !ok {
+		t.Fatalf("expected ghcr-prod credentials, got %+v", creds)
+	}
+	if cred.Server != "ghcr.io" || cred.Username != "user" || cred.Password != "pass" {
+		t.Fatalf("unexpected credential: %+v", cred)
+	}
+}
+
+func TestParseRegistryCredentialsRejectsNamedRefWithoutServer(t *testing.T) {
+	_, err := ParseRegistryCredentials(`{"ghcr-prod":{"username":"user","password":"pass"}}`)
+	if err == nil {
+		t.Fatal("expected error for missing server on named ref")
+	}
+	if !strings.Contains(err.Error(), "requires server") {
+		t.Fatalf("unexpected error: %v", err)
 	}
 }
 

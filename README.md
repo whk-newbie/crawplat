@@ -35,8 +35,10 @@
   - spider versions now persist optional `registryAuthRef` for private registry credentials.
   - `SpidersView` supports listing versions, setting version-level `registryAuthRef`, and creating a new version.
 - Private image pull integration is now available in agent runtime:
-  - set `IMAGE_REGISTRY_AUTH_MAP` as JSON map `{ "<registry-host>": { "username": "...", "password": "...", "server": "..." } }`
-  - when execution image host matches configured registry, agent runs `docker login` + `docker pull` before `docker run`.
+  - set `IMAGE_REGISTRY_AUTH_MAP` as JSON map:
+    - host-key mode: `{ "<registry-host>": { "username": "...", "password": "...", "server": "..." } }`
+    - named-ref mode (for `registryAuthRef` such as `ghcr-prod`): `{ "<auth-ref>": { "server": "<registry-host>", "username": "...", "password": "..." } }`
+  - when execution image host matches configured registry, or execution carries a matched `registryAuthRef`, agent runs `docker login` + `docker pull` before `docker run`.
   - execution/schedule APIs now support optional `registryAuthRef` to select a named credential directly.
   - execution creation now auto-inherits `registryAuthRef` from resolved spider version when request-level `registryAuthRef` is empty.
   - spider-service now exposes `GET /api/v1/projects/:projectId/registry-auth-refs` for project-scoped saved refs; web forms can load these refs to reduce manual typing.

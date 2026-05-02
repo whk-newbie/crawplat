@@ -25,15 +25,25 @@ func ParseRegistryCredentials(raw string) (map[string]RegistryCredential, error)
 		}
 		cred.Username = strings.TrimSpace(cred.Username)
 		cred.Password = strings.TrimSpace(cred.Password)
-		cred.Server = strings.TrimSpace(cred.Server)
+		cred.Server = strings.TrimSpace(strings.ToLower(cred.Server))
 		if cred.Username == "" || cred.Password == "" {
 			return nil, fmt.Errorf("registry credentials incomplete for host %s", key)
 		}
 		if cred.Server == "" {
+			if !isLikelyRegistryHost(key) {
+				return nil, fmt.Errorf("registry credential %s requires server when key is not a registry host", key)
+			}
 			cred.Server = key
 		}
 		out[key] = cred
 	}
 
 	return out, nil
+}
+
+func isLikelyRegistryHost(value string) bool {
+	if value == "localhost" {
+		return true
+	}
+	return strings.Contains(value, ".") || strings.Contains(value, ":")
 }

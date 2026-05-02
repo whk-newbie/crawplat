@@ -80,3 +80,17 @@ func TestLoadConfigReadsEnvironment(t *testing.T) {
 		t.Fatalf("unexpected registry credentials: %+v", cfg.registryCreds)
 	}
 }
+
+func TestLoadConfigReadsNamedRegistryAuthRefCredentials(t *testing.T) {
+	t.Setenv("IMAGE_REGISTRY_AUTH_MAP", `{"ghcr-prod":{"server":"ghcr.io","username":"user","password":"pass"}}`)
+
+	cfg := loadConfig()
+
+	cred, ok := cfg.registryCreds["ghcr-prod"]
+	if !ok {
+		t.Fatalf("expected ghcr-prod credential, got %+v", cfg.registryCreds)
+	}
+	if cred.Server != "ghcr.io" || cred.Username != "user" || cred.Password != "pass" {
+		t.Fatalf("unexpected credential: %+v", cred)
+	}
+}

@@ -117,4 +117,7 @@ Crawler Platform API 分为两类：
 ## 与私有镜像仓库的接口协同
 
 - `registryAuthRef` 在 spider versions / schedules / executions 三处可传递。
-- agent 启动时读取 `IMAGE_REGISTRY_AUTH_MAP`，在匹配镜像 registry host 时执行 `docker login` + `docker pull`。
+- agent 启动时读取 `IMAGE_REGISTRY_AUTH_MAP`：
+  - 支持 host-key：`"<registry-host>" -> credential`
+  - 支持 named-ref：`"<registryAuthRef>" -> { server: "<registry-host>", ... }`
+- 当匹配镜像 registry host，或 execution 的 `registryAuthRef` 命中映射时，执行 `docker login` + `docker pull`。
