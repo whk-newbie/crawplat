@@ -18,6 +18,7 @@ type MonitorService struct {
 type Repository interface {
 	Overview(ctx context.Context) (model.Overview, error)
 	CreateAlertRule(ctx context.Context, rule model.AlertRule) (model.AlertRule, error)
+	UpdateAlertRule(ctx context.Context, id string, patch model.AlertRulePatch) (model.AlertRule, bool, error)
 	ListAlertRules(ctx context.Context) ([]model.AlertRule, error)
 	ListAlertEvents(ctx context.Context, limit, offset int) ([]model.AlertEvent, error)
 	CountAlertEvents(ctx context.Context) (int64, error)
@@ -38,6 +39,9 @@ func (r *memoryRepository) Overview(_ context.Context) (model.Overview, error) {
 }
 func (r *memoryRepository) CreateAlertRule(_ context.Context, rule model.AlertRule) (model.AlertRule, error) {
 	return rule, nil
+}
+func (r *memoryRepository) UpdateAlertRule(_ context.Context, _ string, _ model.AlertRulePatch) (model.AlertRule, bool, error) {
+	return model.AlertRule{}, false, nil
 }
 func (r *memoryRepository) ListAlertRules(_ context.Context) ([]model.AlertRule, error) {
 	return nil, nil
@@ -94,6 +98,7 @@ var (
 	ErrInvalidRuleType   = errors.New("invalid alert rule type")
 	ErrInvalidWebhookURL = errors.New("webhook url is required")
 	ErrInvalidRuleName   = errors.New("rule name is required")
+	ErrRuleNotFound      = errors.New("alert rule not found")
 )
 
 func (s *MonitorService) CreateAlertRule(input CreateAlertRuleInput) (model.AlertRule, error) {
@@ -128,6 +133,62 @@ func (s *MonitorService) CreateAlertRule(input CreateAlertRuleInput) (model.Aler
 
 func (s *MonitorService) ListAlertRules() ([]model.AlertRule, error) {
 	return s.repo.ListAlertRules(context.Background())
+}
+
+type UpdateAlertRuleInput struct {
+	Name                *string
+	Enabled             *bool
+	WebhookURL          *string
+	CooldownSeconds     *int
+	TimeoutSeconds      *int
+	OfflineGraceSeconds *int
+}
+
+func (s *MonitorService) UpdateAlertRule(id string, input UpdateAlertRuleInput) (model.AlertRule, error) {
+	id = strings.TrimSpace(id)
+	if id == "" {
+		return model.AlertRule{}, ErrRuleNotFound
+	}
+
+	patch := model.AlertRulePatch{
+		Enabled:             input.Enabled,
+		CooldownSeconds:     input.CooldownSeconds,
+		TimeoutSeconds:      input.TimeoutSeconds,
+		OfflineGraceSeconds: input.OfflineGraceSeconds,
+		UpdatedAt:           time.Now().UTC(),
+	}
+	if input.Name != nil {
+		trimmed := strings.TrimSpace(*input.Name)
+		if trimmed == "" {
+			return model.AlertRule{}, ErrInvalidRuleName
+		}
+		patch.Name = &trimmed
+	}
+	if input.WebhookURL != nil {
+		trimmed := strings.TrimSpace(*input.WebhookURL)
+		if trimmed == "" {
+			return model.AlertRule{}, ErrInvalidWebhookURL
+		}
+		patch.WebhookURL = &trimmed
+	}
+	if patch.CooldownSeconds != nil && *patch.CooldownSeconds <= 0 {
+		return model.AlertRule{}, errors.New("cooldownSeconds must be positive")
+	}
+	if patch.TimeoutSeconds != nil && *patch.TimeoutSeconds <= 0 {
+		return model.AlertRule{}, errors.New("timeoutSeconds must be positive")
+	}
+	if patch.OfflineGraceSeconds != nil && *patch.OfflineGraceSeconds <= 0 {
+		return model.AlertRule{}, errors.New("offlineGraceSeconds must be positive")
+	}
+
+	updated, ok, err := s.repo.UpdateAlertRule(context.Background(), id, patch)
+	if err != nil {
+		return model.AlertRule{}, err
+	}
+	if !ok {
+		return model.AlertRule{}, ErrRuleNotFound
+	}
+	return updated, nil
 }
 
 func (s *MonitorService) ListAlertEvents(limit, offset int) ([]model.AlertEvent, int64, int, int, error) {

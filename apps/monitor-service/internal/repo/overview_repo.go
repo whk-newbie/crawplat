@@ -4,6 +4,8 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"fmt"
+	"strings"
 	"time"
 
 	"crawler-platform/apps/monitor-service/internal/model"
@@ -149,6 +151,76 @@ func (r *OverviewRepository) CreateAlertRule(ctx context.Context, rule model.Ale
 		return model.AlertRule{}, err
 	}
 	return created, nil
+}
+
+func (r *OverviewRepository) UpdateAlertRule(ctx context.Context, id string, patch model.AlertRulePatch) (model.AlertRule, bool, error) {
+	setParts := make([]string, 0, 8)
+	args := make([]any, 0, 10)
+	argPos := 1
+
+	if patch.Name != nil {
+		setParts = append(setParts, fmt.Sprintf("name = $%d", argPos))
+		args = append(args, *patch.Name)
+		argPos++
+	}
+	if patch.Enabled != nil {
+		setParts = append(setParts, fmt.Sprintf("enabled = $%d", argPos))
+		args = append(args, *patch.Enabled)
+		argPos++
+	}
+	if patch.WebhookURL != nil {
+		setParts = append(setParts, fmt.Sprintf("webhook_url = $%d", argPos))
+		args = append(args, *patch.WebhookURL)
+		argPos++
+	}
+	if patch.CooldownSeconds != nil {
+		setParts = append(setParts, fmt.Sprintf("cooldown_seconds = $%d", argPos))
+		args = append(args, *patch.CooldownSeconds)
+		argPos++
+	}
+	if patch.TimeoutSeconds != nil {
+		setParts = append(setParts, fmt.Sprintf("timeout_seconds = $%d", argPos))
+		args = append(args, *patch.TimeoutSeconds)
+		argPos++
+	}
+	if patch.OfflineGraceSeconds != nil {
+		setParts = append(setParts, fmt.Sprintf("offline_grace_seconds = $%d", argPos))
+		args = append(args, *patch.OfflineGraceSeconds)
+		argPos++
+	}
+
+	setParts = append(setParts, fmt.Sprintf("updated_at = $%d", argPos))
+	args = append(args, patch.UpdatedAt)
+	argPos++
+
+	args = append(args, id)
+	query := fmt.Sprintf(`
+		UPDATE alert_rules
+		SET %s
+		WHERE id = $%d
+		RETURNING id, name, rule_type, enabled, webhook_url, cooldown_seconds, timeout_seconds, offline_grace_seconds, created_at, updated_at
+	`, strings.Join(setParts, ", "), argPos)
+
+	var updated model.AlertRule
+	err := r.db.QueryRowContext(ctx, query, args...).Scan(
+		&updated.ID,
+		&updated.Name,
+		&updated.RuleType,
+		&updated.Enabled,
+		&updated.WebhookURL,
+		&updated.CooldownSeconds,
+		&updated.TimeoutSeconds,
+		&updated.OfflineGraceSeconds,
+		&updated.CreatedAt,
+		&updated.UpdatedAt,
+	)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return model.AlertRule{}, false, nil
+		}
+		return model.AlertRule{}, false, err
+	}
+	return updated, true, nil
 }
 
 func (r *OverviewRepository) ListAlertRules(ctx context.Context) ([]model.AlertRule, error) {

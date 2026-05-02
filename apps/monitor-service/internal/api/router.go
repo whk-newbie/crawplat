@@ -72,6 +72,42 @@ func NewRouter(monitorService *service.MonitorService) *gin.Engine {
 		c.JSON(http.StatusOK, rules)
 	})
 
+	router.PATCH("/api/v1/monitor/alerts/rules/:id", func(c *gin.Context) {
+		var req struct {
+			Name                *string `json:"name"`
+			Enabled             *bool   `json:"enabled"`
+			WebhookURL          *string `json:"webhookUrl"`
+			CooldownSeconds     *int    `json:"cooldownSeconds"`
+			TimeoutSeconds      *int    `json:"timeoutSeconds"`
+			OfflineGraceSeconds *int    `json:"offlineGraceSeconds"`
+		}
+		if err := c.ShouldBindJSON(&req); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
+		rule, err := monitorService.UpdateAlertRule(c.Param("id"), service.UpdateAlertRuleInput{
+			Name:                req.Name,
+			Enabled:             req.Enabled,
+			WebhookURL:          req.WebhookURL,
+			CooldownSeconds:     req.CooldownSeconds,
+			TimeoutSeconds:      req.TimeoutSeconds,
+			OfflineGraceSeconds: req.OfflineGraceSeconds,
+		})
+		if err != nil {
+			switch {
+			case errors.Is(err, service.ErrRuleNotFound):
+				c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
+			case errors.Is(err, service.ErrInvalidWebhookURL),
+				errors.Is(err, service.ErrInvalidRuleName):
+				c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			default:
+				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			}
+			return
+		}
+		c.JSON(http.StatusOK, rule)
+	})
+
 	router.GET("/api/v1/monitor/alerts/events", func(c *gin.Context) {
 		limit, _ := strconv.Atoi(c.DefaultQuery("limit", "50"))
 		offset, _ := strconv.Atoi(c.DefaultQuery("offset", "0"))

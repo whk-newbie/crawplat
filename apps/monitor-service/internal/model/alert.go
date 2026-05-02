@@ -20,6 +20,16 @@ type AlertRule struct {
 	UpdatedAt           time.Time `json:"updatedAt"`
 }
 
+type AlertRulePatch struct {
+	Name                *string
+	Enabled             *bool
+	WebhookURL          *string
+	CooldownSeconds     *int
+	TimeoutSeconds      *int
+	OfflineGraceSeconds *int
+	UpdatedAt           time.Time
+}
+
 type AlertEvent struct {
 	ID                string    `json:"id"`
 	RuleID            string    `json:"ruleId"`

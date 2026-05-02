@@ -33,6 +33,9 @@ func (r *fakeAlertRepo) CreateAlertRule(_ context.Context, rule model.AlertRule)
 	r.createdRules = append(r.createdRules, rule)
 	return rule, nil
 }
+func (r *fakeAlertRepo) UpdateAlertRule(_ context.Context, _ string, _ model.AlertRulePatch) (model.AlertRule, bool, error) {
+	return model.AlertRule{}, false, nil
+}
 func (r *fakeAlertRepo) ListAlertRules(_ context.Context) ([]model.AlertRule, error) {
 	if r.listAlertRulesErr != nil {
 		return nil, r.listAlertRulesErr

@@ -12,6 +12,7 @@ import (
 type fakeSummaryRepository struct {
 	overview model.Overview
 	err      error
+	rules    map[string]model.AlertRule
 }
 
 func (r *fakeSummaryRepository) Overview(_ context.Context) (model.Overview, error) {
@@ -22,7 +23,41 @@ func (r *fakeSummaryRepository) Overview(_ context.Context) (model.Overview, err
 }
 
 func (r *fakeSummaryRepository) CreateAlertRule(_ context.Context, rule model.AlertRule) (model.AlertRule, error) {
+	if r.rules == nil {
+		r.rules = map[string]model.AlertRule{}
+	}
+	r.rules[rule.ID] = rule
 	return rule, nil
+}
+func (r *fakeSummaryRepository) UpdateAlertRule(_ context.Context, id string, patch model.AlertRulePatch) (model.AlertRule, bool, error) {
+	if r.rules == nil {
+		return model.AlertRule{}, false, nil
+	}
+	rule, ok := r.rules[id]
+	if !ok {
+		return model.AlertRule{}, false, nil
+	}
+	if patch.Name != nil {
+		rule.Name = *patch.Name
+	}
+	if patch.Enabled != nil {
+		rule.Enabled = *patch.Enabled
+	}
+	if patch.WebhookURL != nil {
+		rule.WebhookURL = *patch.WebhookURL
+	}
+	if patch.CooldownSeconds != nil {
+		rule.CooldownSeconds = *patch.CooldownSeconds
+	}
+	if patch.TimeoutSeconds != nil {
+		rule.TimeoutSeconds = *patch.TimeoutSeconds
+	}
+	if patch.OfflineGraceSeconds != nil {
+		rule.OfflineGraceSeconds = *patch.OfflineGraceSeconds
+	}
+	rule.UpdatedAt = patch.UpdatedAt
+	r.rules[id] = rule
+	return rule, true, nil
 }
 func (r *fakeSummaryRepository) ListAlertRules(_ context.Context) ([]model.AlertRule, error) {
 	return nil, nil
@@ -96,5 +131,27 @@ func TestMonitorServiceOverviewReturnsRepositoryError(t *testing.T) {
 	_, err := svc.Overview()
 	if !errors.Is(err, expectedErr) {
 		t.Fatalf("expected error %v, got %v", expectedErr, err)
+	}
+}
+
+func TestUpdateAlertRuleUpdatesEnabled(t *testing.T) {
+	repo := &fakeSummaryRepository{
+		rules: map[string]model.AlertRule{
+			"rule-1": {
+				ID:       "rule-1",
+				Name:     "node offline",
+				RuleType: model.AlertRuleTypeNodeOffline,
+				Enabled:  true,
+			},
+		},
+	}
+	svc := NewMonitorService(repo)
+	enabled := false
+	got, err := svc.UpdateAlertRule("rule-1", UpdateAlertRuleInput{Enabled: &enabled})
+	if err != nil {
+		t.Fatalf("UpdateAlertRule returned error: %v", err)
+	}
+	if got.Enabled {
+		t.Fatalf("expected enabled false, got %+v", got)
 	}
 }

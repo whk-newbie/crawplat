@@ -38,6 +38,34 @@ func (r *fakeSummaryRepository) CreateAlertRule(_ context.Context, rule model.Al
 	r.rules = append(r.rules, rule)
 	return rule, nil
 }
+func (r *fakeSummaryRepository) UpdateAlertRule(_ context.Context, id string, patch model.AlertRulePatch) (model.AlertRule, bool, error) {
+	for i := range r.rules {
+		if r.rules[i].ID != id {
+			continue
+		}
+		if patch.Name != nil {
+			r.rules[i].Name = *patch.Name
+		}
+		if patch.Enabled != nil {
+			r.rules[i].Enabled = *patch.Enabled
+		}
+		if patch.WebhookURL != nil {
+			r.rules[i].WebhookURL = *patch.WebhookURL
+		}
+		if patch.CooldownSeconds != nil {
+			r.rules[i].CooldownSeconds = *patch.CooldownSeconds
+		}
+		if patch.TimeoutSeconds != nil {
+			r.rules[i].TimeoutSeconds = *patch.TimeoutSeconds
+		}
+		if patch.OfflineGraceSeconds != nil {
+			r.rules[i].OfflineGraceSeconds = *patch.OfflineGraceSeconds
+		}
+		r.rules[i].UpdatedAt = patch.UpdatedAt
+		return r.rules[i], true, nil
+	}
+	return model.AlertRule{}, false, nil
+}
 func (r *fakeSummaryRepository) ListAlertRules(_ context.Context) ([]model.AlertRule, error) {
 	return append([]model.AlertRule(nil), r.rules...), nil
 }
@@ -191,5 +219,16 @@ func TestAlertRulesAndEventsRoutes(t *testing.T) {
 	}
 	if !strings.Contains(listEventsResp.Body.String(), `"deliveryStatus":"sent"`) || !strings.Contains(listEventsResp.Body.String(), `"total":1`) {
 		t.Fatalf("unexpected list events payload: %s", listEventsResp.Body.String())
+	}
+
+	patchReq := httptest.NewRequest(http.MethodPatch, "/api/v1/monitor/alerts/rules/rule-1", strings.NewReader(`{"enabled":false}`))
+	patchReq.Header.Set("Content-Type", "application/json")
+	patchResp := httptest.NewRecorder()
+	router.ServeHTTP(patchResp, patchReq)
+	if patchResp.Code != http.StatusOK {
+		t.Fatalf("expected patch status 200, got %d body=%s", patchResp.Code, patchResp.Body.String())
+	}
+	if !strings.Contains(patchResp.Body.String(), `"enabled":false`) {
+		t.Fatalf("expected patched rule to be disabled, got %s", patchResp.Body.String())
 	}
 }
