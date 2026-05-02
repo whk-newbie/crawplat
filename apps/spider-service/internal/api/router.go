@@ -14,9 +14,9 @@ func NewRouter(spiderService *service.SpiderService) *gin.Engine {
 
 	router.POST("/api/v1/projects/:projectId/spiders", func(c *gin.Context) {
 		var req struct {
-			Name     string `json:"name" binding:"required"`
-			Language string `json:"language" binding:"required"`
-			Runtime  string `json:"runtime" binding:"required"`
+			Name     string   `json:"name" binding:"required"`
+			Language string   `json:"language" binding:"required"`
+			Runtime  string   `json:"runtime" binding:"required"`
 			Image    string   `json:"image"`
 			Command  []string `json:"command"`
 		}
@@ -55,6 +55,45 @@ func NewRouter(spiderService *service.SpiderService) *gin.Engine {
 			Limit:  p.Limit,
 			Offset: p.Offset,
 		})
+	})
+
+	router.POST("/api/v1/spiders/:spiderId/versions", func(c *gin.Context) {
+		var req struct {
+			Image   string   `json:"image"`
+			Command []string `json:"command"`
+		}
+		if err := c.ShouldBindJSON(&req); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
+
+		version, err := spiderService.CreateVersion(c.Param("spiderId"), req.Image, req.Command)
+		if err != nil {
+			switch err {
+			case service.ErrSpiderNotFound:
+				c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
+			case service.ErrImageRequired:
+				c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			default:
+				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			}
+			return
+		}
+		c.JSON(http.StatusCreated, version)
+	})
+
+	router.GET("/api/v1/spiders/:spiderId/versions", func(c *gin.Context) {
+		versions, err := spiderService.ListVersions(c.Param("spiderId"))
+		if err != nil {
+			switch err {
+			case service.ErrSpiderNotFound:
+				c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
+			default:
+				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			}
+			return
+		}
+		c.JSON(http.StatusOK, versions)
 	})
 
 	return router

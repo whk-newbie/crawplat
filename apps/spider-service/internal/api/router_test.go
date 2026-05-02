@@ -164,3 +164,35 @@ func TestListSpidersRespectsPaginationParams(t *testing.T) {
 		t.Fatalf("expected limit=1 offset=1, got limit=%d offset=%d", resp.Limit, resp.Offset)
 	}
 }
+
+func TestSpiderVersionRoutes(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	svc := service.NewSpiderService()
+	spider, err := svc.Create("p1", "crawler-a", "go", "docker", "crawler/go:latest", []string{"./crawler-a"})
+	if err != nil {
+		t.Fatalf("Create returned error: %v", err)
+	}
+	router := NewRouter(svc)
+
+	createVersionReq := httptest.NewRequest(http.MethodPost, "/api/v1/spiders/"+spider.ID+"/versions", strings.NewReader(`{"image":"crawler/go:v2","command":["./crawler-a","--fast"]}`))
+	createVersionReq.Header.Set("Content-Type", "application/json")
+	createVersionResp := httptest.NewRecorder()
+	router.ServeHTTP(createVersionResp, createVersionReq)
+	if createVersionResp.Code != http.StatusCreated {
+		t.Fatalf("expected status 201, got %d body=%s", createVersionResp.Code, createVersionResp.Body.String())
+	}
+	if !strings.Contains(createVersionResp.Body.String(), `"version":2`) {
+		t.Fatalf("expected created version 2, got %s", createVersionResp.Body.String())
+	}
+
+	listVersionsReq := httptest.NewRequest(http.MethodGet, "/api/v1/spiders/"+spider.ID+"/versions", nil)
+	listVersionsResp := httptest.NewRecorder()
+	router.ServeHTTP(listVersionsResp, listVersionsReq)
+	if listVersionsResp.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d body=%s", listVersionsResp.Code, listVersionsResp.Body.String())
+	}
+	if !strings.Contains(listVersionsResp.Body.String(), `"version":2`) || !strings.Contains(listVersionsResp.Body.String(), `"version":1`) {
+		t.Fatalf("expected version list with v2 and v1, got %s", listVersionsResp.Body.String())
+	}
+}

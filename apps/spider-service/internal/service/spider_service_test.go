@@ -4,16 +4,30 @@ import (
 	"context"
 	"errors"
 	"testing"
+	"time"
 
 	"crawler-platform/apps/spider-service/internal/model"
+	"github.com/google/uuid"
 )
 
 type fakeSpiderRepo struct {
-	spiders []model.Spider
+	spiders  []model.Spider
+	versions map[string][]model.SpiderVersion
 }
 
 func (r *fakeSpiderRepo) Create(_ context.Context, spider model.Spider) error {
 	r.spiders = append(r.spiders, spider)
+	if r.versions == nil {
+		r.versions = map[string][]model.SpiderVersion{}
+	}
+	r.versions[spider.ID] = []model.SpiderVersion{{
+		ID:        uuid.NewString(),
+		SpiderID:  spider.ID,
+		Version:   1,
+		Image:     spider.Image,
+		Command:   append([]string(nil), spider.Command...),
+		CreatedAt: time.Now().UTC(),
+	}}
 	return nil
 }
 
@@ -51,6 +65,42 @@ func (r *fakeSpiderRepo) Get(_ context.Context, id string) (model.Spider, bool, 
 		}
 	}
 	return model.Spider{}, false, nil
+}
+
+func (r *fakeSpiderRepo) CreateVersion(_ context.Context, spiderID, image string, command []string) (model.SpiderVersion, error) {
+	for i := range r.spiders {
+		if r.spiders[i].ID != spiderID {
+			continue
+		}
+		existing := r.versions[spiderID]
+		nextVersion := 1
+		if len(existing) > 0 {
+			nextVersion = existing[0].Version + 1
+		}
+		created := model.SpiderVersion{
+			ID:        uuid.NewString(),
+			SpiderID:  spiderID,
+			Version:   nextVersion,
+			Image:     image,
+			Command:   append([]string(nil), command...),
+			CreatedAt: time.Now().UTC(),
+		}
+		r.versions[spiderID] = append([]model.SpiderVersion{created}, existing...)
+		r.spiders[i].Image = image
+		r.spiders[i].Command = append([]string(nil), command...)
+		return created, nil
+	}
+	return model.SpiderVersion{}, ErrSpiderNotFound
+}
+
+func (r *fakeSpiderRepo) ListVersions(_ context.Context, spiderID string) ([]model.SpiderVersion, error) {
+	versions := r.versions[spiderID]
+	out := make([]model.SpiderVersion, 0, len(versions))
+	for _, version := range versions {
+		version.Command = append([]string(nil), version.Command...)
+		out = append(out, version)
+	}
+	return out, nil
 }
 
 func TestCreateSpiderRejectsUnknownLanguage(t *testing.T) {
@@ -115,5 +165,52 @@ func TestListFiltersByProjectID(t *testing.T) {
 	listedP2, totalP2, _ := svc.List("p2", 20, 0)
 	if totalP2 != 1 || len(listedP2) != 1 || listedP2[0].ID != spiderB.ID {
 		t.Fatalf("expected p2 spider %s, got %+v", spiderB.ID, listedP2)
+	}
+}
+
+func TestCreateSpiderSeedsVersionAndListVersions(t *testing.T) {
+	svc := NewSpiderService(&fakeSpiderRepo{})
+
+	spider, err := svc.Create("p1", "crawler-a", "go", "docker", "crawler/go:latest", []string{"./crawler-a"})
+	if err != nil {
+		t.Fatalf("Create returned error: %v", err)
+	}
+
+	versions, err := svc.ListVersions(spider.ID)
+	if err != nil {
+		t.Fatalf("ListVersions returned error: %v", err)
+	}
+	if len(versions) != 1 {
+		t.Fatalf("expected 1 version, got %d", len(versions))
+	}
+	if versions[0].Version != 1 || versions[0].Image != "crawler/go:latest" {
+		t.Fatalf("unexpected initial version: %+v", versions[0])
+	}
+}
+
+func TestCreateVersionAppendsSequentialVersion(t *testing.T) {
+	svc := NewSpiderService(&fakeSpiderRepo{})
+	spider, err := svc.Create("p1", "crawler-a", "go", "docker", "crawler/go:latest", []string{"./crawler-a"})
+	if err != nil {
+		t.Fatalf("Create returned error: %v", err)
+	}
+
+	version, err := svc.CreateVersion(spider.ID, "crawler/go:v2", []string{"./crawler-a", "--fast"})
+	if err != nil {
+		t.Fatalf("CreateVersion returned error: %v", err)
+	}
+	if version.Version != 2 || version.Image != "crawler/go:v2" {
+		t.Fatalf("unexpected created version: %+v", version)
+	}
+
+	versions, err := svc.ListVersions(spider.ID)
+	if err != nil {
+		t.Fatalf("ListVersions returned error: %v", err)
+	}
+	if len(versions) != 2 {
+		t.Fatalf("expected 2 versions, got %d", len(versions))
+	}
+	if versions[0].Version != 2 || versions[1].Version != 1 {
+		t.Fatalf("expected desc order by version, got %+v", versions)
 	}
 }
