@@ -73,6 +73,13 @@
       width="720px"
     >
       <el-form :inline="true" :model="versionForm" @submit.prevent="submitVersion">
+        <el-form-item label="Registry Auth Ref">
+          <el-input
+            v-model="versionForm.registryAuthRef"
+            placeholder="optional credential ref (e.g. ghcr-prod)"
+            style="width: 260px"
+          />
+        </el-form-item>
         <el-form-item label="Image">
           <el-input v-model="versionForm.image" placeholder="crawler/go:v2" style="width: 280px" />
         </el-form-item>
@@ -86,6 +93,9 @@
 
       <el-table v-loading="versionsLoading" :data="versions" size="small">
         <el-table-column prop="version" label="Version" width="100" />
+        <el-table-column label="Registry Auth Ref" width="180">
+          <template #default="{ row }">{{ row.registryAuthRef || '-' }}</template>
+        </el-table-column>
         <el-table-column prop="image" label="Image" min-width="220" />
         <el-table-column label="Command" min-width="220">
           <template #default="{ row }">{{ Array.isArray(row.command) ? row.command.join(' ') : '' }}</template>
@@ -130,6 +140,7 @@ const versionsLoading = ref(false)
 const versionsSubmitting = ref(false)
 const selectedSpider = ref<Spider | null>(null)
 const versionForm = reactive({
+  registryAuthRef: '',
   image: '',
   command: '',
 })
@@ -179,6 +190,7 @@ async function loadSpiders() {
 
 async function openVersions(spider: Spider) {
   selectedSpider.value = spider
+  versionForm.registryAuthRef = ''
   versionForm.image = spider.image ?? ''
   versionForm.command = Array.isArray(spider.command) ? spider.command.join(' ') : ''
   versionsDialogVisible.value = true
@@ -207,6 +219,7 @@ async function submitVersion() {
   try {
     await createSpiderVersion({
       spiderId: selectedSpider.value.id,
+      registryAuthRef: versionForm.registryAuthRef.trim() || undefined,
       image: versionForm.image.trim(),
       command: parseCommand(versionForm.command),
     })

@@ -14,6 +14,7 @@ export type SpiderVersion = {
   id: string
   spiderId: string
   version: number
+  registryAuthRef?: string
   image: string
   command: string[]
   createdAt: string
@@ -51,7 +52,7 @@ export function listSpiderVersions(spiderId: string) {
   return apiFetch<SpiderVersion[]>(`/spiders/${encodeURIComponent(spiderId)}/versions`)
 }
 
-export function createSpiderVersion(input: { spiderId: string; image: string; command: string[] }) {
+export function createSpiderVersion(input: { spiderId: string; registryAuthRef?: string; image: string; command: string[] }) {
   const { spiderId, ...body } = input
   return apiFetch<SpiderVersion>(`/spiders/${encodeURIComponent(spiderId)}/versions`, {
     method: 'POST',
