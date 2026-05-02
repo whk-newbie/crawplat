@@ -10,6 +10,15 @@ export type Spider = {
   command?: string[]
 }
 
+export type SpiderVersion = {
+  id: string
+  spiderId: string
+  version: number
+  image: string
+  command: string[]
+  createdAt: string
+}
+
 export type CreateSpiderInput = {
   projectId: string
   name: string
@@ -36,4 +45,16 @@ export function createSpider(input: CreateSpiderInput) {
 
 export function listSpiders(projectId: string) {
   return apiFetch<PaginatedSpiders>(`/projects/${projectId}/spiders`)
+}
+
+export function listSpiderVersions(spiderId: string) {
+  return apiFetch<SpiderVersion[]>(`/spiders/${encodeURIComponent(spiderId)}/versions`)
+}
+
+export function createSpiderVersion(input: { spiderId: string; image: string; command: string[] }) {
+  const { spiderId, ...body } = input
+  return apiFetch<SpiderVersion>(`/spiders/${encodeURIComponent(spiderId)}/versions`, {
+    method: 'POST',
+    body: JSON.stringify(body),
+  })
 }

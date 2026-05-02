@@ -29,6 +29,11 @@
             <el-tag type="info" size="small">{{ row.image }}</el-tag>
           </template>
         </el-table-column>
+        <el-table-column label="Actions" width="140">
+          <template #default="{ row }">
+            <el-button size="small" @click="openVersions(row)">Versions</el-button>
+          </template>
+        </el-table-column>
         <template #empty>
           <el-empty v-if="!loading" description="No spiders loaded yet" />
         </template>
@@ -61,13 +66,50 @@
         <el-button type="primary" :loading="submitting" @click="submit">Create</el-button>
       </template>
     </el-dialog>
+
+    <el-dialog
+      v-model="versionsDialogVisible"
+      :title="selectedSpider ? `Spider Versions · ${selectedSpider.name}` : 'Spider Versions'"
+      width="720px"
+    >
+      <el-form :inline="true" :model="versionForm" @submit.prevent="submitVersion">
+        <el-form-item label="Image">
+          <el-input v-model="versionForm.image" placeholder="crawler/go:v2" style="width: 280px" />
+        </el-form-item>
+        <el-form-item label="Command">
+          <el-input v-model="versionForm.command" placeholder="./crawler --fast" style="width: 220px" />
+        </el-form-item>
+        <el-form-item>
+          <el-button type="primary" :loading="versionsSubmitting" @click="submitVersion">Create Version</el-button>
+        </el-form-item>
+      </el-form>
+
+      <el-table v-loading="versionsLoading" :data="versions" size="small">
+        <el-table-column prop="version" label="Version" width="100" />
+        <el-table-column prop="image" label="Image" min-width="220" />
+        <el-table-column label="Command" min-width="220">
+          <template #default="{ row }">{{ Array.isArray(row.command) ? row.command.join(' ') : '' }}</template>
+        </el-table-column>
+        <el-table-column prop="createdAt" label="Created At" width="180" />
+      </el-table>
+      <template #footer>
+        <el-button @click="versionsDialogVisible = false">Close</el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
 <script setup lang="ts">
 import { reactive, ref } from 'vue'
 import { ElMessage } from 'element-plus'
-import { createSpider, listSpiders, type Spider } from '../api/spiders'
+import {
+  createSpider,
+  createSpiderVersion,
+  listSpiderVersions,
+  listSpiders,
+  type Spider,
+  type SpiderVersion,
+} from '../api/spiders'
 
 const form = reactive({
   projectId: 'project-1',
@@ -79,9 +121,18 @@ const form = reactive({
 
 const projectFilter = ref('project-1')
 const spiders = ref<Spider[]>([])
+const versions = ref<SpiderVersion[]>([])
 const createDialogVisible = ref(false)
+const versionsDialogVisible = ref(false)
 const submitting = ref(false)
 const loading = ref(false)
+const versionsLoading = ref(false)
+const versionsSubmitting = ref(false)
+const selectedSpider = ref<Spider | null>(null)
+const versionForm = reactive({
+  image: '',
+  command: '',
+})
 
 function parseCommand(input: string) {
   return input
@@ -123,6 +174,49 @@ async function loadSpiders() {
     ElMessage.error(err instanceof Error ? err.message : 'failed to load spiders')
   } finally {
     loading.value = false
+  }
+}
+
+async function openVersions(spider: Spider) {
+  selectedSpider.value = spider
+  versionForm.image = spider.image ?? ''
+  versionForm.command = Array.isArray(spider.command) ? spider.command.join(' ') : ''
+  versionsDialogVisible.value = true
+  await loadVersions()
+}
+
+async function loadVersions() {
+  if (!selectedSpider.value) {
+    return
+  }
+  versionsLoading.value = true
+  try {
+    versions.value = await listSpiderVersions(selectedSpider.value.id)
+  } catch (err) {
+    ElMessage.error(err instanceof Error ? err.message : 'failed to load spider versions')
+  } finally {
+    versionsLoading.value = false
+  }
+}
+
+async function submitVersion() {
+  if (!selectedSpider.value) {
+    return
+  }
+  versionsSubmitting.value = true
+  try {
+    await createSpiderVersion({
+      spiderId: selectedSpider.value.id,
+      image: versionForm.image.trim(),
+      command: parseCommand(versionForm.command),
+    })
+    ElMessage.success('Spider version created')
+    await loadVersions()
+    await loadSpiders()
+  } catch (err) {
+    ElMessage.error(err instanceof Error ? err.message : 'failed to create spider version')
+  } finally {
+    versionsSubmitting.value = false
   }
 }
 </script>
