@@ -20,6 +20,11 @@
           {{ row.spiderId }}<span v-if="row.spiderVersion"> · v{{ row.spiderVersion }}</span>
         </template>
       </el-table-column>
+      <el-table-column label="Registry Auth Ref" width="180">
+        <template #default="{ row }">
+          {{ row.registryAuthRef || '-' }}
+        </template>
+      </el-table-column>
       <el-table-column prop="cronExpr" label="Cron">
         <template #default="{ row }">
           <el-tag type="info" size="small">{{ row.cronExpr }}</el-tag>

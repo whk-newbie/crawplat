@@ -28,6 +28,7 @@ describe('schedules view', () => {
             id: 'schedule-1',
             projectId: 'project-1',
             spiderId: 'spider-1',
+            registryAuthRef: 'ghcr-prod',
             name: 'nightly-go-echo',
             cronExpr: '*/5 * * * *',
             enabled: true,
@@ -54,6 +55,7 @@ describe('schedules view', () => {
     expect(fetchMock).toHaveBeenCalledWith('/api/v1/schedules', expect.any(Object))
     expect(container.textContent).toContain('nightly-go-echo')
     expect(container.textContent).toContain('*/5 * * * *')
+    expect(container.textContent).toContain('ghcr-prod')
     expect(container.textContent).toContain('enabled')
   })
 
