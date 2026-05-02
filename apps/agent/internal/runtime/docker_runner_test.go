@@ -39,7 +39,7 @@ func TestDockerRunnerEmitsOutputLines(t *testing.T) {
 		gotName = name
 		gotArgs = append([]string(nil), args...)
 		return &fakeCommand{output: []byte("line one\nline two\n")}
-	})
+	}, nil)
 
 	var logs []string
 	err := runner.Run(context.Background(), poller.ClaimedExecution{
@@ -69,7 +69,7 @@ func TestDockerRunnerEmitsOutputLines(t *testing.T) {
 func TestDockerRunnerReturnsCommandFailure(t *testing.T) {
 	runner := NewDockerRunner(func(_ context.Context, _ string, _ ...string) command {
 		return &fakeCommand{output: []byte("boom\n"), err: errors.New("exit status 1")}
-	})
+	}, nil)
 
 	var logs []string
 	err := runner.Run(context.Background(), poller.ClaimedExecution{
@@ -83,6 +83,54 @@ func TestDockerRunnerReturnsCommandFailure(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	if !reflect.DeepEqual(logs, []string{"boom"}) {
+		t.Fatalf("unexpected logs: %#v", logs)
+	}
+}
+
+func TestDockerRunnerPerformsLoginAndPullWhenCredentialExists(t *testing.T) {
+	var invocations [][]string
+	runner := NewDockerRunner(func(_ context.Context, name string, args ...string) command {
+		invocations = append(invocations, append([]string{name}, args...))
+		switch args[0] {
+		case "login":
+			return &fakeCommand{output: []byte("login ok\n")}
+		case "pull":
+			return &fakeCommand{output: []byte("pull ok\n")}
+		default:
+			return &fakeCommand{output: []byte("run ok\n")}
+		}
+	}, map[string]RegistryCredential{
+		"ghcr.io": {
+			Username: "user",
+			Password: "pass",
+		},
+	})
+
+	var logs []string
+	err := runner.Run(context.Background(), poller.ClaimedExecution{
+		ID:      "exec-1",
+		Image:   "ghcr.io/acme/crawler:latest",
+		Command: []string{"./crawler"},
+	}, func(line string) {
+		logs = append(logs, line)
+	})
+	if err != nil {
+		t.Fatalf("Run returned error: %v", err)
+	}
+
+	if len(invocations) != 3 {
+		t.Fatalf("expected 3 docker invocations, got %#v", invocations)
+	}
+	if !reflect.DeepEqual(invocations[0], []string{"docker", "login", "ghcr.io", "-u", "user", "-p", "pass"}) {
+		t.Fatalf("unexpected login invocation: %#v", invocations[0])
+	}
+	if !reflect.DeepEqual(invocations[1], []string{"docker", "pull", "ghcr.io/acme/crawler:latest"}) {
+		t.Fatalf("unexpected pull invocation: %#v", invocations[1])
+	}
+	if !reflect.DeepEqual(invocations[2], []string{"docker", "run", "--rm", "ghcr.io/acme/crawler:latest", "./crawler"}) {
+		t.Fatalf("unexpected run invocation: %#v", invocations[2])
+	}
+	if !reflect.DeepEqual(logs, []string{"login ok", "pull ok", "run ok"}) {
 		t.Fatalf("unexpected logs: %#v", logs)
 	}
 }

@@ -33,6 +33,9 @@
   - `POST /api/v1/spiders/:spiderId/versions`
   - `GET /api/v1/spiders/:spiderId/versions`
   - `SpidersView` supports listing versions and creating a new version.
+- Private image pull integration is now available in agent runtime:
+  - set `IMAGE_REGISTRY_AUTH_MAP` as JSON map `{ "<registry-host>": { "username": "...", "password": "...", "server": "..." } }`
+  - when execution image host matches configured registry, agent runs `docker login` + `docker pull` before `docker run`.
 
 ## Containerized Dev Workflow
 

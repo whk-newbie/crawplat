@@ -45,6 +45,9 @@ func TestLoadConfigUsesDefaults(t *testing.T) {
 	if cfg.pollInterval != 5*time.Second {
 		t.Fatalf("unexpected poll interval: %v", cfg.pollInterval)
 	}
+	if len(cfg.registryCreds) != 0 {
+		t.Fatalf("expected no registry credentials by default, got %+v", cfg.registryCreds)
+	}
 }
 
 func TestLoadConfigReadsEnvironment(t *testing.T) {
@@ -53,6 +56,7 @@ func TestLoadConfigReadsEnvironment(t *testing.T) {
 	t.Setenv("NODE_NAME", "mvp-node")
 	t.Setenv("INTERNAL_API_TOKEN", "secret")
 	t.Setenv("POLL_INTERVAL", "2s")
+	t.Setenv("IMAGE_REGISTRY_AUTH_MAP", `{"ghcr.io":{"username":"user","password":"pass"}}`)
 
 	cfg := loadConfig()
 
@@ -70,5 +74,9 @@ func TestLoadConfigReadsEnvironment(t *testing.T) {
 	}
 	if cfg.pollInterval != 2*time.Second {
 		t.Fatalf("unexpected poll interval: %v", cfg.pollInterval)
+	}
+	cred, ok := cfg.registryCreds["ghcr.io"]
+	if !ok || cred.Username != "user" || cred.Password != "pass" {
+		t.Fatalf("unexpected registry credentials: %+v", cfg.registryCreds)
 	}
 }

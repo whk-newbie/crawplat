@@ -2,6 +2,7 @@ package runtime
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os/exec"
 	"strconv"
@@ -17,17 +18,24 @@ type command interface {
 
 type commandFactory func(ctx context.Context, name string, args ...string) command
 
-type DockerRunner struct {
-	newCommand commandFactory
+type RegistryCredential struct {
+	Server   string `json:"server"`
+	Username string `json:"username"`
+	Password string `json:"password"`
 }
 
-func NewDockerRunner(factory commandFactory) *DockerRunner {
+type DockerRunner struct {
+	newCommand commandFactory
+	creds      map[string]RegistryCredential
+}
+
+func NewDockerRunner(factory commandFactory, creds map[string]RegistryCredential) *DockerRunner {
 	if factory == nil {
 		factory = func(ctx context.Context, name string, args ...string) command {
 			return exec.CommandContext(ctx, name, args...)
 		}
 	}
-	return &DockerRunner{newCommand: factory}
+	return &DockerRunner{newCommand: factory, creds: creds}
 }
 
 func (r *DockerRunner) Run(ctx context.Context, exec poller.ClaimedExecution, onLog func(string)) error {
@@ -38,15 +46,20 @@ func (r *DockerRunner) Run(ctx context.Context, exec poller.ClaimedExecution, on
 	}
 	defer cancel()
 
-	cmd := buildDockerRunCommand(exec)
-	output, err := r.newCommand(runCtx, cmd[0], cmd[1:]...).CombinedOutput()
-	for _, line := range splitOutputLines(string(output)) {
-		onLog(line)
+	if cred, ok := r.findCredential(exec.Image); ok {
+		login := buildDockerLoginCommand(cred)
+		if err := r.runCommand(runCtx, login, onLog); err != nil {
+			return err
+		}
+		pull := buildDockerPullCommand(exec.Image)
+		if err := r.runCommand(runCtx, pull, onLog); err != nil {
+			return err
+		}
 	}
-	if runCtx.Err() != nil {
-		return runCtx.Err()
+	if err := r.runCommand(runCtx, buildDockerRunCommand(exec), onLog); err != nil {
+		return err
 	}
-	return err
+	return nil
 }
 
 func buildDockerRunCommand(exec poller.ClaimedExecution) []string {
@@ -61,6 +74,14 @@ func buildDockerRunCommand(exec poller.ClaimedExecution) []string {
 	return append(args, exec.Command...)
 }
 
+func buildDockerPullCommand(image string) []string {
+	return []string{"docker", "pull", image}
+}
+
+func buildDockerLoginCommand(cred RegistryCredential) []string {
+	return []string{"docker", "login", cred.Server, "-u", cred.Username, "-p", cred.Password}
+}
+
 func splitOutputLines(output string) []string {
 	var lines []string
 	for _, line := range strings.Split(output, "\n") {
@@ -71,4 +92,50 @@ func splitOutputLines(output string) []string {
 		lines = append(lines, line)
 	}
 	return lines
+}
+
+func (r *DockerRunner) runCommand(ctx context.Context, cmd []string, onLog func(string)) error {
+	if len(cmd) == 0 {
+		return errors.New("empty command")
+	}
+	output, err := r.newCommand(ctx, cmd[0], cmd[1:]...).CombinedOutput()
+	for _, line := range splitOutputLines(string(output)) {
+		onLog(line)
+	}
+	if ctx.Err() != nil {
+		return ctx.Err()
+	}
+	return err
+}
+
+func (r *DockerRunner) findCredential(image string) (RegistryCredential, bool) {
+	if len(r.creds) == 0 {
+		return RegistryCredential{}, false
+	}
+	host := registryHostFromImage(image)
+	cred, ok := r.creds[host]
+	if ok {
+		if strings.TrimSpace(cred.Server) == "" {
+			cred.Server = host
+		}
+		return cred, true
+	}
+	return RegistryCredential{}, false
+}
+
+func registryHostFromImage(image string) string {
+	trimmed := strings.TrimSpace(image)
+	if trimmed == "" {
+		return "docker.io"
+	}
+	first := trimmed
+	if slash := strings.IndexByte(trimmed, '/'); slash >= 0 {
+		first = trimmed[:slash]
+	} else {
+		return "docker.io"
+	}
+	if strings.Contains(first, ".") || strings.Contains(first, ":") || first == "localhost" {
+		return first
+	}
+	return "docker.io"
 }
