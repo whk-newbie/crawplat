@@ -158,4 +158,112 @@ describe('schedules view', () => {
       }),
     )
   })
+
+  it('loads project registry auth refs and uses default value', async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({
+          items: [],
+          total: 0,
+          limit: 20,
+          offset: 0,
+        }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ([
+          {
+            id: 'v2',
+            spiderId: 'spider-1',
+            version: 2,
+            image: 'crawler/go:v2',
+            command: ['./crawler', '--v2'],
+            createdAt: '2026-05-01T00:00:00Z',
+          },
+        ]),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ['harbor-ci', 'ghcr-prod'],
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 201,
+        json: async () => ({
+          id: 'schedule-3',
+          projectId: 'project-1',
+          spiderId: 'spider-1',
+          spiderVersion: 2,
+          registryAuthRef: 'harbor-ci',
+          name: 'nightly-with-ref',
+          cronExpr: '*/10 * * * *',
+          enabled: true,
+          image: 'crawler/go:v2',
+          command: ['./crawler', '--v2'],
+          retryLimit: 1,
+          retryDelaySeconds: 20,
+        }),
+      })
+
+    vi.stubGlobal('fetch', fetchMock)
+
+    const container = document.createElement('div')
+    document.body.appendChild(container)
+
+    createApp(SchedulesView).use(ElementPlus).mount(container)
+    await flushPromises()
+
+    const createButton = [...container.querySelectorAll('button')].find((button) => button.textContent?.includes('Create Schedule'))
+    ;(createButton as HTMLButtonElement).click()
+    await flushPromises()
+
+    const spiderInput = document.querySelector('input[name="spiderId"]') as HTMLInputElement
+    const nameInput = document.querySelector('input[name="name"]') as HTMLInputElement
+    const cronInput = document.querySelector('input[name="cronExpr"]') as HTMLInputElement
+    spiderInput.value = 'spider-1'
+    spiderInput.dispatchEvent(new Event('input'))
+    nameInput.value = 'nightly-with-ref'
+    nameInput.dispatchEvent(new Event('input'))
+    cronInput.value = '*/10 * * * *'
+    cronInput.dispatchEvent(new Event('input'))
+
+    const loadVersionsButton = [...document.querySelectorAll('button')].find((button) => button.textContent?.includes('Load Spider Versions'))
+    ;(loadVersionsButton as HTMLButtonElement).click()
+    await flushPromises()
+
+    const loadRefsButton = [...document.querySelectorAll('button')].find((button) => button.textContent?.includes('Load Registry Refs'))
+    ;(loadRefsButton as HTMLButtonElement).click()
+    await flushPromises()
+
+    const footerButtons = [...document.querySelectorAll('.el-dialog__footer button')]
+    const confirmButton = footerButtons.find((button) => button.textContent?.includes('Create'))
+    ;(confirmButton as HTMLButtonElement).click()
+    await flushPromises()
+
+    expect(fetchMock).toHaveBeenNthCalledWith(3, '/api/v1/projects/project-1/registry-auth-refs', expect.any(Object))
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      4,
+      '/api/v1/schedules',
+      expect.objectContaining({
+        method: 'POST',
+        body: JSON.stringify({
+          projectId: 'project-1',
+          spiderId: 'spider-1',
+          spiderVersion: 2,
+          registryAuthRef: 'harbor-ci',
+          name: 'nightly-with-ref',
+          cronExpr: '*/10 * * * *',
+          enabled: true,
+          image: 'crawler/go:v2',
+          command: ['./crawler', '--v2'],
+          retryLimit: 0,
+          retryDelaySeconds: 0,
+        }),
+      }),
+    )
+  })
 })

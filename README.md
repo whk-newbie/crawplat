@@ -39,6 +39,7 @@
   - when execution image host matches configured registry, agent runs `docker login` + `docker pull` before `docker run`.
   - execution/schedule APIs now support optional `registryAuthRef` to select a named credential directly.
   - execution creation now auto-inherits `registryAuthRef` from resolved spider version when request-level `registryAuthRef` is empty.
+  - spider-service now exposes `GET /api/v1/projects/:projectId/registry-auth-refs` for project-scoped saved refs; web forms can load these refs to reduce manual typing.
 
 ## Containerized Dev Workflow
 

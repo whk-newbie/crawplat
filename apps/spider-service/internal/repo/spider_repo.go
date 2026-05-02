@@ -191,3 +191,30 @@ func (r *PostgresRepository) ListVersions(ctx context.Context, spiderID string) 
 	}
 	return versions, nil
 }
+
+func (r *PostgresRepository) ListRegistryAuthRefsByProject(ctx context.Context, projectID string) ([]string, error) {
+	rows, err := r.db.QueryContext(ctx, `
+		SELECT DISTINCT sv.registry_auth_ref
+		FROM spider_versions sv
+		INNER JOIN spiders s ON s.id = sv.spider_id
+		WHERE s.project_id = $1 AND sv.registry_auth_ref <> ''
+		ORDER BY sv.registry_auth_ref ASC
+	`, projectID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var refs []string
+	for rows.Next() {
+		var ref string
+		if err := rows.Scan(&ref); err != nil {
+			return nil, err
+		}
+		refs = append(refs, ref)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return refs, nil
+}

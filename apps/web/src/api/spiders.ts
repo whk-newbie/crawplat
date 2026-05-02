@@ -48,6 +48,10 @@ export function listSpiders(projectId: string) {
   return apiFetch<PaginatedSpiders>(`/projects/${projectId}/spiders`)
 }
 
+export function listRegistryAuthRefs(projectId: string) {
+  return apiFetch<string[]>(`/projects/${encodeURIComponent(projectId)}/registry-auth-refs`)
+}
+
 export function listSpiderVersions(spiderId: string) {
   return apiFetch<SpiderVersion[]>(`/spiders/${encodeURIComponent(spiderId)}/versions`)
 }

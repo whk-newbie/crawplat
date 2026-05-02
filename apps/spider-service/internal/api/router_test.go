@@ -202,3 +202,34 @@ func TestSpiderVersionRoutes(t *testing.T) {
 		t.Fatalf("expected version list to include registryAuthRef, got %s", listVersionsResp.Body.String())
 	}
 }
+
+func TestListRegistryAuthRefsRoute(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	svc := service.NewSpiderService()
+	spiderA, err := svc.Create("p1", "crawler-a", "go", "docker", "crawler/go-a:latest", []string{"./crawler-a"})
+	if err != nil {
+		t.Fatalf("Create returned error: %v", err)
+	}
+	spiderB, err := svc.Create("p1", "crawler-b", "go", "docker", "crawler/go-b:latest", []string{"./crawler-b"})
+	if err != nil {
+		t.Fatalf("Create returned error: %v", err)
+	}
+	if _, err := svc.CreateVersion(spiderA.ID, "ghcr-prod", "crawler/go-a:v2", []string{"./crawler-a"}); err != nil {
+		t.Fatalf("CreateVersion returned error: %v", err)
+	}
+	if _, err := svc.CreateVersion(spiderB.ID, "harbor-ci", "crawler/go-b:v2", []string{"./crawler-b"}); err != nil {
+		t.Fatalf("CreateVersion returned error: %v", err)
+	}
+	router := NewRouter(svc)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/projects/p1/registry-auth-refs", nil)
+	resp := httptest.NewRecorder()
+	router.ServeHTTP(resp, req)
+	if resp.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d body=%s", resp.Code, resp.Body.String())
+	}
+	if !strings.Contains(resp.Body.String(), "ghcr-prod") || !strings.Contains(resp.Body.String(), "harbor-ci") {
+		t.Fatalf("expected refs payload, got %s", resp.Body.String())
+	}
+}

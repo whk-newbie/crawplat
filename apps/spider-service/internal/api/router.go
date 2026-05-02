@@ -57,6 +57,15 @@ func NewRouter(spiderService *service.SpiderService) *gin.Engine {
 		})
 	})
 
+	router.GET("/api/v1/projects/:projectId/registry-auth-refs", func(c *gin.Context) {
+		refs, err := spiderService.ListRegistryAuthRefsByProject(c.Param("projectId"))
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+		c.JSON(http.StatusOK, refs)
+	})
+
 	router.POST("/api/v1/spiders/:spiderId/versions", func(c *gin.Context) {
 		var req struct {
 			RegistryAuthRef string   `json:"registryAuthRef"`

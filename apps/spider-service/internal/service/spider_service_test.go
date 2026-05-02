@@ -104,6 +104,27 @@ func (r *fakeSpiderRepo) ListVersions(_ context.Context, spiderID string) ([]mod
 	return out, nil
 }
 
+func (r *fakeSpiderRepo) ListRegistryAuthRefsByProject(_ context.Context, projectID string) ([]string, error) {
+	refSet := map[string]struct{}{}
+	for _, spider := range r.spiders {
+		if spider.ProjectID != projectID {
+			continue
+		}
+		for _, version := range r.versions[spider.ID] {
+			if version.RegistryAuthRef == "" {
+				continue
+			}
+			refSet[version.RegistryAuthRef] = struct{}{}
+		}
+	}
+
+	var refs []string
+	for ref := range refSet {
+		refs = append(refs, ref)
+	}
+	return refs, nil
+}
+
 func TestCreateSpiderRejectsUnknownLanguage(t *testing.T) {
 	svc := NewSpiderService(&fakeSpiderRepo{})
 	_, err := svc.Create("p1", "bad", "ruby", "docker", "crawler/go:latest", []string{"./crawler"})
@@ -219,5 +240,33 @@ func TestCreateVersionAppendsSequentialVersion(t *testing.T) {
 	}
 	if versions[0].RegistryAuthRef != "ghcr-prod" {
 		t.Fatalf("expected latest version to carry registry auth ref, got %+v", versions[0])
+	}
+}
+
+func TestListRegistryAuthRefsByProjectReturnsUniqueValues(t *testing.T) {
+	svc := NewSpiderService(&fakeSpiderRepo{})
+	spiderP1A, _ := svc.Create("p1", "crawler-a", "go", "docker", "crawler/go-a:latest", []string{"./crawler-a"})
+	spiderP1B, _ := svc.Create("p1", "crawler-b", "go", "docker", "crawler/go-b:latest", []string{"./crawler-b"})
+	spiderP2, _ := svc.Create("p2", "crawler-c", "go", "docker", "crawler/go-c:latest", []string{"./crawler-c"})
+
+	if _, err := svc.CreateVersion(spiderP1A.ID, "ghcr-prod", "crawler/go-a:v2", []string{"./crawler-a"}); err != nil {
+		t.Fatalf("CreateVersion returned error: %v", err)
+	}
+	if _, err := svc.CreateVersion(spiderP1B.ID, "harbor-ci", "crawler/go-b:v2", []string{"./crawler-b"}); err != nil {
+		t.Fatalf("CreateVersion returned error: %v", err)
+	}
+	if _, err := svc.CreateVersion(spiderP1A.ID, "ghcr-prod", "crawler/go-a:v3", []string{"./crawler-a"}); err != nil {
+		t.Fatalf("CreateVersion returned error: %v", err)
+	}
+	if _, err := svc.CreateVersion(spiderP2.ID, "dockerhub", "crawler/go-c:v2", []string{"./crawler-c"}); err != nil {
+		t.Fatalf("CreateVersion returned error: %v", err)
+	}
+
+	refs, err := svc.ListRegistryAuthRefsByProject("p1")
+	if err != nil {
+		t.Fatalf("ListRegistryAuthRefsByProject returned error: %v", err)
+	}
+	if len(refs) != 2 {
+		t.Fatalf("expected 2 unique refs, got %+v", refs)
 	}
 }

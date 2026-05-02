@@ -40,7 +40,10 @@
           </el-select>
         </el-form-item>
         <el-form-item label="Registry Auth Ref">
-          <el-input v-model="form.registryAuthRef" placeholder="optional credential ref (e.g. ghcr-prod)" />
+          <div style="display: flex; gap: 8px; width: 100%">
+            <el-input v-model="form.registryAuthRef" placeholder="optional credential ref (e.g. ghcr-prod)" />
+            <el-button :loading="loadingRegistryAuthRefs" @click="loadRegistryAuthRefs">Load Registry Refs</el-button>
+          </div>
         </el-form-item>
         <el-form-item label="Image" required>
           <el-input v-model="form.image" placeholder="crawler/go-echo:latest" />
@@ -62,7 +65,7 @@ import { reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { createExecution } from '../api/executions'
-import { listSpiderVersions, type SpiderVersion } from '../api/spiders'
+import { listRegistryAuthRefs, listSpiderVersions, type SpiderVersion } from '../api/spiders'
 
 const router = useRouter()
 
@@ -79,6 +82,7 @@ const lookupId = ref('')
 const createDialogVisible = ref(false)
 const submitting = ref(false)
 const loadingVersions = ref(false)
+const loadingRegistryAuthRefs = ref(false)
 const spiderVersions = ref<SpiderVersion[]>([])
 
 function parseCommand(input: string) {
@@ -140,6 +144,25 @@ async function loadSpiderVersions() {
     ElMessage.error(err instanceof Error ? err.message : 'failed to load spider versions')
   } finally {
     loadingVersions.value = false
+  }
+}
+
+async function loadRegistryAuthRefs() {
+  const projectID = form.projectId.trim()
+  if (!projectID) {
+    ElMessage.warning('Project ID is required')
+    return
+  }
+  loadingRegistryAuthRefs.value = true
+  try {
+    const refs = await listRegistryAuthRefs(projectID)
+    if (!form.registryAuthRef.trim() && refs.length > 0) {
+      form.registryAuthRef = refs[0]
+    }
+  } catch (err) {
+    ElMessage.error(err instanceof Error ? err.message : 'failed to load registry auth refs')
+  } finally {
+    loadingRegistryAuthRefs.value = false
   }
 }
 

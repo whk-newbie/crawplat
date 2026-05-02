@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"errors"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -29,6 +30,7 @@ type Repository interface {
 	Get(ctx context.Context, id string) (model.Spider, bool, error)
 	CreateVersion(ctx context.Context, spiderID, registryAuthRef, image string, command []string) (model.SpiderVersion, error)
 	ListVersions(ctx context.Context, spiderID string) ([]model.SpiderVersion, error)
+	ListRegistryAuthRefsByProject(ctx context.Context, projectID string) ([]string, error)
 }
 
 type memoryRepository struct {
@@ -147,6 +149,31 @@ func (r *memoryRepository) ListVersions(_ context.Context, spiderID string) ([]m
 	return out, nil
 }
 
+func (r *memoryRepository) ListRegistryAuthRefsByProject(_ context.Context, projectID string) ([]string, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	refs := map[string]struct{}{}
+	for _, spider := range r.spiders {
+		if spider.ProjectID != projectID {
+			continue
+		}
+		for _, version := range r.versions[spider.ID] {
+			if version.RegistryAuthRef == "" {
+				continue
+			}
+			refs[version.RegistryAuthRef] = struct{}{}
+		}
+	}
+
+	out := make([]string, 0, len(refs))
+	for ref := range refs {
+		out = append(out, ref)
+	}
+	slices.Sort(out)
+	return out, nil
+}
+
 func NewSpiderService(repos ...Repository) *SpiderService {
 	if len(repos) > 0 && repos[0] != nil {
 		return &SpiderService{repo: repos[0]}
@@ -225,4 +252,8 @@ func (s *SpiderService) ListVersions(spiderID string) ([]model.SpiderVersion, er
 		return nil, ErrSpiderNotFound
 	}
 	return s.repo.ListVersions(context.Background(), spiderID)
+}
+
+func (s *SpiderService) ListRegistryAuthRefsByProject(projectID string) ([]string, error) {
+	return s.repo.ListRegistryAuthRefsByProject(context.Background(), projectID)
 }

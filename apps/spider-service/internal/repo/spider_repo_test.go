@@ -164,3 +164,37 @@ func TestPostgresRepositoryListByProject(t *testing.T) {
 		t.Fatalf("ExpectationsWereMet returned error: %v", err)
 	}
 }
+
+func TestPostgresRepositoryListRegistryAuthRefsByProject(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	if err != nil {
+		t.Fatalf("sqlmock.New returned error: %v", err)
+	}
+	defer db.Close()
+
+	repo := NewPostgresRepository(db)
+	rows := sqlmock.NewRows([]string{"registry_auth_ref"}).
+		AddRow("ghcr-prod").
+		AddRow("harbor-ci")
+
+	mock.ExpectQuery(regexp.QuoteMeta(`
+		SELECT DISTINCT sv.registry_auth_ref
+		FROM spider_versions sv
+		INNER JOIN spiders s ON s.id = sv.spider_id
+		WHERE s.project_id = $1 AND sv.registry_auth_ref <> ''
+		ORDER BY sv.registry_auth_ref ASC
+	`)).
+		WithArgs("p1").
+		WillReturnRows(rows)
+
+	refs, err := repo.ListRegistryAuthRefsByProject(context.Background(), "p1")
+	if err != nil {
+		t.Fatalf("ListRegistryAuthRefsByProject returned error: %v", err)
+	}
+	if len(refs) != 2 || refs[0] != "ghcr-prod" || refs[1] != "harbor-ci" {
+		t.Fatalf("unexpected refs: %+v", refs)
+	}
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Fatalf("ExpectationsWereMet returned error: %v", err)
+	}
+}
