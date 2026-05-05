@@ -1,3 +1,7 @@
+// 执行服务核心逻辑单元测试。
+// 使用内存 fake 实现（fakeExecutionRepo/fakeLogRepo/fakeQueue）验证完整业务流程：
+// 创建回滚、认领循环、状态转换幂等性、重试物化、Complete/Fail 的 Ack 补偿逻辑等。
+// 不依赖任何外部服务，所有依赖均为纯内存实现。
 package service
 
 import (

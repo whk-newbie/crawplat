@@ -1,3 +1,6 @@
+// 执行仓库层单元测试。
+// 使用 go-sqlmock 模拟 PostgreSQL 交互，验证 SQL 语句正确性和错误映射（ErrExecutionNotFound/ErrInvalidExecutionState）。
+// 不依赖真实数据库。
 package repo
 
 import (

@@ -1,3 +1,7 @@
+// 执行服务入口文件。
+// 负责加载配置，初始化 PostgreSQL（执行状态）、Redis（任务队列）、MongoDB（执行日志）三个外部依赖，
+// 组装依赖注入链（Repository → Service → Router），最后在 :8085 端口启动 HTTP 服务。
+// 不负责业务逻辑、路由定义或数据操作——这些由 internal 包处理。
 package main
 
 import (
@@ -14,6 +18,9 @@ import (
 	commonredis "crawler-platform/packages/go-common/redisx"
 )
 
+// main 是执行服务的入口函数。
+// 按顺序完成：加载配置 → 连接 PostgreSQL → 连接 Redis → 连接 MongoDB → 组装服务 → 启动 HTTP。
+// 任一初始化步骤失败都会直接 log.Fatal 退出，因为服务无法在缺少依赖的情况下正常启动。
 func main() {
 	cfg := commonconfig.Load()
 
