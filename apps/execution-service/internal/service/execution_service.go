@@ -76,9 +76,14 @@ type CreateManualInput struct {
 type CreateExecutionInput struct {
 	ProjectID          string
 	SpiderID           string
+	SpiderVersion      string
+	RegistryAuthRef    string
 	Image              string
 	Command            []string
 	TriggerSource      string
+	CpuCores           float64
+	MemoryMB           int
+	TimeoutSeconds     int
 	RetryLimit         int
 	RetryCount         int
 	RetryDelaySeconds  int
@@ -126,10 +131,15 @@ func (s *ExecutionService) Create(ctx context.Context, input CreateExecutionInpu
 		ID:                uuid.NewString(),
 		ProjectID:         input.ProjectID,
 		SpiderID:          input.SpiderID,
+		SpiderVersion:     input.SpiderVersion,
+		RegistryAuthRef:   input.RegistryAuthRef,
 		Status:            "pending",
 		TriggerSource:     triggerSource,
 		Image:             input.Image,
 		Command:           append([]string(nil), input.Command...),
+		CpuCores:          input.CpuCores,
+		MemoryMB:          input.MemoryMB,
+		TimeoutSeconds:    input.TimeoutSeconds,
 		RetryLimit:        input.RetryLimit,
 		RetryCount:        input.RetryCount,
 		RetryDelaySeconds: input.RetryDelaySeconds,
@@ -175,14 +185,19 @@ func (s *ExecutionService) MaterializeRetry(ctx context.Context) (model.Executio
 	}
 
 	created, err := s.Create(ctx, CreateExecutionInput{
-		ProjectID:         candidate.ProjectID,
-		SpiderID:          candidate.SpiderID,
-		Image:             candidate.Image,
-		Command:           candidate.Command,
-		TriggerSource:     "retry",
-		RetryLimit:        candidate.RetryLimit,
-		RetryCount:        candidate.RetryCount + 1,
-		RetryDelaySeconds: candidate.RetryDelaySeconds,
+		ProjectID:          candidate.ProjectID,
+		SpiderID:           candidate.SpiderID,
+		SpiderVersion:      candidate.SpiderVersion,
+		RegistryAuthRef:    candidate.RegistryAuthRef,
+		Image:              candidate.Image,
+		Command:            candidate.Command,
+		TriggerSource:      "retry",
+		CpuCores:           candidate.CpuCores,
+		MemoryMB:           candidate.MemoryMB,
+		TimeoutSeconds:     candidate.TimeoutSeconds,
+		RetryLimit:         candidate.RetryLimit,
+		RetryCount:         candidate.RetryCount + 1,
+		RetryDelaySeconds:  candidate.RetryDelaySeconds,
 		RetryOfExecutionID: candidate.ID,
 	})
 	if err != nil {

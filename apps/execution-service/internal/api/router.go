@@ -38,28 +38,38 @@ func NewRouter(executionService *service.ExecutionService) *gin.Engine {
 		var req struct {
 			ProjectID         string   `json:"projectId" binding:"required"`
 			SpiderID          string   `json:"spiderId" binding:"required"`
+			SpiderVersion     string   `json:"spiderVersion"`
+			RegistryAuthRef   string   `json:"registryAuthRef"`
 			Image             string   `json:"image" binding:"required"`
 			Command           []string `json:"command"`
 			TriggerSource     string   `json:"triggerSource"`
+			CpuCores          float64  `json:"cpuCores"`
+			MemoryMB          int      `json:"memoryMB"`
+			TimeoutSeconds    int      `json:"timeoutSeconds"`
 			RetryLimit        int      `json:"retryLimit"`
 			RetryCount        int      `json:"retryCount"`
 			RetryDelaySeconds int      `json:"retryDelaySeconds"`
 			RetryOfExecutionID string  `json:"retryOfExecutionId"`
 		}
 		if err := c.ShouldBindJSON(&req); err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request body"})
 			return
 		}
 
 		exec, err := executionService.Create(context.Background(), service.CreateExecutionInput{
-			ProjectID:         req.ProjectID,
-			SpiderID:          req.SpiderID,
-			Image:             req.Image,
-			Command:           req.Command,
-			TriggerSource:     req.TriggerSource,
-			RetryLimit:        req.RetryLimit,
-			RetryCount:        req.RetryCount,
-			RetryDelaySeconds: req.RetryDelaySeconds,
+			ProjectID:          req.ProjectID,
+			SpiderID:           req.SpiderID,
+			SpiderVersion:      req.SpiderVersion,
+			RegistryAuthRef:    req.RegistryAuthRef,
+			Image:              req.Image,
+			Command:            req.Command,
+			TriggerSource:      req.TriggerSource,
+			CpuCores:           req.CpuCores,
+			MemoryMB:           req.MemoryMB,
+			TimeoutSeconds:     req.TimeoutSeconds,
+			RetryLimit:         req.RetryLimit,
+			RetryCount:         req.RetryCount,
+			RetryDelaySeconds:  req.RetryDelaySeconds,
 			RetryOfExecutionID: req.RetryOfExecutionID,
 		})
 		if err != nil {
@@ -74,7 +84,7 @@ func NewRouter(executionService *service.ExecutionService) *gin.Engine {
 			Message string `json:"message" binding:"required"`
 		}
 		if err := c.ShouldBindJSON(&req); err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request body"})
 			return
 		}
 
@@ -131,7 +141,7 @@ func NewRouter(executionService *service.ExecutionService) *gin.Engine {
 			NodeID string `json:"nodeId" binding:"required"`
 		}
 		if err := c.ShouldBindJSON(&req); err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request body"})
 			return
 		}
 
@@ -159,7 +169,7 @@ func NewRouter(executionService *service.ExecutionService) *gin.Engine {
 			NodeID string `json:"nodeId" binding:"required"`
 		}
 		if err := c.ShouldBindJSON(&req); err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request body"})
 			return
 		}
 
@@ -201,7 +211,7 @@ func NewRouter(executionService *service.ExecutionService) *gin.Engine {
 			Error string `json:"error" binding:"required"`
 		}
 		if err := c.ShouldBindJSON(&req); err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request body"})
 			return
 		}
 

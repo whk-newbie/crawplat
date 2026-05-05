@@ -35,9 +35,9 @@ func (r *ExecutionRepository) Create(ctx context.Context, exec model.Execution) 
 	}
 
 	_, err = r.db.ExecContext(ctx, `
-		INSERT INTO executions (id, project_id, spider_id, node_id, status, trigger_source, image, command, retry_limit, retry_count, retry_delay_seconds, retry_of_execution_id, started_at, finished_at, error_message, retried_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
-	`, exec.ID, exec.ProjectID, exec.SpiderID, nullableString(exec.NodeID), exec.Status, exec.TriggerSource, exec.Image, string(command), exec.RetryLimit, exec.RetryCount, exec.RetryDelaySeconds, nullableString(exec.RetryOfExecutionID), exec.StartedAt, exec.FinishedAt, nullableString(exec.ErrorMessage), exec.RetriedAt)
+		INSERT INTO executions (id, project_id, spider_id, spider_version, registry_auth_ref, cpu_cores, memory_mb, timeout_seconds, node_id, status, trigger_source, image, command, retry_limit, retry_count, retry_delay_seconds, retry_of_execution_id, started_at, finished_at, error_message, retried_at)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21)
+	`, exec.ID, exec.ProjectID, exec.SpiderID, nullableString(exec.SpiderVersion), nullableString(exec.RegistryAuthRef), exec.CpuCores, exec.MemoryMB, exec.TimeoutSeconds, nullableString(exec.NodeID), exec.Status, exec.TriggerSource, exec.Image, string(command), exec.RetryLimit, exec.RetryCount, exec.RetryDelaySeconds, nullableString(exec.RetryOfExecutionID), exec.StartedAt, exec.FinishedAt, nullableString(exec.ErrorMessage), exec.RetriedAt)
 	if err != nil {
 		return model.Execution{}, err
 	}
@@ -51,23 +51,30 @@ func (r *ExecutionRepository) Create(ctx context.Context, exec model.Execution) 
 func (r *ExecutionRepository) Get(ctx context.Context, id string) (model.Execution, error) {
 	var exec model.Execution
 	var (
-		nodeID       sql.NullString
-		commandRaw   []byte
-		errorMessage sql.NullString
+		nodeID            sql.NullString
+		spiderVersion     sql.NullString
+		registryAuthRef   sql.NullString
+		commandRaw        []byte
+		errorMessage      sql.NullString
 		retryOfExecutionID sql.NullString
-		startedAt    sql.NullTime
-		finishedAt   sql.NullTime
-		retriedAt    sql.NullTime
+		startedAt         sql.NullTime
+		finishedAt        sql.NullTime
+		retriedAt         sql.NullTime
 	)
 
 	err := r.db.QueryRowContext(ctx, `
-		SELECT id, project_id, spider_id, node_id, status, trigger_source, image, command, error_message, created_at, started_at, finished_at, retry_limit, retry_count, retry_delay_seconds, retry_of_execution_id, retried_at
+		SELECT id, project_id, spider_id, spider_version, registry_auth_ref, cpu_cores, memory_mb, timeout_seconds, node_id, status, trigger_source, image, command, error_message, created_at, started_at, finished_at, retry_limit, retry_count, retry_delay_seconds, retry_of_execution_id, retried_at
 		FROM executions
 		WHERE id = $1
 	`, id).Scan(
 		&exec.ID,
 		&exec.ProjectID,
 		&exec.SpiderID,
+		&spiderVersion,
+		&registryAuthRef,
+		&exec.CpuCores,
+		&exec.MemoryMB,
+		&exec.TimeoutSeconds,
 		&nodeID,
 		&exec.Status,
 		&exec.TriggerSource,
@@ -92,6 +99,12 @@ func (r *ExecutionRepository) Get(ctx context.Context, id string) (model.Executi
 
 	if nodeID.Valid {
 		exec.NodeID = nodeID.String
+	}
+	if spiderVersion.Valid {
+		exec.SpiderVersion = spiderVersion.String
+	}
+	if registryAuthRef.Valid {
+		exec.RegistryAuthRef = registryAuthRef.String
 	}
 	if errorMessage.Valid {
 		exec.ErrorMessage = errorMessage.String
@@ -202,6 +215,8 @@ func (r *ExecutionRepository) ClaimNextRetryCandidate(ctx context.Context, now t
 	var exec model.Execution
 	var (
 		nodeID            sql.NullString
+		spiderVersion     sql.NullString
+		registryAuthRef   sql.NullString
 		commandRaw        []byte
 		errorMessage      sql.NullString
 		startedAt         sql.NullTime
@@ -224,11 +239,16 @@ func (r *ExecutionRepository) ClaimNextRetryCandidate(ctx context.Context, now t
 			ORDER BY finished_at ASC, id ASC
 			LIMIT 1
 		)
-		RETURNING id, project_id, spider_id, node_id, status, trigger_source, image, command, error_message, created_at, started_at, finished_at, retry_limit, retry_count, retry_delay_seconds, retry_of_execution_id, retried_at
+		RETURNING id, project_id, spider_id, spider_version, registry_auth_ref, cpu_cores, memory_mb, timeout_seconds, node_id, status, trigger_source, image, command, error_message, created_at, started_at, finished_at, retry_limit, retry_count, retry_delay_seconds, retry_of_execution_id, retried_at
 	`, now, now).Scan(
 		&exec.ID,
 		&exec.ProjectID,
 		&exec.SpiderID,
+		&spiderVersion,
+		&registryAuthRef,
+		&exec.CpuCores,
+		&exec.MemoryMB,
+		&exec.TimeoutSeconds,
 		&nodeID,
 		&exec.Status,
 		&exec.TriggerSource,
@@ -253,6 +273,12 @@ func (r *ExecutionRepository) ClaimNextRetryCandidate(ctx context.Context, now t
 
 	if nodeID.Valid {
 		exec.NodeID = nodeID.String
+	}
+	if spiderVersion.Valid {
+		exec.SpiderVersion = spiderVersion.String
+	}
+	if registryAuthRef.Valid {
+		exec.RegistryAuthRef = registryAuthRef.String
 	}
 	if errorMessage.Valid {
 		exec.ErrorMessage = errorMessage.String
