@@ -1,3 +1,4 @@
+// Package api 的 HTTP 层集成测试，使用 httptest 验证路由行为。
 package api
 
 import (

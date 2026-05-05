@@ -1,3 +1,4 @@
+// Package service 的单元测试，使用 fake repository 验证 Create/List 行为。
 package service
 
 import (

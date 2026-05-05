@@ -1,3 +1,4 @@
+// Package repo 的单元测试，使用 sqlmock 模拟数据库交互。
 package repo
 
 import (
