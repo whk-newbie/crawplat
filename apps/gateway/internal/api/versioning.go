@@ -42,7 +42,6 @@ func registerAPIVersion(router *gin.Engine, version string, cfg authConfig, rate
 	}
 
 	protectedGroup.Any("/projects", proxy.ProxyTo("project-service"))
-	protectedGroup.Any("/projects/*path", proxy.ProxyTo("project-service"))
 	protectedGroup.Any("/projects/:projectId/spiders", proxy.ProxyTo("spider-service"))
 
 	protectedGroup.Any("/spiders/:spiderId/versions", proxy.ProxyTo("spider-service"))

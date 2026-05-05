@@ -38,7 +38,7 @@ func TestNewRouterIncludesGatewayRoutes(t *testing.T) {
 	assertRouteRegistered(t, seen, "/internal/v1/executions/:id/complete")
 	assertRouteRegistered(t, seen, "/internal/v1/executions/:id/fail")
 	assertRouteRegistered(t, seen, "/internal/v1/executions/retries/materialize")
-	assertRouteRegistered(t, seen, "/api/v1/projects/*path")
+	assertRouteRegistered(t, seen, "/api/v1/projects")
 	assertRouteRegistered(t, seen, "/api/v1/spiders/:spiderId/versions")
 	assertRouteRegistered(t, seen, "/api/v1/schedules/*path")
 	assertRouteRegistered(t, seen, "/api/v1/monitor/*path")
