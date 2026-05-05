@@ -23,11 +23,33 @@ export type Execution = {
   logs?: ExecutionLog[]
 }
 
+export type PaginatedExecutions = {
+  items: Execution[]
+  total: number
+  limit: number
+  offset: number
+}
+
+export type ListExecutionsParams = {
+  limit?: number
+  offset?: number
+  status?: string
+}
+
 export type CreateExecutionInput = {
   projectId: string
   spiderId: string
   image: string
   command: string[]
+}
+
+export function listExecutions(params?: ListExecutionsParams) {
+  const qs = new URLSearchParams()
+  if (params?.limit != null) qs.set('limit', String(params.limit))
+  if (params?.offset != null) qs.set('offset', String(params.offset))
+  if (params?.status) qs.set('status', params.status)
+  const query = qs.toString()
+  return apiFetch<PaginatedExecutions>(`/executions${query ? '?' + query : ''}`)
 }
 
 export function createExecution(input: CreateExecutionInput) {
