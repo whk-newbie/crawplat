@@ -1,3 +1,5 @@
+// Package repo 的单元测试，使用 go-sqlmock 模拟 PostgreSQL 数据库交互。
+// 不依赖真实数据库，通过 mock SQL 期望验证 SQL 语句的正确性和参数绑定。
 package repo
 
 import (
@@ -9,6 +11,8 @@ import (
 	"github.com/DATA-DOG/go-sqlmock"
 )
 
+// TestPostgresRepositoryCreate 验证 Create 方法执行正确的 INSERT 语句，
+// 包括 SQL 模板匹配、参数值校验以及 config_json 的 JSON 序列化。
 func TestPostgresRepositoryCreate(t *testing.T) {
 	db, mock, err := sqlmock.New()
 	if err != nil {
@@ -41,6 +45,8 @@ func TestPostgresRepositoryCreate(t *testing.T) {
 	}
 }
 
+// TestPostgresRepositoryListByProject 验证 ListByProject 执行正确的 SELECT 查询，
+// 包括 WHERE 条件、ORDER BY 排序以及 config_json 的反序列化。
 func TestPostgresRepositoryListByProject(t *testing.T) {
 	db, mock, err := sqlmock.New()
 	if err != nil {

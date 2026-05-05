@@ -1,3 +1,6 @@
+// Package service 的单元测试，验证 DatasourceService 的业务逻辑。
+// 使用 fakeDatasourceRepo（内存实现）替代真实仓储，不依赖 PostgreSQL 或外部数据源。
+// 测试覆盖：类型校验、仓储持久化、列表查询、连接测试和数据预览。
 package service
 
 import (
@@ -35,6 +38,7 @@ func (r *fakeDatasourceRepo) Get(_ context.Context, id string) (model.Datasource
 	return model.Datasource{}, false, nil
 }
 
+// TestCreateDatasourceRejectsUnknownType 验证创建数据源时对不支持类型（如 mysql）的校验拒绝。
 func TestCreateDatasourceRejectsUnknownType(t *testing.T) {
 	svc := NewDatasourceService(&fakeDatasourceRepo{})
 	_, err := svc.Create("project-1", "main", "mysql", nil)
@@ -43,6 +47,8 @@ func TestCreateDatasourceRejectsUnknownType(t *testing.T) {
 	}
 }
 
+// TestCreateDatasourcePersistsThroughRepo 验证 Create 方法正确委托给 Repository 持久化，
+// 包括 UUID 自动生成和 Config map 数据保存。
 func TestCreateDatasourcePersistsThroughRepo(t *testing.T) {
 	repo := &fakeDatasourceRepo{}
 	svc := NewDatasourceService(repo)
@@ -62,6 +68,8 @@ func TestCreateDatasourcePersistsThroughRepo(t *testing.T) {
 	}
 }
 
+// TestDatasourceServiceListAndReadUseRepo 验证 List、Test、Preview 方法正确委托给 Repository，
+// 覆盖完整的创建→查询→测试→预览生命周期。
 func TestDatasourceServiceListAndReadUseRepo(t *testing.T) {
 	repo := &fakeDatasourceRepo{}
 	svc := NewDatasourceService(repo)
