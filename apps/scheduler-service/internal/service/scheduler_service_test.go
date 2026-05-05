@@ -1,3 +1,15 @@
+// Package service 测试：验证 SchedulerService 的创建、列表和物化核心逻辑。
+//
+// 该文件负责：
+//   - TestSchedulerServiceCreatePersistsThroughRepo：验证 Create 正确持久化并通过 Repo 读取。
+//   - TestSchedulerServiceCreateRejectsMissingFields：验证参数校验（必填字段为空）。
+//   - TestSchedulerServiceListReturnsRepoSchedules：验证 List 返回已创建的调度。
+//   - TestMaterializeDueBackfillsScheduledExecutions：验证物化逻辑能根据 cron 生成正确的执行记录数，
+//     并验证 RetryLimit/RetryDelaySeconds 透传、last_materialized_at 更新。
+//   - TestMaterializeDueSkipsDisabledSchedules：验证禁用的调度不生成执行记录。
+//   - TestMaterializeDueIsIdempotentPerTick：验证同一 tick 内重复调用不重复物化（去重）。
+//
+// fakeScheduleRepo 和 fakeExecutionClient 提供可控的测试替身，不依赖任何外部服务。
 package service
 
 import (
@@ -9,6 +21,7 @@ import (
 	"crawler-platform/apps/scheduler-service/internal/model"
 )
 
+// fakeScheduleRepo 是 Repository 的测试替身，在内存中存储调度数据。
 type fakeScheduleRepo struct {
 	schedules []model.Schedule
 }
@@ -61,6 +74,8 @@ func (r *fakeScheduleRepo) mustGet(id string) model.Schedule {
 	return model.Schedule{}
 }
 
+// fakeExecutionClient 是 ExecutionClient 的测试替身，记录所有 Create 请求并返回假执行 ID。
+// err 字段可注入错误以模拟执行服务故障。
 type fakeExecutionClient struct {
 	requests []CreateExecutionInput
 	err      error
@@ -78,6 +93,7 @@ func (c *fakeExecutionClient) MaterializeRetry(_ context.Context) (bool, error) 
 	return false, c.err
 }
 
+// TestSchedulerServiceCreatePersistsThroughRepo 验证 Create 写出的数据能通过 Repo 完整读取。
 func TestSchedulerServiceCreatePersistsThroughRepo(t *testing.T) {
 	repo := &fakeScheduleRepo{}
 	svc := NewSchedulerService(repo, nil)
@@ -102,6 +118,7 @@ func TestSchedulerServiceCreatePersistsThroughRepo(t *testing.T) {
 	}
 }
 
+// TestSchedulerServiceCreateRejectsMissingFields 验证缺少必填字段时返回 ErrInvalidSchedule。
 func TestSchedulerServiceCreateRejectsMissingFields(t *testing.T) {
 	svc := NewSchedulerService(&fakeScheduleRepo{}, nil)
 
@@ -111,6 +128,7 @@ func TestSchedulerServiceCreateRejectsMissingFields(t *testing.T) {
 	}
 }
 
+// TestSchedulerServiceListReturnsRepoSchedules 验证 List 返回与 Create 输出一致的数据。
 func TestSchedulerServiceListReturnsRepoSchedules(t *testing.T) {
 	repo := &fakeScheduleRepo{}
 	svc := NewSchedulerService(repo, nil)
@@ -132,6 +150,9 @@ func TestSchedulerServiceListReturnsRepoSchedules(t *testing.T) {
 	}
 }
 
+// TestMaterializeDueBackfillsScheduledExecutions 验证从未物化的调度能正确生成追赶执行记录。
+// 调度创建于 23:25，cron 为 "*/5 * * * *"，当前时间 23:45，应生成 5 条执行（23:25 到 23:45 每隔 5 分钟）。
+// 同时验证 RetryLimit/RetryDelaySeconds 和 TriggerSource="scheduled" 透传到执行请求。
 func TestMaterializeDueBackfillsScheduledExecutions(t *testing.T) {
 	now := time.Date(2026, 4, 23, 23, 45, 0, 0, time.UTC)
 	repo := &fakeScheduleRepo{
@@ -174,6 +195,7 @@ func TestMaterializeDueBackfillsScheduledExecutions(t *testing.T) {
 	}
 }
 
+// TestMaterializeDueSkipsDisabledSchedules 验证 Enabled=false 的调度不生成任何执行记录。
 func TestMaterializeDueSkipsDisabledSchedules(t *testing.T) {
 	now := time.Date(2026, 4, 23, 23, 45, 0, 0, time.UTC)
 	repo := &fakeScheduleRepo{
@@ -204,6 +226,8 @@ func TestMaterializeDueSkipsDisabledSchedules(t *testing.T) {
 	}
 }
 
+// TestMaterializeDueIsIdempotentPerTick 验证同一 tick 内两次调用 MaterializeDue 不会重复物化。
+// 第一次物化 5 条，第二次应为 0（因为 last_materialized_at 已推进到 now）。
 func TestMaterializeDueIsIdempotentPerTick(t *testing.T) {
 	now := time.Date(2026, 4, 23, 23, 45, 0, 0, time.UTC)
 	repo := &fakeScheduleRepo{

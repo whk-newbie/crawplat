@@ -1,3 +1,9 @@
+// Package repo 测试：使用 sqlmock 验证 PostgreSQL SQL 操作的正确性。
+//
+// 该文件负责：
+//   - TestPostgresRepositoryCreate：验证 INSERT SQL 及参数绑定，包括 command JSONB 序列化。
+//   - TestPostgresRepositoryList：验证 SELECT SQL、反序列化及 last_materialized_at 的 NULL 处理。
+//   - TestPostgresRepositoryAdvanceLastMaterialized：验证 CAS UPDATE SQL 的 WHERE 条件正确性。
 package repo
 
 import (
