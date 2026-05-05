@@ -1,6 +1,14 @@
+<script setup lang="ts">
+import { useLocaleStore } from '../stores/locale'
+
+const localeStore = useLocaleStore()
+</script>
+
 <template>
-  <main>
-    <h1>Datasources</h1>
-    <p>Web MVP shell placeholder.</p>
-  </main>
+  <el-card>
+    <template #header>
+      <h1>{{ localeStore.t('pages.datasources.title') }}</h1>
+    </template>
+    <p>{{ localeStore.t('pages.datasources.placeholder') }}</p>
+  </el-card>
 </template>

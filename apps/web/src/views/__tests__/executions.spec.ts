@@ -1,6 +1,8 @@
 import { createApp, nextTick } from 'vue'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { createPinia } from 'pinia'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createMemoryHistory, createRouter } from 'vue-router'
+import ElementPlus from 'element-plus'
 import ExecutionDetailView from '../ExecutionDetailView.vue'
 
 const flushPromises = async () => {
@@ -13,12 +15,24 @@ const flushPromises = async () => {
 }
 
 describe('execution detail view', () => {
+  let storage: Record<string, string>
+
+  beforeEach(() => {
+    storage = {}
+    vi.stubGlobal('localStorage', {
+      getItem: (key: string) => storage[key] ?? null,
+      setItem: (key: string, value: string) => { storage[key] = value },
+      removeItem: (key: string) => { delete storage[key] },
+      clear: () => { storage = {} },
+    })
+  })
+
   afterEach(() => {
     vi.unstubAllGlobals()
     document.body.innerHTML = ''
   })
 
-  it('renders execution details after selecting an execution', async () => {
+  it('renders execution details after fetching', async () => {
     const fetchMock = vi.fn()
       .mockResolvedValueOnce({
         ok: true,
@@ -37,14 +51,12 @@ describe('execution detail view', () => {
       .mockResolvedValueOnce({
         ok: true,
         status: 200,
-        json: async () => ([
-          {
-            id: 'log-1',
-            executionId: 'exec-1',
-            message: 'started',
-            createdAt: '2026-04-22T15:00:01Z',
-          },
-        ]),
+        json: async () => [{
+          id: 'log-1',
+          executionId: 'exec-1',
+          message: 'started',
+          createdAt: '2026-04-22T15:00:01Z',
+        }],
       })
 
     vi.stubGlobal('fetch', fetchMock)
@@ -60,10 +72,10 @@ describe('execution detail view', () => {
     const container = document.createElement('div')
     document.body.appendChild(container)
 
-    createApp(ExecutionDetailView).use(router).mount(container)
+    createApp(ExecutionDetailView).use(router).use(createPinia()).use(ElementPlus).mount(container)
     await flushPromises()
 
-    expect(container.textContent).toContain('Status')
+    expect(container.textContent).toContain('exec-1')
     expect(container.textContent).toContain('running')
     expect(container.textContent).toContain('started')
   })

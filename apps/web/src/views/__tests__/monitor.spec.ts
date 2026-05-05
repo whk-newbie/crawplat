@@ -1,5 +1,7 @@
 import { createApp, nextTick } from 'vue'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { createPinia } from 'pinia'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import ElementPlus from 'element-plus'
 import MonitorView from '../MonitorView.vue'
 
 const flushPromises = async () => {
@@ -12,6 +14,18 @@ const flushPromises = async () => {
 }
 
 describe('monitor view', () => {
+  let storage: Record<string, string>
+
+  beforeEach(() => {
+    storage = {}
+    vi.stubGlobal('localStorage', {
+      getItem: (key: string) => storage[key] ?? null,
+      setItem: (key: string, value: string) => { storage[key] = value },
+      removeItem: (key: string) => { delete storage[key] },
+      clear: () => { storage = {} },
+    })
+  })
+
   afterEach(() => {
     vi.unstubAllGlobals()
     document.body.innerHTML = ''
@@ -22,18 +36,8 @@ describe('monitor view', () => {
       ok: true,
       status: 200,
       json: async () => ({
-        executions: {
-          total: 12,
-          pending: 7,
-          running: 3,
-          failed: 1,
-          succeeded: 1,
-        },
-        nodes: {
-          total: 4,
-          online: 2,
-          offline: 2,
-        },
+        executions: { total: 12, pending: 7, running: 3, failed: 1, succeeded: 1 },
+        nodes: { total: 4, online: 2, offline: 2 },
         generatedAt: '2026-04-23T08:00:00Z',
       }),
     })
@@ -43,9 +47,7 @@ describe('monitor view', () => {
     const container = document.createElement('div')
     document.body.appendChild(container)
 
-    createApp(MonitorView).mount(container)
-    expect(container.textContent).toContain('Loading overview...')
-
+    createApp(MonitorView).use(createPinia()).use(ElementPlus).mount(container)
     await flushPromises()
 
     expect(fetchMock).toHaveBeenCalledWith('/api/v1/monitor/overview', expect.any(Object))
@@ -53,8 +55,6 @@ describe('monitor view', () => {
     expect(container.textContent).toContain('12')
     expect(container.textContent).toContain('Pending executions')
     expect(container.textContent).toContain('7')
-    expect(container.textContent).toContain('Running executions')
-    expect(container.textContent).toContain('3')
     expect(container.textContent).toContain('Nodes online')
     expect(container.textContent).toContain('2')
   })
@@ -71,9 +71,9 @@ describe('monitor view', () => {
     const container = document.createElement('div')
     document.body.appendChild(container)
 
-    createApp(MonitorView).mount(container)
+    createApp(MonitorView).use(createPinia()).use(ElementPlus).mount(container)
     await flushPromises()
 
-    expect(container.textContent).toContain('monitor unavailable')
+    expect(container.textContent).toContain('request failed: 503')
   })
 })

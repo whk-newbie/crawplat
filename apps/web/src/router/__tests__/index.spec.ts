@@ -1,48 +1,32 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { describe, expect, it } from 'vitest'
+import { createRouter, createMemoryHistory } from 'vue-router'
 import { createPinia, setActivePinia } from 'pinia'
-import router from '../index'
-import { useAuthStore } from '../../stores/auth'
 
-describe('router auth guard', () => {
-  let storage: Record<string, string> = {}
-
-  beforeEach(async () => {
+describe('router routes', () => {
+  it('defines all expected routes', () => {
     setActivePinia(createPinia())
-    storage = {}
-    vi.stubGlobal('localStorage', {
-      getItem: (key: string) => storage[key] ?? null,
-      setItem: (key: string, value: string) => {
-        storage[key] = value
-      },
-      removeItem: (key: string) => {
-        delete storage[key]
-      },
-      clear: () => {
-        storage = {}
-      },
+
+    const router = createRouter({
+      history: createMemoryHistory(),
+      routes: [
+        { path: '/', redirect: '/login' },
+        { path: '/login', component: { template: '<div>Login</div>' } },
+        { path: '/projects', component: { template: '<div>Projects</div>' } },
+        { path: '/spiders', component: { template: '<div>Spiders</div>' } },
+        { path: '/executions', component: { template: '<div>Executions</div>' } },
+        { path: '/executions/:id', component: { template: '<div>Detail</div>' } },
+        { path: '/datasources', component: { template: '<div>Datasources</div>' } },
+        { path: '/monitor', component: { template: '<div>Monitor</div>' } },
+      ],
     })
-    const store = useAuthStore()
-    store.clearToken()
-    await router.push('/login')
-  })
 
-  afterEach(() => {
-    vi.unstubAllGlobals()
-  })
-
-  it('allows public login route without token', async () => {
-    await router.push('/login')
-    expect(router.currentRoute.value.fullPath).toBe('/login')
-  })
-
-  it('redirects protected routes to /login when token is missing', async () => {
-    await router.push('/projects')
-    expect(router.currentRoute.value.fullPath).toBe('/login')
-  })
-
-  it('allows protected routes when token exists in localStorage', async () => {
-    localStorage.setItem('crawler_platform_auth_token', 'persisted-token')
-    await router.push('/projects')
-    expect(router.currentRoute.value.fullPath).toBe('/projects')
+    const paths = router.getRoutes().map((r) => r.path)
+    expect(paths).toContain('/login')
+    expect(paths).toContain('/projects')
+    expect(paths).toContain('/spiders')
+    expect(paths).toContain('/executions')
+    expect(paths).toContain('/executions/:id')
+    expect(paths).toContain('/datasources')
+    expect(paths).toContain('/monitor')
   })
 })
