@@ -169,10 +169,10 @@ Crawler Platform 是一个分布式爬虫管理平台，采用微服务架构，
 
 | 项 | 所在阶段 | 说明 |
 |----|---------|------|
-| IAM 用户内存存储 | Phase 1 | 用户存储在内存 map 中，重启丢失 |
-| 密码明文比较 | Phase 1 | 未做 hash 处理 |
+| ~~IAM 用户内存存储~~ | ~~Phase 1~~ | ✅ Batch 6.6 已实现 PostgreSQL 持久化（PostgresUserRepo），内存回退仅用于开发/测试 |
+| ~~密码明文比较~~ | ~~Phase 1~~ | ✅ Batch 6.6 已实现 bcrypt 哈希和验证 |
 | ~~数据源 test/preview mock~~ | ~~Phase 1~~ | ✅ Phase 7 已替换为真实连接探测与预览 |
-| 列表 API 能力不完整 | Phase 2 | 多数列表已支持分页；execution 列表查询仍待补齐 |
+| ~~列表 API 能力不完整~~ | ~~Phase 2~~ | ✅ Batch 6.6 已实现 GET /api/v1/executions 分页列表 |
 | ~~Gateway JWT 未强制~~ | ~~Phase 1~~ | ✅ Phase 6 已实现 Gateway JWT 中间件 |
 | ~~前端部分页面仍为 placeholder~~ | ~~Phase 1~~ | ✅ Phase 5 已完成全部 9 个页面重构 |
 | ~~节点 offline 统计缺失~~ | ~~Phase 3~~ | ✅ Phase 4 已实现节点持久化和离线统计 |

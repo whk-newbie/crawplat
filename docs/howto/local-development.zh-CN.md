@@ -96,6 +96,19 @@ deploy/migrations/postgres/
 make dev-down && make dev-up
 ```
 
+## 环境变量
+
+主要环境变量定义在 `deploy/env/.env.example`。各服务特定覆盖项：
+
+| 变量 | 服务 | 默认值 | 说明 |
+|----------|---------|---------|-------------|
+| `DATABASE_DSN` | iam-service | *(空)* | 用户持久化的 PostgreSQL DSN；未设置时回退到内存存储（仅开发环境） |
+| `IAM_ENABLE_SEED_ADMIN` | iam-service | `false` | 设为 `true` 时，在 users 表为空时自动创建 admin/admin123 |
+| `IMAGE_REGISTRY_AUTH_MAP` | agent | *(空)* | 私有仓库凭据 JSON 映射，如 `{"ghcr.io":{"username":"u","password":"p"}}` |
+| `AGENT_CAPABILITIES` | agent | `docker` | 心跳中上报的节点能力，逗号分隔 |
+| `INTERNAL_API_TOKEN` | 全部 | `change-me` | 服务间内部认证 Token |
+| `JWT_SECRET` | iam-service, gateway | `change-me` | JWT Token 签名与验证密钥 |
+
 ## 运行测试
 
 ### 全部测试

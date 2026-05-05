@@ -68,9 +68,12 @@ Common status codes: `200`, `201`, `204`, `400`, `401`, `404`, `409`, `500`, `50
 ### execution-service
 
 - `POST /api/v1/executions`
+- `GET /api/v1/executions?limit=<n>&offset=<n>&status=<string>`
 - `GET /api/v1/executions/:id`
 - `GET /api/v1/executions/:id/logs`
 - `POST /api/v1/executions/:id/logs`
+
+`GET /api/v1/executions` supports pagination via `limit` (default 20, max 100) and `offset` (default 0), and optional `status` filtering.
 
 `POST /api/v1/executions` supports:
 

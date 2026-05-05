@@ -96,6 +96,19 @@ Then restart the development environment:
 make dev-down && make dev-up
 ```
 
+## Environment Variables
+
+Key environment variables are defined in `deploy/env/.env.example`. Service-specific overrides:
+
+| Variable | Service | Default | Description |
+|----------|---------|---------|-------------|
+| `DATABASE_DSN` | iam-service | *(empty)* | PostgreSQL DSN for user persistence; when unset, falls back to in-memory (dev only) |
+| `IAM_ENABLE_SEED_ADMIN` | iam-service | `false` | Set to `true` to auto-create admin/admin123 on empty users table |
+| `IMAGE_REGISTRY_AUTH_MAP` | agent | *(empty)* | JSON map of private registry credentials, e.g. `{"ghcr.io":{"username":"u","password":"p"}}` |
+| `AGENT_CAPABILITIES` | agent | `docker` | Comma-separated node capabilities reported in heartbeat |
+| `INTERNAL_API_TOKEN` | all | `change-me` | Token for internal service-to-service authentication |
+| `JWT_SECRET` | iam-service, gateway | `change-me` | Secret for signing and verifying JWT tokens |
+
 ## Running Tests
 
 ### All Tests
