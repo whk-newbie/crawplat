@@ -52,47 +52,7 @@ func (r *ExecutionRepository) Get(ctx context.Context, id string) (model.Executi
 }
 
 func (r *ExecutionRepository) ListByProject(ctx context.Context, query service.ListExecutionsQuery) ([]model.Execution, error) {
-	args := []any{query.ProjectID}
-	where := []string{"project_id = $1"}
-	argPos := 2
-	if strings.TrimSpace(query.Status) != "" {
-		where = append(where, fmt.Sprintf("status = $%d", argPos))
-		args = append(args, query.Status)
-		argPos++
-	}
-	if strings.TrimSpace(query.Trigger) != "" {
-		where = append(where, fmt.Sprintf("trigger_source = $%d", argPos))
-		args = append(args, query.Trigger)
-		argPos++
-	}
-	if strings.TrimSpace(query.SpiderID) != "" {
-		where = append(where, fmt.Sprintf("spider_id = $%d", argPos))
-		args = append(args, query.SpiderID)
-		argPos++
-	}
-	if strings.TrimSpace(query.NodeID) != "" {
-		where = append(where, fmt.Sprintf("node_id = $%d", argPos))
-		args = append(args, query.NodeID)
-		argPos++
-	}
-	if query.From != nil {
-		where = append(where, fmt.Sprintf("created_at >= $%d", argPos))
-		args = append(args, *query.From)
-		argPos++
-	}
-	if query.To != nil {
-		where = append(where, fmt.Sprintf("created_at <= $%d", argPos))
-		args = append(args, *query.To)
-		argPos++
-	}
-	sqlQuery := fmt.Sprintf(`
-		SELECT id, project_id, spider_id, spider_version, registry_auth_ref, node_id, status, trigger_source, image, command, cpu_cores, memory_mb, timeout_seconds, error_message, created_at, started_at, finished_at, retry_limit, retry_count, retry_delay_seconds, retry_of_execution_id, retried_at
-		FROM executions
-		WHERE %s
-		ORDER BY created_at DESC, id DESC
-		LIMIT $%d OFFSET $%d
-	`, strings.Join(where, " AND "), argPos, argPos+1)
-	args = append(args, query.Limit, query.Offset)
+	sqlQuery, args := buildExecutionListQuery(query, false)
 	rows, err := r.db.QueryContext(ctx, sqlQuery, args...)
 	if err != nil {
 		return nil, err
@@ -114,6 +74,15 @@ func (r *ExecutionRepository) ListByProject(ctx context.Context, query service.L
 }
 
 func (r *ExecutionRepository) CountByProject(ctx context.Context, query service.ListExecutionsQuery) (int64, error) {
+	sqlQuery, args := buildExecutionListQuery(query, true)
+	var total int64
+	if err := r.db.QueryRowContext(ctx, sqlQuery, args...).Scan(&total); err != nil {
+		return 0, err
+	}
+	return total, nil
+}
+
+func buildExecutionListQuery(query service.ListExecutionsQuery, countOnly bool) (string, []any) {
 	args := []any{query.ProjectID}
 	where := []string{"project_id = $1"}
 	argPos := 2
@@ -147,15 +116,42 @@ func (r *ExecutionRepository) CountByProject(ctx context.Context, query service.
 		args = append(args, *query.To)
 		argPos++
 	}
-	var total int64
-	if err := r.db.QueryRowContext(ctx, fmt.Sprintf(`
-		SELECT COUNT(1)
+
+	if countOnly {
+		return fmt.Sprintf(`
+			SELECT COUNT(1)
+			FROM executions
+			WHERE %s
+		`, strings.Join(where, " AND ")), args
+	}
+
+	sortBy := executionSortColumn(query.SortBy)
+	sortOrder := strings.ToUpper(strings.TrimSpace(query.SortOrder))
+	if sortOrder != "ASC" && sortOrder != "DESC" {
+		sortOrder = "DESC"
+	}
+	sqlQuery := fmt.Sprintf(`
+		SELECT id, project_id, spider_id, spider_version, registry_auth_ref, node_id, status, trigger_source, image, command, cpu_cores, memory_mb, timeout_seconds, error_message, created_at, started_at, finished_at, retry_limit, retry_count, retry_delay_seconds, retry_of_execution_id, retried_at
 		FROM executions
 		WHERE %s
-	`, strings.Join(where, " AND ")), args...).Scan(&total); err != nil {
-		return 0, err
+		ORDER BY %s %s, id DESC
+		LIMIT $%d OFFSET $%d
+	`, strings.Join(where, " AND "), sortBy, sortOrder, argPos, argPos+1)
+	args = append(args, query.Limit, query.Offset)
+	return sqlQuery, args
+}
+
+func executionSortColumn(sortBy string) string {
+	switch sortBy {
+	case "started_at":
+		return "started_at"
+	case "finished_at":
+		return "finished_at"
+	case "status":
+		return "status"
+	default:
+		return "created_at"
 	}
-	return total, nil
 }
 
 func scanExecution(_ context.Context, scanner rowScanner, errIfNoRows error) (model.Execution, error) {

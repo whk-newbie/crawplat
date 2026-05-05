@@ -90,6 +90,7 @@ func TestExecutionRepositoryListByProjectAndCount(t *testing.T) {
 		ProjectID: "p1",
 		Limit:     20,
 		Offset:    0,
+		SortOrder: "desc",
 	})
 	if err != nil {
 		t.Fatalf("ListByProject returned error: %v", err)
@@ -157,6 +158,7 @@ func TestExecutionRepositoryListByProjectAndCountWithFilters(t *testing.T) {
 		To:        &to,
 		Limit:     10,
 		Offset:    0,
+		SortOrder: "desc",
 	}
 	items, err := repo.ListByProject(context.Background(), query)
 	if err != nil {

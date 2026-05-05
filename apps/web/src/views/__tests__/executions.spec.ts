@@ -166,7 +166,7 @@ describe('execution detail view', () => {
     await flushPromises()
 
     expect(fetchMock).toHaveBeenNthCalledWith(1, '/api/v1/projects', expect.any(Object))
-    expect(fetchMock).toHaveBeenNthCalledWith(2, '/api/v1/executions?projectId=project-1&limit=20&offset=0', expect.any(Object))
+    expect(fetchMock).toHaveBeenNthCalledWith(2, '/api/v1/executions?project_id=project-1&limit=20&offset=0&sort_by=created_at&sort_order=desc', expect.any(Object))
     expect(fetchMock).toHaveBeenNthCalledWith(
       3,
       '/api/v1/spiders/spider-1/versions',
@@ -286,7 +286,7 @@ describe('execution detail view', () => {
     await flushPromises()
 
     expect(fetchMock).toHaveBeenNthCalledWith(1, '/api/v1/projects', expect.any(Object))
-    expect(fetchMock).toHaveBeenNthCalledWith(2, '/api/v1/executions?projectId=project-9&limit=20&offset=0', expect.any(Object))
+    expect(fetchMock).toHaveBeenNthCalledWith(2, '/api/v1/executions?project_id=project-9&limit=20&offset=0&sort_by=created_at&sort_order=desc', expect.any(Object))
     expect(fetchMock).toHaveBeenNthCalledWith(3, '/api/v1/spiders/spider-9/versions', expect.any(Object))
     expect(fetchMock).toHaveBeenNthCalledWith(
       4,
@@ -364,6 +364,6 @@ describe('execution detail view', () => {
     ;(applyButton as HTMLButtonElement).click()
     await flushPromises()
 
-    expect(fetchMock).toHaveBeenNthCalledWith(3, '/api/v1/executions?projectId=project-1&limit=20&offset=0&nodeId=node-a', expect.any(Object))
+    expect(fetchMock).toHaveBeenNthCalledWith(3, '/api/v1/executions?project_id=project-1&limit=20&offset=0&sort_by=created_at&sort_order=desc&node_id=node-a', expect.any(Object))
   })
 })

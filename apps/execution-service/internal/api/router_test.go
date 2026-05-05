@@ -531,8 +531,8 @@ func TestListExecutionsRequiresProjectID(t *testing.T) {
 	if w.Code != http.StatusBadRequest {
 		t.Fatalf("expected status 400, got %d", w.Code)
 	}
-	if !strings.Contains(w.Body.String(), "projectId is required") {
-		t.Fatalf("expected projectId error, got %s", w.Body.String())
+	if !strings.Contains(w.Body.String(), "project_id is required") {
+		t.Fatalf("expected project_id error, got %s", w.Body.String())
 	}
 }
 
