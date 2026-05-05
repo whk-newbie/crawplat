@@ -1,3 +1,5 @@
+// Package main 是 Project 服务的程序入口。
+// 负责加载数据库配置、创建 PostgreSQL 仓储并注入 service → api 依赖链，最后监听 :8082。
 package main
 
 import (
@@ -10,6 +12,7 @@ import (
 	commonpostgres "crawler-platform/packages/go-common/postgres"
 )
 
+// main 组装依赖（config → db → repo → service → router）并启动 HTTP。
 func main() {
 	cfg := commonconfig.Load()
 	db, err := commonpostgres.Open(cfg.PostgresDSN)
