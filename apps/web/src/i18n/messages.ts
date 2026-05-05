@@ -140,6 +140,11 @@ export const messages: Record<Locale, MessageTree> = {
         error: '错误信息',
         logs: '日志',
         logsEmpty: '暂无日志',
+        empty: '暂无执行记录，点击上方按钮创建',
+        listLoadFailed: '加载执行列表失败',
+        filterStatus: '按状态过滤',
+        allStatus: '全部',
+        createdAt: '创建时间',
         errors: {
           loadFailed: '加载执行详情失败',
           createFailed: '创建执行失败',
