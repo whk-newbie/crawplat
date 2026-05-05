@@ -22,6 +22,8 @@ type config struct {
 	nodeName            string
 	internalToken       string
 	pollInterval        time.Duration
+	registryCredentials map[string]agentruntime.RegistryCredential
+	capabilities        []string
 }
 
 func main() {
@@ -32,14 +34,14 @@ func main() {
 
 	execPoller := poller.New(
 		poller.NewExecutionClient(cfg.executionServiceURL, cfg.internalToken),
-		agentruntime.NewDockerRunner(nil),
+		agentruntime.NewDockerRunner(cfg.registryCredentials, nil),
 		cfg.nodeName,
 		cfg.pollInterval,
 	)
 
 	if err := run(
 		ctx,
-		func(ctx context.Context) error { return heartbeat.Run(ctx, cfg.nodeServiceURL, cfg.nodeName) },
+		func(ctx context.Context) error { return heartbeat.Run(ctx, cfg.nodeServiceURL, cfg.nodeName, cfg.capabilities) },
 		execPoller.Run,
 	); err != nil {
 		log.Fatal(err)
@@ -54,12 +56,24 @@ func loadConfig() config {
 		}
 	}
 
+	credentials, _ := agentruntime.ParseRegistryCredentials(os.Getenv("IMAGE_REGISTRY_AUTH_MAP"))
+
+	capabilities := []string{"docker"}
+	if raw := strings.TrimSpace(os.Getenv("AGENT_CAPABILITIES")); raw != "" {
+		capabilities = strings.Split(raw, ",")
+		for i := range capabilities {
+			capabilities[i] = strings.TrimSpace(capabilities[i])
+		}
+	}
+
 	return config{
 		nodeServiceURL:      envOrDefault("NODE_SERVICE_URL", "http://localhost:8084"),
 		executionServiceURL: envOrDefault("EXECUTION_SERVICE_URL", "http://localhost:8085"),
 		nodeName:            envOrDefault("NODE_NAME", "node-a"),
 		internalToken:       strings.TrimSpace(os.Getenv("INTERNAL_API_TOKEN")),
 		pollInterval:        pollInterval,
+		registryCredentials: credentials,
+		capabilities:        capabilities,
 	}
 }
 
