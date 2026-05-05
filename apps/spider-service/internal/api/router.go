@@ -1,3 +1,13 @@
+// 该文件为 Spider 服务的 HTTP 路由层，负责注册 Gin 路由和请求处理函数。
+//
+// 路由端点（API contract）：
+//   - POST /api/v1/projects/:projectId/spiders —— 创建爬虫
+//   - GET  /api/v1/projects/:projectId/spiders —— 列表查询爬虫
+//
+// Handler 负责解析请求参数、调用 Service 层处理业务、根据 Service 返回的哨兵错误
+// 映射 HTTP 状态码（BadRequest / InternalServerError）。
+//
+// 不包含任何业务逻辑——所有校验和持久化委托给 service.SpiderService。
 package api
 
 import (
@@ -7,6 +17,8 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
+// NewRouter 创建并配置 Gin 引擎，注册 Spider 相关路由。
+// 接收 *service.SpiderService 作为依赖，路由处理函数通过闭包捕获该依赖。
 func NewRouter(spiderService *service.SpiderService) *gin.Engine {
 	router := gin.Default()
 

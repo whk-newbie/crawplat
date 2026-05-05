@@ -1,3 +1,6 @@
+// 该文件为路由层的 HTTP 集成测试，使用 httptest 模拟请求验证路由的请求/响应行为，
+// 包括创建爬虫成功/失败场景和按项目 ID 过滤列表的正确性。
+// 测试使用内存存储（无数据库依赖），通过 NewRouter(service.NewSpiderService()) 构建被测对象。
 package api
 
 import (
