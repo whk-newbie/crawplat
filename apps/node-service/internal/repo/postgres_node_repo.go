@@ -91,7 +91,7 @@ func (r *PostgresNodeRepository) ListCatalog(ctx context.Context) ([]service.Nod
 	return nodes, nil
 }
 
-func (r *PostgresNodeRepository) ListOnline(ctx context.Context) ([]service.Node, error) {
+func (r *PostgresNodeRepository) ListOnline(ctx context.Context, limit, offset int) ([]service.Node, error) {
 	return r.ListCatalog(ctx)
 }
 

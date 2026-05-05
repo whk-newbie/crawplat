@@ -47,7 +47,7 @@ func (r *RedisRepository) UpsertHeartbeat(ctx context.Context, name string, capa
 	return node, nil
 }
 
-func (r *RedisRepository) ListOnline(ctx context.Context) ([]service.Node, error) {
+func (r *RedisRepository) ListOnline(ctx context.Context, limit, offset int) ([]service.Node, error) {
 	ids, err := r.client.SMembers(ctx, nodeIndexKey).Result()
 	if err != nil {
 		return nil, err
@@ -70,5 +70,33 @@ func (r *RedisRepository) ListOnline(ctx context.Context) ([]service.Node, error
 		}
 		nodes = append(nodes, node)
 	}
-	return nodes, nil
+
+	if offset >= len(nodes) {
+		return []service.Node{}, nil
+	}
+	end := offset + limit
+	if limit <= 0 || end > len(nodes) {
+		end = len(nodes)
+	}
+	return nodes[offset:end], nil
+}
+
+func (r *RedisRepository) GetByID(ctx context.Context, nodeID string) (service.Node, error) {
+	payload, err := r.client.Get(ctx, nodeKeyPrefix+nodeID).Result()
+	if err == redis.Nil {
+		return service.Node{}, service.ErrNodeNotFound
+	}
+	if err != nil {
+		return service.Node{}, err
+	}
+
+	var node service.Node
+	if err := json.Unmarshal([]byte(payload), &node); err != nil {
+		return service.Node{}, err
+	}
+	return node, nil
+}
+
+func (r *RedisRepository) ListRecentExecutions(ctx context.Context, nodeID string, query service.ExecutionQuery) ([]service.NodeExecution, error) {
+	return []service.NodeExecution{}, nil
 }

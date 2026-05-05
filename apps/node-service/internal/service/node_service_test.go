@@ -23,12 +23,31 @@ func (r *fakeNodeRepo) UpsertHeartbeat(_ context.Context, name string, capabilit
 	return node, nil
 }
 
-func (r *fakeNodeRepo) ListOnline(_ context.Context) ([]Node, error) {
+func (r *fakeNodeRepo) ListOnline(_ context.Context, limit, offset int) ([]Node, error) {
 	nodes := make([]Node, 0, len(r.nodes))
 	for _, node := range r.nodes {
 		nodes = append(nodes, node)
 	}
-	return nodes, nil
+	if offset >= len(nodes) {
+		return []Node{}, nil
+	}
+	end := offset + limit
+	if limit <= 0 || end > len(nodes) {
+		end = len(nodes)
+	}
+	return nodes[offset:end], nil
+}
+
+func (r *fakeNodeRepo) GetByID(_ context.Context, nodeID string) (Node, error) {
+	node, ok := r.nodes[nodeID]
+	if !ok {
+		return Node{}, ErrNodeNotFound
+	}
+	return node, nil
+}
+
+func (r *fakeNodeRepo) ListRecentExecutions(_ context.Context, nodeID string, query ExecutionQuery) ([]NodeExecution, error) {
+	return []NodeExecution{}, nil
 }
 
 func TestHeartbeatMarksNodeOnline(t *testing.T) {
@@ -49,11 +68,35 @@ func TestListReturnsRepoNodes(t *testing.T) {
 		t.Fatalf("Heartbeat returned error: %v", err)
 	}
 
-	nodes, err := svc.List()
+	nodes, err := svc.List(20, 0)
 	if err != nil {
 		t.Fatalf("List returned error: %v", err)
 	}
 	if len(nodes) != 1 || nodes[0].Name != "node-a" {
 		t.Fatalf("unexpected nodes: %#v", nodes)
+	}
+}
+
+func TestGetByIDReturnsNode(t *testing.T) {
+	repo := &fakeNodeRepo{}
+	svc := NewNodeService(repo)
+	if _, err := svc.Heartbeat("node-a", []string{"docker", "go"}); err != nil {
+		t.Fatalf("Heartbeat returned error: %v", err)
+	}
+
+	node, err := svc.GetByID("node-a")
+	if err != nil {
+		t.Fatalf("GetByID returned error: %v", err)
+	}
+	if node.ID != "node-a" || node.Status != "online" {
+		t.Fatalf("unexpected node: %#v", node)
+	}
+}
+
+func TestGetByIDReturnsNotFoundForUnknownNode(t *testing.T) {
+	svc := NewNodeService(&fakeNodeRepo{})
+	_, err := svc.GetByID("missing")
+	if err != ErrNodeNotFound {
+		t.Fatalf("expected ErrNodeNotFound, got %v", err)
 	}
 }
