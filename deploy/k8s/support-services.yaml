@@ -1,0 +1,149 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: scheduler-service
+  namespace: crawler-platform
+spec:
+  selector:
+    app: scheduler-service
+  ports:
+    - port: 8080
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: scheduler-service
+  namespace: crawler-platform
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: scheduler-service
+  template:
+    metadata:
+      labels:
+        app: scheduler-service
+    spec:
+      containers:
+        - name: scheduler-service
+          image: crawler-platform/scheduler-service:latest
+          envFrom:
+            - configMapRef:
+                name: crawler-platform-config
+          resources:
+            limits: { cpu: 500m, memory: 128Mi }
+            requests: { cpu: 100m, memory: 64Mi }
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: monitor-service
+  namespace: crawler-platform
+spec:
+  selector:
+    app: monitor-service
+  ports:
+    - port: 8087
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: monitor-service
+  namespace: crawler-platform
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: monitor-service
+  template:
+    metadata:
+      labels:
+        app: monitor-service
+    spec:
+      containers:
+        - name: monitor-service
+          image: crawler-platform/monitor-service:latest
+          ports:
+            - containerPort: 8087
+          envFrom:
+            - configMapRef:
+                name: crawler-platform-config
+          resources:
+            limits: { cpu: 500m, memory: 128Mi }
+            requests: { cpu: 100m, memory: 64Mi }
+
+---
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: agent
+  namespace: crawler-platform
+spec:
+  selector:
+    matchLabels:
+      app: agent
+  template:
+    metadata:
+      labels:
+        app: agent
+    spec:
+      hostNetwork: true
+      containers:
+        - name: agent
+          image: crawler-platform/agent:latest
+          envFrom:
+            - configMapRef:
+                name: crawler-platform-config
+          volumeMounts:
+            - name: docker-sock
+              mountPath: /var/run/docker.sock
+          resources:
+            limits: { cpu: "1", memory: 256Mi }
+            requests: { cpu: 250m, memory: 128Mi }
+          securityContext:
+            privileged: true
+      volumes:
+        - name: docker-sock
+          hostPath:
+            path: /var/run/docker.sock
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: web
+  namespace: crawler-platform
+spec:
+  selector:
+    app: web
+  ports:
+    - port: 80
+  type: LoadBalancer
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: web
+  namespace: crawler-platform
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: web
+  template:
+    metadata:
+      labels:
+        app: web
+    spec:
+      containers:
+        - name: web
+          image: crawler-platform/web:latest
+          ports:
+            - containerPort: 80
+          resources:
+            limits: { cpu: 250m, memory: 64Mi }
+            requests: { cpu: 50m, memory: 32Mi }

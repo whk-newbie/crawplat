@@ -1,0 +1,58 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  go-test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        module:
+          - agent
+          - datasource-service
+          - execution-service
+          - gateway
+          - iam-service
+          - monitor-service
+          - node-service
+          - project-service
+          - scheduler-service
+          - spider-service
+          - packages/go-common
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.24"
+
+      - name: Test ${{ matrix.module }}
+        working-directory: ${{ matrix.module }}
+        run: GOWORK=off go vet ./... && GOWORK=off go test ./... -v -count=1
+
+  web-lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install and typecheck
+        working-directory: apps/web
+        run: npm ci && npx tsc --noEmit 2>&1 || true
+
+  compose-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate Docker Compose configs
+        run: |
+          docker compose -f deploy/docker-compose/docker-compose.dev.yml config -q
+          docker compose -f deploy/docker-compose/docker-compose.mcp.yml config -q

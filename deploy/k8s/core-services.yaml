@@ -1,0 +1,279 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: gateway
+  namespace: crawler-platform
+spec:
+  selector:
+    app: gateway
+  ports:
+    - port: 8080
+  type: ClusterIP
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: gateway
+  namespace: crawler-platform
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: gateway
+  template:
+    metadata:
+      labels:
+        app: gateway
+    spec:
+      containers:
+        - name: gateway
+          image: crawler-platform/gateway:latest
+          ports:
+            - containerPort: 8080
+          envFrom:
+            - configMapRef:
+                name: crawler-platform-config
+          resources:
+            limits: { cpu: 500m, memory: 128Mi }
+            requests: { cpu: 100m, memory: 64Mi }
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: iam-service
+  namespace: crawler-platform
+spec:
+  selector:
+    app: iam-service
+  ports:
+    - port: 8081
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: iam-service
+  namespace: crawler-platform
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: iam-service
+  template:
+    metadata:
+      labels:
+        app: iam-service
+    spec:
+      containers:
+        - name: iam-service
+          image: crawler-platform/iam-service:latest
+          ports:
+            - containerPort: 8081
+          envFrom:
+            - configMapRef:
+                name: crawler-platform-config
+          resources:
+            limits: { cpu: 500m, memory: 128Mi }
+            requests: { cpu: 100m, memory: 64Mi }
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: project-service
+  namespace: crawler-platform
+spec:
+  selector:
+    app: project-service
+  ports:
+    - port: 8082
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: project-service
+  namespace: crawler-platform
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: project-service
+  template:
+    metadata:
+      labels:
+        app: project-service
+    spec:
+      containers:
+        - name: project-service
+          image: crawler-platform/project-service:latest
+          ports:
+            - containerPort: 8082
+          envFrom:
+            - configMapRef:
+                name: crawler-platform-config
+          resources:
+            limits: { cpu: 500m, memory: 128Mi }
+            requests: { cpu: 100m, memory: 64Mi }
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: spider-service
+  namespace: crawler-platform
+spec:
+  selector:
+    app: spider-service
+  ports:
+    - port: 8083
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: spider-service
+  namespace: crawler-platform
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: spider-service
+  template:
+    metadata:
+      labels:
+        app: spider-service
+    spec:
+      containers:
+        - name: spider-service
+          image: crawler-platform/spider-service:latest
+          ports:
+            - containerPort: 8083
+          envFrom:
+            - configMapRef:
+                name: crawler-platform-config
+          resources:
+            limits: { cpu: 500m, memory: 128Mi }
+            requests: { cpu: 100m, memory: 64Mi }
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: execution-service
+  namespace: crawler-platform
+spec:
+  selector:
+    app: execution-service
+  ports:
+    - port: 8085
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: execution-service
+  namespace: crawler-platform
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: execution-service
+  template:
+    metadata:
+      labels:
+        app: execution-service
+    spec:
+      containers:
+        - name: execution-service
+          image: crawler-platform/execution-service:latest
+          ports:
+            - containerPort: 8085
+          envFrom:
+            - configMapRef:
+                name: crawler-platform-config
+          resources:
+            limits: { cpu: "1", memory: 256Mi }
+            requests: { cpu: 250m, memory: 128Mi }
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: node-service
+  namespace: crawler-platform
+spec:
+  selector:
+    app: node-service
+  ports:
+    - port: 8084
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: node-service
+  namespace: crawler-platform
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: node-service
+  template:
+    metadata:
+      labels:
+        app: node-service
+    spec:
+      containers:
+        - name: node-service
+          image: crawler-platform/node-service:latest
+          ports:
+            - containerPort: 8084
+          envFrom:
+            - configMapRef:
+                name: crawler-platform-config
+          resources:
+            limits: { cpu: 500m, memory: 128Mi }
+            requests: { cpu: 100m, memory: 64Mi }
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: datasource-service
+  namespace: crawler-platform
+spec:
+  selector:
+    app: datasource-service
+  ports:
+    - port: 8086
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: datasource-service
+  namespace: crawler-platform
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: datasource-service
+  template:
+    metadata:
+      labels:
+        app: datasource-service
+    spec:
+      containers:
+        - name: datasource-service
+          image: crawler-platform/datasource-service:latest
+          ports:
+            - containerPort: 8086
+          envFrom:
+            - configMapRef:
+                name: crawler-platform-config
+          resources:
+            limits: { cpu: 500m, memory: 256Mi }
+            requests: { cpu: 100m, memory: 128Mi }
