@@ -5,6 +5,7 @@ package repo
 
 import (
 	"errors"
+	"fmt"
 
 	"crawler-platform/apps/iam-service/internal/model"
 )
@@ -12,6 +13,9 @@ import (
 // ErrUserNotFound 表示用户不存在。service 层在 Login 失败时会统一返回
 // ErrInvalidCredentials，不直接暴露此错误，避免用户枚举攻击。
 var ErrUserNotFound = errors.New("user not found")
+
+// ErrUserAlreadyExists 表示用户名已被注册。
+var ErrUserAlreadyExists = errors.New("user already exists")
 
 // UserRepo 是内存用户仓储，非并发安全。
 type UserRepo struct {
@@ -38,4 +42,13 @@ func (r *UserRepo) FindByUsername(username string) (model.User, error) {
 		return model.User{}, ErrUserNotFound
 	}
 	return user, nil
+}
+
+// Create 创建新用户，用户名已存在时返回 ErrUserAlreadyExists。
+func (r *UserRepo) Create(user model.User) error {
+	if _, ok := r.users[user.Username]; ok {
+		return fmt.Errorf("%w: %s", ErrUserAlreadyExists, user.Username)
+	}
+	r.users[user.Username] = user
+	return nil
 }

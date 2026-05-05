@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"crawler-platform/apps/iam-service/internal/api"
+	"crawler-platform/apps/iam-service/internal/repo"
 	"crawler-platform/apps/iam-service/internal/service"
 )
 
@@ -19,7 +20,7 @@ func main() {
 	}
 
 	enableSeedAdmin := strings.EqualFold(os.Getenv("IAM_ENABLE_SEED_ADMIN"), "true")
-	router := api.NewRouter(service.NewAuthService(secret, enableSeedAdmin))
+	router := api.NewRouter(service.NewAuthService(secret, repo.NewUserRepo(enableSeedAdmin)))
 	if err := router.Run(":8081"); err != nil {
 		log.Fatal(err)
 	}

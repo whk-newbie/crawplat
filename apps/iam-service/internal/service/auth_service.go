@@ -1,13 +1,14 @@
 // Package service 是 IAM 认证业务逻辑层。
-// 负责用户登录认证、JWT Token 签发。
+// 负责用户登录认证、用户注册、JWT Token 签发。
 // 不处理 HTTP 请求解析和路由注册——这些属于 api 层。
-// 不处理用户数据存取——该职责属于 repo 层。
+// 不处理用户数据存取——该职责通过 UserRepository 接口委托给 repo 层。
 package service
 
 import (
 	"errors"
+	"strings"
 
-	"crawler-platform/apps/iam-service/internal/repo"
+	"crawler-platform/apps/iam-service/internal/model"
 	"crawler-platform/packages/go-common/auth"
 )
 
@@ -15,24 +16,37 @@ import (
 // 出于安全考虑，不区分"用户不存在"和"密码错误"的具体原因。
 var ErrInvalidCredentials = errors.New("invalid credentials")
 
-// AuthService 处理登录认证，依赖 JWT secret 和用户仓储。
-type AuthService struct {
-	secret string
-	users  *repo.UserRepo
+// ErrUserAlreadyExists 表示注册时用户名已被占用。
+var ErrUserAlreadyExists = errors.New("user already exists")
+
+// UserRepository 定义用户数据访问接口，由 repo 层实现。
+type UserRepository interface {
+	FindByUsername(username string) (model.User, error)
+	Create(user model.User) error
 }
 
-// NewAuthService 创建认证服务实例。enableSeedAdmin 控制是否预置管理员账号。
-func NewAuthService(secret string, enableSeedAdmin bool) *AuthService {
+// AuthService 处理登录认证和用户注册，依赖 JWT secret 和 UserRepository 接口。
+type AuthService struct {
+	secret string
+	users  UserRepository
+}
+
+// NewAuthService 创建认证服务实例，接受 UserRepository 接口实现。
+func NewAuthService(secret string, users UserRepository) *AuthService {
 	return &AuthService{
 		secret: secret,
-		users:  repo.NewUserRepo(enableSeedAdmin),
+		users:  users,
 	}
 }
 
 // Login 验证用户名密码并签发 JWT Token。
-// 输入：username（登录名）、password（明文密码，MVP 阶段）。
-// 成功返回签发的 JWT Token 字符串，失败返回 ErrInvalidCredentials。
+// 输入自动做 TrimSpace 处理，成功返回 JWT Token，失败返回 ErrInvalidCredentials。
 func (s *AuthService) Login(username, password string) (string, error) {
+	username = strings.TrimSpace(username)
+	if username == "" || password == "" {
+		return "", ErrInvalidCredentials
+	}
+
 	user, err := s.users.FindByUsername(username)
 	if err != nil {
 		return "", ErrInvalidCredentials
@@ -41,4 +55,20 @@ func (s *AuthService) Login(username, password string) (string, error) {
 		return "", ErrInvalidCredentials
 	}
 	return auth.IssueToken(s.secret, user.Username)
+}
+
+// Register 注册新用户。
+// 用户名自动做 TrimSpace 处理，不允许空用户名或空密码。
+// 用户名已存在时返回 ErrUserAlreadyExists。
+func (s *AuthService) Register(username, password string) (model.User, error) {
+	username = strings.TrimSpace(username)
+	if username == "" || password == "" {
+		return model.User{}, errors.New("username and password are required")
+	}
+
+	user := model.User{Username: username, Password: password}
+	if err := s.users.Create(user); err != nil {
+		return model.User{}, ErrUserAlreadyExists
+	}
+	return user, nil
 }
