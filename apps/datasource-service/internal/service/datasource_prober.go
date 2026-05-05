@@ -1,3 +1,16 @@
+// Package service 中的数据源探针（prober）实现，负责真实连接测试和数据预览。
+//
+// 本文件是核心探针层——所有连接测试和数据预览都是真实操作，非 mock：
+//   - 连接测试：对目标数据源建立真实 TCP 连接并执行 Ping/认证
+//   - 数据预览：对目标数据源执行真实查询，返回元数据（表名、key 列表、集合名等）
+//
+// 与谁交互：直接与外部数据源建立连接——
+//   - PostgreSQL：通过 pgx/v5 驱动
+//   - Redis：通过 go-redis/v9 客户端
+//   - MongoDB：通过 mongo-driver/v2 客户端
+//
+// 所有探针操作均设置 5 秒超时（probeTimeout），防止外部数据源不可达时无限阻塞。
+// 错误分类：配置校验错误（ErrDatasourceConfigInvalid）vs 连接/查询失败（ErrDatasourceProbeFailed）。
 package service
 
 import (
@@ -18,19 +31,28 @@ import (
 	"go.mongodb.org/mongo-driver/v2/mongo/readpref"
 )
 
+// probeTimeout 定义了连接测试和数据预览的统一超时时间。
+// 设置为 5 秒以在"快速反馈给前端"和"容忍慢网络"之间取得平衡。
 const probeTimeout = 5 * time.Second
 
+// Prober 定义了数据源探针的接口。
+// 实现者必须支持连接测试（Test）和数据预览（Preview），两者均为真实操作。
 type Prober interface {
 	Test(ctx context.Context, datasource model.Datasource) (model.TestResult, error)
 	Preview(ctx context.Context, datasource model.Datasource) (model.PreviewResult, error)
 }
 
+// newLiveDatasourceProber 创建真实探针实例，所有操作都直接连接外部数据源。
 func newLiveDatasourceProber() Prober {
 	return &liveDatasourceProber{}
 }
 
+// liveDatasourceProber 是 Prober 接口的真实实现，连接外部 PostgreSQL/Redis/MongoDB。
 type liveDatasourceProber struct{}
 
+// Test 对指定数据源执行真实连接测试。
+// 内部创建带超时的 context（5 秒），根据数据源类型路由到对应的测试函数。
+// 返回 TestResult.Status="ok" 表示连接成功；失败时返回包裹了 ErrDatasourceProbeFailed 或 ErrDatasourceConfigInvalid 的错误。
 func (p *liveDatasourceProber) Test(ctx context.Context, datasource model.Datasource) (model.TestResult, error) {
 	probeCtx, cancel := context.WithTimeout(ctx, probeTimeout)
 	defer cancel()
@@ -59,6 +81,9 @@ func (p *liveDatasourceProber) Test(ctx context.Context, datasource model.Dataso
 	}, nil
 }
 
+// Preview 对指定数据源执行真实数据预览查询。
+// 内部创建带超时的 context（5 秒），根据数据源类型路由到对应的预览函数。
+// 返回的 Rows 结构取决于数据源类型：PostgreSQL 返回表名，Redis 返回 key 和类型，MongoDB 返回数据库/集合名。
 func (p *liveDatasourceProber) Preview(ctx context.Context, datasource model.Datasource) (model.PreviewResult, error) {
 	probeCtx, cancel := context.WithTimeout(ctx, probeTimeout)
 	defer cancel()
@@ -89,6 +114,8 @@ func (p *liveDatasourceProber) Preview(ctx context.Context, datasource model.Dat
 	}, nil
 }
 
+// testPostgres 使用 pgx 驱动连接 PostgreSQL 并执行 Ping，验证连接可用性。
+// 连接失败时返回 ErrDatasourceProbeFailed，便于前端根据错误类型展示不同的失败原因。
 func testPostgres(ctx context.Context, cfg map[string]string) error {
 	dsn, err := postgresDSN(cfg)
 	if err != nil {
@@ -107,6 +134,9 @@ func testPostgres(ctx context.Context, cfg map[string]string) error {
 	return nil
 }
 
+// previewPostgres 查询 information_schema.tables 获取 schema 下的表名列表（最多 5 条）。
+// schema 默认使用 "public"，可通过 config 中的 "schema" 键覆盖。
+// 这样前端即可展示"该 PostgreSQL 数据源中有哪些表"的预览信息。
 func previewPostgres(ctx context.Context, cfg map[string]string) ([]map[string]string, error) {
 	dsn, err := postgresDSN(cfg)
 	if err != nil {
@@ -152,6 +182,7 @@ func previewPostgres(ctx context.Context, cfg map[string]string) ([]map[string]s
 	return previewRows, nil
 }
 
+// testRedis 创建 Redis 客户端并执行 PING 命令验证连接。
 func testRedis(ctx context.Context, cfg map[string]string) error {
 	client, err := newRedisClient(cfg)
 	if err != nil {
@@ -165,6 +196,8 @@ func testRedis(ctx context.Context, cfg map[string]string) error {
 	return nil
 }
 
+// previewRedis 使用 SCAN 命令扫描前 5 个 key，返回 key 名、类型及字符串类型的值截断（最多 120 字符）。
+// 注意：SCAN 在生产环境可能较慢，此处限制 count 为 5 以避免对 Redis 造成压力。
 func previewRedis(ctx context.Context, cfg map[string]string) ([]map[string]string, error) {
 	client, err := newRedisClient(cfg)
 	if err != nil {
@@ -197,6 +230,7 @@ func previewRedis(ctx context.Context, cfg map[string]string) ([]map[string]stri
 	return previewRows, nil
 }
 
+// testMongo 创建 MongoDB 客户端并对 Primary 节点执行 Ping，验证连接及副本集状态。
 func testMongo(ctx context.Context, cfg map[string]string) error {
 	client, err := newMongoClient(cfg)
 	if err != nil {
@@ -210,6 +244,9 @@ func testMongo(ctx context.Context, cfg map[string]string) error {
 	return nil
 }
 
+// previewMongo 预览 MongoDB 结构信息：
+//   - 如果未指定 database，则列出前 5 个数据库名
+//   - 如果指定了 database，则列出该数据库下前 5 个集合名
 func previewMongo(ctx context.Context, cfg map[string]string) ([]map[string]string, error) {
 	client, err := newMongoClient(cfg)
 	if err != nil {
@@ -250,6 +287,11 @@ func previewMongo(ctx context.Context, cfg map[string]string) ([]map[string]stri
 	return rows, nil
 }
 
+// postgresDSN 从 config map 中构建 PostgreSQL 连接字符串（DSN）。
+// 支持两种配置方式：
+//   1. 直接提供完整 URI/DSN（优先级最高）
+//   2. 分别提供 host、port、user、password、database 等字段，由本函数拼接
+// 未指定 sslmode 时默认使用 "disable"（开发环境常用）。
 func postgresDSN(cfg map[string]string) (string, error) {
 	if uri := firstNonEmpty(cfg, "uri", "dsn"); uri != "" {
 		return uri, nil
@@ -298,6 +340,9 @@ func postgresDSN(cfg map[string]string) (string, error) {
 	), nil
 }
 
+// newRedisClient 从 config map 创建 Redis 客户端。
+// 支持 "addr" 或 "host:port" 两种地址配置方式，默认端口 6379。
+// db 参数默认为 0。
 func newRedisClient(cfg map[string]string) (*redis.Client, error) {
 	addr := strings.TrimSpace(firstNonEmpty(cfg, "addr", "address"))
 	if addr == "" {
@@ -328,6 +373,8 @@ func newRedisClient(cfg map[string]string) (*redis.Client, error) {
 	}), nil
 }
 
+// newMongoClient 从 config map 中的 "uri" 字段创建 MongoDB 客户端。
+// MongoDB 必须提供完整 URI 连接字符串，不支持分别指定 host/port。
 func newMongoClient(cfg map[string]string) (*mongo.Client, error) {
 	uri := strings.TrimSpace(firstNonEmpty(cfg, "uri"))
 	if uri == "" {
@@ -340,6 +387,8 @@ func newMongoClient(cfg map[string]string) (*mongo.Client, error) {
 	return client, nil
 }
 
+// firstNonEmpty 从 config map 中按优先级返回第一个非空的配置值。
+// keys 按优先级降序排列——用于支持同一配置项的多种键名（如 "user" vs "username"）。
 func firstNonEmpty(cfg map[string]string, keys ...string) string {
 	for _, key := range keys {
 		if strings.TrimSpace(cfg[key]) != "" {
@@ -349,6 +398,9 @@ func firstNonEmpty(cfg map[string]string, keys ...string) string {
 	return ""
 }
 
+// truncateValue 截断字符串到指定最大长度，超出部分用 "..." 表示。
+// 用于 Redis 字符串类型的值预览，避免超长 value 撑爆前端展示。
+// 当 maxLen <= 0 或字符串未超过限制时返回原值，不做修改。
 func truncateValue(value string, maxLen int) string {
 	if maxLen <= 0 || len(value) <= maxLen {
 		return value

@@ -1,3 +1,8 @@
+// Package api 的 HTTP 层集成测试，验证路由注册和请求/响应生命周期。
+//
+// 本文件使用 httptest 模拟 HTTP 请求，不启动真实 TCP 端口。
+// 测试覆盖创建数据源、列表查询、连接测试和数据预览的完整 API 通路。
+// 依赖 memoryRepository（内存在线存储），不依赖 PostgreSQL 或外部数据源。
 package api
 
 import (
@@ -12,6 +17,8 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
+// TestCreateDatasourceReturnsCreatedDatasource 验证 POST /api/v1/datasources 创建数据源端点。
+// 检查：HTTP 201 状态码、返回的 JSON 包含生成的 ID 和传入的 config 字段。
 func TestCreateDatasourceReturnsCreatedDatasource(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
@@ -35,6 +42,8 @@ func TestCreateDatasourceReturnsCreatedDatasource(t *testing.T) {
 	}
 }
 
+// TestDatasourceLifecycleRoutesUseService 验证完整的数据源生命周期 API 调用链：
+// 创建 → 列表查询 → 连接测试 → 数据预览，确保所有路由正确委托给 Service 层。
 func TestDatasourceLifecycleRoutesUseService(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
