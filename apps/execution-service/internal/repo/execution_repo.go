@@ -126,7 +126,10 @@ func buildExecutionListQuery(query service.ListExecutionsQuery, countOnly bool) 
 	}
 
 	sortBy := executionSortColumn(query.SortBy)
-	sortOrder := strings.ToUpper(query.SortOrder)
+	sortOrder := strings.ToUpper(strings.TrimSpace(query.SortOrder))
+	if sortOrder != "ASC" && sortOrder != "DESC" {
+		sortOrder = "DESC"
+	}
 	sqlQuery := fmt.Sprintf(`
 		SELECT id, project_id, spider_id, spider_version, registry_auth_ref, node_id, status, trigger_source, image, command, cpu_cores, memory_mb, timeout_seconds, error_message, created_at, started_at, finished_at, retry_limit, retry_count, retry_delay_seconds, retry_of_execution_id, retried_at
 		FROM executions
