@@ -1,3 +1,7 @@
+// API 路由层单元测试。
+// 使用内存 fake 实现（apiFakeExecutionRepo/apiFakeLogRepo/apiFakeQueue）替代真实数据库和 Redis，
+// 通过 httptest 验证 HTTP 状态码、响应体结构和错误映射的正确性。
+// 不依赖外部服务，所有测试都可以在无网络环境中运行。
 package api
 
 import (
@@ -172,6 +176,7 @@ func (q *apiFakeQueue) Release(_ context.Context, executionID string) error {
 	return q.err
 }
 
+// newAPITestService 创建测试用的服务实例及其 fake 依赖，所有 fake 均为空状态。
 func newAPITestService() (*service.ExecutionService, *apiFakeExecutionRepo, *apiFakeLogRepo, *apiFakeQueue) {
 	execRepo := &apiFakeExecutionRepo{}
 	logRepo := &apiFakeLogRepo{}
@@ -628,6 +633,7 @@ func TestInternalExecutionRoutesRequireToken(t *testing.T) {
 	}
 }
 
+// newInternalJSONRequest 创建带有 Internal Token 认证头的 JSON 请求，用于测试内部 API。
 func newInternalJSONRequest(method, target, body string) *http.Request {
 	req := httptest.NewRequest(method, target, strings.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")

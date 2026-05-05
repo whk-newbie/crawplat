@@ -1,3 +1,7 @@
+// HTTP 路由和请求处理层。
+// 负责注册所有执行服务的公开 API（/api/v1/executions）和内部 API（/internal/v1/executions），
+// 包括请求参数绑定（ShouldBindJSON）、调用 service 层方法、错误码映射。
+// 不包含业务逻辑——状态机、队列语义、持久化由 service 层处理；本层仅负责 HTTP 层面的输入输出。
 package api
 
 import (
@@ -12,6 +16,21 @@ import (
 
 const internalTokenHeader = "X-Internal-Token"
 
+// NewRouter 创建并配置 gin 路由引擎，注册所有公开和内部路由。
+//
+// 公开 API（无需认证）：
+//   - POST   /api/v1/executions         创建执行
+//   - GET    /api/v1/executions/:id      查询执行详情
+//   - GET    /api/v1/executions/:id/logs 查询执行日志
+//   - POST   /api/v1/executions/:id/logs 追加日志
+//
+// 内部 API（需 X-Internal-Token 认证）：
+//   - POST   /internal/v1/executions/claim                认领下一个待执行任务
+//   - POST   /internal/v1/executions/:id/start            确认执行已启动
+//   - POST   /internal/v1/executions/:id/complete         标记执行完成
+//   - POST   /internal/v1/executions/:id/fail             标记执行失败
+//   - POST   /internal/v1/executions/:id/logs             追加日志（内部调用）
+//   - POST   /internal/v1/executions/retries/materialize  物化下一个重试候选
 func NewRouter(executionService *service.ExecutionService) *gin.Engine {
 	router := gin.Default()
 
@@ -217,6 +236,9 @@ func NewRouter(executionService *service.ExecutionService) *gin.Engine {
 	return router
 }
 
+// requireInternalToken 返回一个 gin 中间件，校验请求头 X-Internal-Token。
+// 优先读取环境变量 INTERNAL_API_TOKEN，回退到 JWT_SECRET。
+// 如果环境变量为空（开发环境），任何请求都会被拒绝（安全优先原则）。
 func requireInternalToken() gin.HandlerFunc {
 	token := os.Getenv("INTERNAL_API_TOKEN")
 	if token == "" {

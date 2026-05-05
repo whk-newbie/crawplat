@@ -1,3 +1,6 @@
+// Redis 队列层单元测试。
+// 使用 miniredis（内存 Redis mock）验证 Enqueue/Claim/Ack/Release 的 FIFO 语义和原子性。
+// 不依赖真实 Redis 实例。
 package queue
 
 import (
@@ -8,6 +11,7 @@ import (
 	"github.com/redis/go-redis/v9"
 )
 
+// newRedisQueue 创建基于 miniredis 的测试队列实例，测试结束后自动清理。
 func newRedisQueue(t *testing.T) *RedisQueue {
 	t.Helper()
 
