@@ -1,4 +1,4 @@
-CREATE TABLE IF NOT EXISTS scheduled_tasks (
+CREATE TABLE scheduled_tasks (
     id TEXT PRIMARY KEY,
     project_id TEXT NOT NULL REFERENCES projects(id),
     spider_id TEXT NOT NULL REFERENCES spiders(id),
@@ -10,5 +10,5 @@ CREATE TABLE IF NOT EXISTS scheduled_tasks (
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-CREATE INDEX IF NOT EXISTS idx_scheduled_tasks_project_id ON scheduled_tasks (project_id);
-CREATE INDEX IF NOT EXISTS idx_scheduled_tasks_enabled ON scheduled_tasks (enabled, created_at DESC);
+CREATE INDEX idx_scheduled_tasks_project_id ON scheduled_tasks (project_id);
+CREATE INDEX idx_scheduled_tasks_enabled ON scheduled_tasks (enabled, created_at DESC);

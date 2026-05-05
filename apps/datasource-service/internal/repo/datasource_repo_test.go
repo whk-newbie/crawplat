@@ -55,43 +55,16 @@ func TestPostgresRepositoryListByProject(t *testing.T) {
 	mock.ExpectQuery(regexp.QuoteMeta(`
 		SELECT id, project_id, name, type, readonly, config_json
 		FROM datasources
-		WHERE ($1 = '' OR project_id = $1)
+		WHERE project_id = $1
 		ORDER BY created_at DESC, id DESC
-		LIMIT $2 OFFSET $3
-	`)).WithArgs("p1", 20, 0).WillReturnRows(rows)
+	`)).WithArgs("p1").WillReturnRows(rows)
 
-	datasources, err := repo.ListByProject(context.Background(), "p1", 20, 0)
+	datasources, err := repo.ListByProject(context.Background(), "p1")
 	if err != nil {
 		t.Fatalf("ListByProject returned error: %v", err)
 	}
 	if len(datasources) != 1 || datasources[0].Config["db"] != "0" {
 		t.Fatalf("unexpected datasources: %#v", datasources)
-	}
-	if err := mock.ExpectationsWereMet(); err != nil {
-		t.Fatalf("ExpectationsWereMet returned error: %v", err)
-	}
-}
-
-func TestPostgresRepositoryCountByProject(t *testing.T) {
-	db, mock, err := sqlmock.New()
-	if err != nil {
-		t.Fatalf("sqlmock.New returned error: %v", err)
-	}
-	defer db.Close()
-
-	repo := NewPostgresRepository(db)
-	mock.ExpectQuery(regexp.QuoteMeta(`
-		SELECT COUNT(*) FROM datasources WHERE ($1 = '' OR project_id = $1)
-	`)).
-		WithArgs("p1").
-		WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(3))
-
-	count, err := repo.CountByProject(context.Background(), "p1")
-	if err != nil {
-		t.Fatalf("CountByProject returned error: %v", err)
-	}
-	if count != 3 {
-		t.Fatalf("expected count 3, got %d", count)
 	}
 	if err := mock.ExpectationsWereMet(); err != nil {
 		t.Fatalf("ExpectationsWereMet returned error: %v", err)

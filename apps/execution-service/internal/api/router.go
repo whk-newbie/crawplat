@@ -5,12 +5,8 @@ import (
 	"errors"
 	"net/http"
 	"os"
-	"strconv"
-	"strings"
-	"time"
 
 	"crawler-platform/apps/execution-service/internal/service"
-	"crawler-platform/packages/go-common/httpx"
 	"github.com/gin-gonic/gin"
 )
 
@@ -21,20 +17,15 @@ func NewRouter(executionService *service.ExecutionService) *gin.Engine {
 
 	createExecutionHandler := func(c *gin.Context) {
 		var req struct {
-			ProjectID          string   `json:"projectId" binding:"required"`
-			SpiderID           string   `json:"spiderId" binding:"required"`
-			SpiderVersion      int      `json:"spiderVersion"`
-			RegistryAuthRef    string   `json:"registryAuthRef"`
-			Image              string   `json:"image"`
-			Command            []string `json:"command"`
-			CPUCores           float64  `json:"cpuCores"`
-			MemoryMB           int      `json:"memoryMB"`
-			TimeoutSeconds     int      `json:"timeoutSeconds"`
-			TriggerSource      string   `json:"triggerSource"`
-			RetryLimit         int      `json:"retryLimit"`
-			RetryCount         int      `json:"retryCount"`
-			RetryDelaySeconds  int      `json:"retryDelaySeconds"`
-			RetryOfExecutionID string   `json:"retryOfExecutionId"`
+			ProjectID         string   `json:"projectId" binding:"required"`
+			SpiderID          string   `json:"spiderId" binding:"required"`
+			Image             string   `json:"image" binding:"required"`
+			Command           []string `json:"command"`
+			TriggerSource     string   `json:"triggerSource"`
+			RetryLimit        int      `json:"retryLimit"`
+			RetryCount        int      `json:"retryCount"`
+			RetryDelaySeconds int      `json:"retryDelaySeconds"`
+			RetryOfExecutionID string  `json:"retryOfExecutionId"`
 		}
 		if err := c.ShouldBindJSON(&req); err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
@@ -42,30 +33,18 @@ func NewRouter(executionService *service.ExecutionService) *gin.Engine {
 		}
 
 		exec, err := executionService.Create(context.Background(), service.CreateExecutionInput{
-			ProjectID:          req.ProjectID,
-			SpiderID:           req.SpiderID,
-			SpiderVersion:      req.SpiderVersion,
-			RegistryAuthRef:    req.RegistryAuthRef,
-			Image:              req.Image,
-			Command:            req.Command,
-			CPUCores:           req.CPUCores,
-			MemoryMB:           req.MemoryMB,
-			TimeoutSeconds:     req.TimeoutSeconds,
-			TriggerSource:      req.TriggerSource,
-			RetryLimit:         req.RetryLimit,
-			RetryCount:         req.RetryCount,
-			RetryDelaySeconds:  req.RetryDelaySeconds,
+			ProjectID:         req.ProjectID,
+			SpiderID:          req.SpiderID,
+			Image:             req.Image,
+			Command:           req.Command,
+			TriggerSource:     req.TriggerSource,
+			RetryLimit:        req.RetryLimit,
+			RetryCount:        req.RetryCount,
+			RetryDelaySeconds: req.RetryDelaySeconds,
 			RetryOfExecutionID: req.RetryOfExecutionID,
 		})
 		if err != nil {
-			switch {
-			case errors.Is(err, service.ErrExecutionImageRequired):
-				c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-			case errors.Is(err, service.ErrSpiderVersionNotFound):
-				c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
-			default:
-				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-			}
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
 		}
 		c.JSON(http.StatusCreated, exec)
@@ -122,74 +101,6 @@ func NewRouter(executionService *service.ExecutionService) *gin.Engine {
 	}
 
 	router.POST("/api/v1/executions", createExecutionHandler)
-	router.GET("/api/v1/executions", func(c *gin.Context) {
-		projectID := firstQuery(c, "project_id", "projectId")
-		limit, err := parseIntQuery(c, "limit", service.DefaultExecutionListLimit)
-		if err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "limit must be an integer"})
-			return
-		}
-		offset, err := parseIntQuery(c, "offset", 0)
-		if err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "offset must be an integer"})
-			return
-		}
-		spiderID := firstQuery(c, "spider_id", "spiderId")
-		nodeID := firstQuery(c, "node_id", "nodeId")
-		status := firstQuery(c, "status", "executionStatus")
-		triggerSource := firstQuery(c, "trigger_source", "executionTriggerSource")
-		executionFrom, err := parseRFC3339Query(c, "from", "executionFrom")
-		if err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "from must be RFC3339"})
-			return
-		}
-		executionTo, err := parseRFC3339Query(c, "to", "executionTo")
-		if err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "to must be RFC3339"})
-			return
-		}
-
-		items, total, err := executionService.List(context.Background(), service.ListExecutionsQuery{
-			ProjectID: projectID,
-			SpiderID:  spiderID,
-			NodeID:    nodeID,
-			Status:    status,
-			Trigger:   triggerSource,
-			From:      executionFrom,
-			To:        executionTo,
-			Limit:     limit,
-			Offset:    offset,
-			SortBy:    firstQuery(c, "sort_by", "sortBy"),
-			SortOrder: firstQuery(c, "sort_order", "sortOrder"),
-		})
-		if err != nil {
-			if errors.Is(err, service.ErrInvalidExecutionListQuery) {
-				c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-				return
-			}
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-			return
-		}
-		normalized, _ := (service.ListExecutionsQuery{
-			ProjectID: projectID,
-			SpiderID:  spiderID,
-			NodeID:    nodeID,
-			Status:    status,
-			Trigger:   triggerSource,
-			From:      executionFrom,
-			To:        executionTo,
-			Limit:     limit,
-			Offset:    offset,
-			SortBy:    firstQuery(c, "sort_by", "sortBy"),
-			SortOrder: firstQuery(c, "sort_order", "sortOrder"),
-		}).Normalize()
-		c.JSON(http.StatusOK, httpx.PaginatedResponse{
-			Items:  items,
-			Total:  total,
-			Limit:  normalized.Limit,
-			Offset: normalized.Offset,
-		})
-	})
 	router.POST("/api/v1/executions/:id/logs", appendLogHandler)
 	router.GET("/api/v1/executions/:id", getExecutionHandler)
 	router.GET("/api/v1/executions/:id/logs", getLogsHandler)
@@ -304,35 +215,6 @@ func NewRouter(executionService *service.ExecutionService) *gin.Engine {
 	})
 
 	return router
-}
-
-func firstQuery(c *gin.Context, keys ...string) string {
-	for _, key := range keys {
-		if value := strings.TrimSpace(c.Query(key)); value != "" {
-			return value
-		}
-	}
-	return ""
-}
-
-func parseIntQuery(c *gin.Context, key string, defaultValue int) (int, error) {
-	raw := strings.TrimSpace(c.Query(key))
-	if raw == "" {
-		return defaultValue, nil
-	}
-	return strconv.Atoi(raw)
-}
-
-func parseRFC3339Query(c *gin.Context, keys ...string) (*time.Time, error) {
-	raw := firstQuery(c, keys...)
-	if raw == "" {
-		return nil, nil
-	}
-	parsed, err := time.Parse(time.RFC3339, raw)
-	if err != nil {
-		return nil, err
-	}
-	return &parsed, nil
 }
 
 func requireInternalToken() gin.HandlerFunc {

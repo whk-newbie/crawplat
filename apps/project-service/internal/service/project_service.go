@@ -14,8 +14,7 @@ type ProjectService struct {
 
 type Repository interface {
 	Create(ctx context.Context, project model.Project) error
-	List(ctx context.Context, limit, offset int) ([]model.Project, error)
-	Count(ctx context.Context) (int64, error)
+	List(ctx context.Context) ([]model.Project, error)
 }
 
 type memoryRepository struct {
@@ -31,26 +30,13 @@ func (r *memoryRepository) Create(_ context.Context, project model.Project) erro
 	return nil
 }
 
-func (r *memoryRepository) List(_ context.Context, limit, offset int) ([]model.Project, error) {
+func (r *memoryRepository) List(_ context.Context) ([]model.Project, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
-	if offset >= len(r.projects) {
-		return nil, nil
-	}
-	end := offset + limit
-	if end > len(r.projects) {
-		end = len(r.projects)
-	}
-	result := make([]model.Project, end-offset)
-	copy(result, r.projects[offset:end])
-	return result, nil
-}
-
-func (r *memoryRepository) Count(_ context.Context) (int64, error) {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	return int64(len(r.projects)), nil
+	projects := make([]model.Project, len(r.projects))
+	copy(projects, r.projects)
+	return projects, nil
 }
 
 func NewProjectService(repos ...Repository) *ProjectService {
@@ -73,14 +59,6 @@ func (s *ProjectService) Create(code, name string) (model.Project, error) {
 	return project, nil
 }
 
-func (s *ProjectService) List(limit, offset int) ([]model.Project, int64, error) {
-	projects, err := s.repo.List(context.Background(), limit, offset)
-	if err != nil {
-		return nil, 0, err
-	}
-	total, err := s.repo.Count(context.Background())
-	if err != nil {
-		return nil, 0, err
-	}
-	return projects, total, err
+func (s *ProjectService) List() ([]model.Project, error) {
+	return s.repo.List(context.Background())
 }

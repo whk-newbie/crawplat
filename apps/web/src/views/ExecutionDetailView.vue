@@ -1,47 +1,54 @@
 <template>
-  <div v-loading="loading">
-    <el-page-header @back="$router.back()">
-      <template #content>Execution Detail</template>
-    </el-page-header>
+  <main class="page">
+    <section class="card">
+      <h1>Execution Detail</h1>
+      <p v-if="loading">Loading execution...</p>
+      <p v-else-if="error" class="error">{{ error }}</p>
+      <template v-else-if="execution">
+        <dl class="details">
+          <div>
+            <dt>ID</dt>
+            <dd>{{ execution.id }}</dd>
+          </div>
+          <div>
+            <dt>Status</dt>
+            <dd>{{ execution.status }}</dd>
+          </div>
+          <div>
+            <dt>Node</dt>
+            <dd>{{ execution.nodeId || 'unassigned' }}</dd>
+          </div>
+          <div>
+            <dt>Trigger</dt>
+            <dd>{{ execution.triggerSource }}</dd>
+          </div>
+          <div>
+            <dt>Image</dt>
+            <dd>{{ execution.image }}</dd>
+          </div>
+          <div>
+            <dt>Command</dt>
+            <dd>{{ execution.command.join(' ') || '-' }}</dd>
+          </div>
+          <div v-if="execution.errorMessage">
+            <dt>Error</dt>
+            <dd>{{ execution.errorMessage }}</dd>
+          </div>
+        </dl>
+      </template>
+    </section>
 
-    <el-alert v-if="error" :title="error" type="error" :closable="false" show-icon style="margin: 16px 0" />
-
-    <template v-if="execution">
-      <el-descriptions :border="true" :column="2" style="margin-top: 16px">
-        <el-descriptions-item label="ID">{{ execution.id }}</el-descriptions-item>
-        <el-descriptions-item label="Status">
-          <el-tag :type="statusTagType(execution.status)" size="small">{{ execution.status }}</el-tag>
-        </el-descriptions-item>
-        <el-descriptions-item label="Node">{{ execution.nodeId || 'unassigned' }}</el-descriptions-item>
-        <el-descriptions-item label="Trigger">{{ execution.triggerSource }}</el-descriptions-item>
-        <el-descriptions-item label="Spider Version">{{ execution.spiderVersion || '-' }}</el-descriptions-item>
-        <el-descriptions-item label="Registry Auth Ref">{{ execution.registryAuthRef || '-' }}</el-descriptions-item>
-        <el-descriptions-item label="Image">{{ execution.image }}</el-descriptions-item>
-        <el-descriptions-item label="Command">{{ execution.command.join(' ') || '-' }}</el-descriptions-item>
-        <el-descriptions-item v-if="execution.startedAt" label="Started">{{ execution.startedAt }}</el-descriptions-item>
-        <el-descriptions-item v-if="execution.finishedAt" label="Finished">{{ execution.finishedAt }}</el-descriptions-item>
-      </el-descriptions>
-
-      <el-alert
-        v-if="execution.errorMessage"
-        :title="execution.errorMessage"
-        type="error"
-        :closable="false"
-        show-icon
-        style="margin-top: 16px"
-      />
-
-      <el-card style="margin-top: 16px">
-        <template #header>Logs</template>
-        <el-timeline v-if="logs.length">
-          <el-timeline-item v-for="entry in logs" :key="entry.id" :timestamp="entry.createdAt" placement="top">
-            {{ entry.message }}
-          </el-timeline-item>
-        </el-timeline>
-        <el-empty v-else description="No logs yet" />
-      </el-card>
-    </template>
-  </div>
+    <section class="card">
+      <h2>Logs</h2>
+      <ul v-if="logs.length" class="logs">
+        <li v-for="entry in logs" :key="entry.id">
+          <strong>{{ entry.createdAt }}</strong>
+          <span>{{ entry.message }}</span>
+        </li>
+      </ul>
+      <p v-else-if="!loading">No logs yet.</p>
+    </section>
+  </main>
 </template>
 
 <script setup lang="ts">
@@ -54,16 +61,6 @@ const execution = ref<Execution | null>(null)
 const logs = ref<ExecutionLog[]>([])
 const loading = ref(false)
 const error = ref('')
-
-function statusTagType(status: string) {
-  const map: Record<string, '' | 'success' | 'warning' | 'danger' | 'info'> = {
-    pending: 'info',
-    running: 'warning',
-    succeeded: 'success',
-    failed: 'danger',
-  }
-  return map[status] || 'info'
-}
 
 async function loadExecution(executionId: string) {
   loading.value = true
@@ -93,3 +90,37 @@ watch(
   { immediate: true },
 )
 </script>
+
+<style scoped>
+.page {
+  display: grid;
+  gap: 1rem;
+  padding: 1rem;
+}
+
+.card {
+  border: 1px solid #d0d7de;
+  border-radius: 8px;
+  padding: 1rem;
+}
+
+.details {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.details div {
+  display: grid;
+  gap: 0.25rem;
+}
+
+.logs {
+  display: grid;
+  gap: 0.75rem;
+  padding-left: 1rem;
+}
+
+.error {
+  color: #b42318;
+}
+</style>

@@ -37,13 +37,11 @@ func main() {
 		_ = mongoClient.Disconnect(context.Background())
 	}()
 
-	executionService := service.NewExecutionService(
+	router := api.NewRouter(service.NewExecutionService(
 		execrepo.NewExecutionRepository(db),
 		execrepo.NewMongoLogRepository(mongoClient.Database("crawler")),
 		queue.NewRedisQueue(redisClient),
-	).WithSpiderVersionResolver(service.NewHTTPSpiderVersionResolver(cfg.SpiderServiceURL, nil))
-
-	router := api.NewRouter(executionService)
+	))
 	if err := router.Run(":8085"); err != nil {
 		log.Fatal(err)
 	}

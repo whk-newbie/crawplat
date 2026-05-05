@@ -1,7 +1,6 @@
-.PHONY: test docker-binaries web-assets migrate up down dev-up dev-down
+.PHONY: test docker-binaries web-assets migrate up down
 
 COMPOSE_FILE := deploy/docker-compose/docker-compose.mcp.yml
-DEV_COMPOSE_FILE := deploy/docker-compose/docker-compose.dev.yml
 DOCKER_BIN_DIR := .docker-bin
 
 NESTED_GO_MODULES := $(shell find packages apps -name go.mod -exec dirname {} \; | sort)
@@ -36,10 +35,3 @@ up: docker-binaries web-assets migrate
 
 down:
 	docker compose -f $(COMPOSE_FILE) down -v --remove-orphans
-
-dev-up:
-	COMPOSE_FILE=$(PWD)/$(DEV_COMPOSE_FILE) ./deploy/scripts/migrate-postgres.sh
-	docker compose -f $(DEV_COMPOSE_FILE) up --build -d
-
-dev-down:
-	docker compose -f $(DEV_COMPOSE_FILE) down -v --remove-orphans

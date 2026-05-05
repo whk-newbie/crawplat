@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"strings"
 	"time"
 
 	"crawler-platform/apps/execution-service/internal/model"
@@ -13,39 +12,15 @@ import (
 
 var ErrExecutionNotFound = errors.New("execution not found")
 var ErrInvalidExecutionState = errors.New("invalid execution state transition")
-var ErrExecutionImageRequired = errors.New("image is required")
-var ErrSpiderVersionNotFound = errors.New("spider version not found")
-var ErrInvalidExecutionListQuery = errors.New("invalid execution list query")
-
-const (
-	DefaultExecutionListLimit  = 20
-	MaxExecutionListLimit      = 100
-	DefaultExecutionListSortBy = "created_at"
-	DefaultExecutionListOrder  = "desc"
-)
-
-var allowedExecutionSortFields = map[string]struct{}{
-	"created_at":  {},
-	"started_at":  {},
-	"finished_at": {},
-	"status":      {},
-}
 
 type ExecutionService struct {
-	execRepo              ExecutionRepository
-	logRepo               LogRepository
-	queue                 Queue
-	spiderVersionResolver SpiderVersionResolver
-}
-
-type SpiderVersionResolver interface {
-	Resolve(ctx context.Context, spiderID string, requestedVersion int) (resolvedVersion int, registryAuthRef string, image string, command []string, err error)
+	execRepo ExecutionRepository
+	logRepo  LogRepository
+	queue    Queue
 }
 
 type ExecutionRepository interface {
 	Create(ctx context.Context, exec model.Execution) (model.Execution, error)
-	ListByProject(ctx context.Context, query ListExecutionsQuery) ([]model.Execution, error)
-	CountByProject(ctx context.Context, query ListExecutionsQuery) (int64, error)
 	Get(ctx context.Context, id string) (model.Execution, error)
 	MarkRunning(ctx context.Context, id, nodeID string, startedAt time.Time) (model.Execution, error)
 	Complete(ctx context.Context, id string, finishedAt time.Time) (model.Execution, error)
@@ -69,165 +44,57 @@ type Queue interface {
 }
 
 type CreateManualInput struct {
-	ProjectID       string
-	SpiderID        string
-	SpiderVersion   int
-	RegistryAuthRef string
-	Image           string
-	Command         []string
-	CPUCores        float64
-	MemoryMB        int
-	TimeoutSeconds  int
+	ProjectID string
+	SpiderID  string
+	Image     string
+	Command   []string
 }
 
 type CreateExecutionInput struct {
-	ProjectID          string
-	SpiderID           string
-	SpiderVersion      int
-	RegistryAuthRef    string
-	Image              string
-	Command            []string
-	CPUCores           float64
-	MemoryMB           int
-	TimeoutSeconds     int
-	TriggerSource      string
-	RetryLimit         int
-	RetryCount         int
-	RetryDelaySeconds  int
+	ProjectID         string
+	SpiderID          string
+	Image             string
+	Command           []string
+	TriggerSource     string
+	RetryLimit        int
+	RetryCount        int
+	RetryDelaySeconds int
 	RetryOfExecutionID string
-}
-
-type ListExecutionsQuery struct {
-	ProjectID string
-	SpiderID  string
-	NodeID    string
-	Status    string
-	Trigger   string
-	From      *time.Time
-	To        *time.Time
-	Limit     int
-	Offset    int
-	SortBy    string
-	SortOrder string
-}
-
-func (q ListExecutionsQuery) Normalize() (ListExecutionsQuery, error) {
-	query := q
-	query.ProjectID = strings.TrimSpace(query.ProjectID)
-	query.SpiderID = strings.TrimSpace(query.SpiderID)
-	query.NodeID = strings.TrimSpace(query.NodeID)
-	query.Status = strings.TrimSpace(query.Status)
-	query.Trigger = strings.TrimSpace(query.Trigger)
-	query.SortBy = strings.TrimSpace(strings.ToLower(query.SortBy))
-	query.SortOrder = strings.TrimSpace(strings.ToLower(query.SortOrder))
-
-	if query.ProjectID == "" {
-		return ListExecutionsQuery{}, fmt.Errorf("%w: project_id is required", ErrInvalidExecutionListQuery)
-	}
-	if query.Limit < 0 {
-		return ListExecutionsQuery{}, fmt.Errorf("%w: limit must be non-negative", ErrInvalidExecutionListQuery)
-	}
-	if query.Offset < 0 {
-		return ListExecutionsQuery{}, fmt.Errorf("%w: offset must be non-negative", ErrInvalidExecutionListQuery)
-	}
-	if query.From != nil && query.To != nil && query.From.After(*query.To) {
-		return ListExecutionsQuery{}, fmt.Errorf("%w: from must be before or equal to to", ErrInvalidExecutionListQuery)
-	}
-
-	if query.Limit == 0 {
-		query.Limit = DefaultExecutionListLimit
-	}
-	if query.Limit > MaxExecutionListLimit {
-		query.Limit = MaxExecutionListLimit
-	}
-	if query.SortBy == "" {
-		query.SortBy = DefaultExecutionListSortBy
-	}
-	if _, ok := allowedExecutionSortFields[query.SortBy]; !ok {
-		return ListExecutionsQuery{}, fmt.Errorf("%w: unsupported sort_by %q", ErrInvalidExecutionListQuery, query.SortBy)
-	}
-	if query.SortOrder == "" {
-		query.SortOrder = DefaultExecutionListOrder
-	}
-	if query.SortOrder != "asc" && query.SortOrder != "desc" {
-		return ListExecutionsQuery{}, fmt.Errorf("%w: unsupported sort_order %q", ErrInvalidExecutionListQuery, query.SortOrder)
-	}
-
-	return query, nil
 }
 
 func NewExecutionService(execRepo ExecutionRepository, logRepo LogRepository, queue Queue) *ExecutionService {
 	return &ExecutionService{execRepo: execRepo, logRepo: logRepo, queue: queue}
 }
 
-func (s *ExecutionService) WithSpiderVersionResolver(resolver SpiderVersionResolver) *ExecutionService {
-	s.spiderVersionResolver = resolver
-	return s
-}
-
 func (s *ExecutionService) CreateManual(ctx context.Context, input CreateManualInput) (model.Execution, error) {
 	return s.Create(ctx, CreateExecutionInput{
-		ProjectID:       input.ProjectID,
-		SpiderID:        input.SpiderID,
-		SpiderVersion:   input.SpiderVersion,
-		RegistryAuthRef: input.RegistryAuthRef,
-		Image:           input.Image,
-		Command:         input.Command,
-		CPUCores:        input.CPUCores,
-		MemoryMB:        input.MemoryMB,
-		TimeoutSeconds:  input.TimeoutSeconds,
-		TriggerSource:   "manual",
+		ProjectID:     input.ProjectID,
+		SpiderID:      input.SpiderID,
+		Image:         input.Image,
+		Command:       input.Command,
+		TriggerSource: "manual",
 	})
 }
 
 func (s *ExecutionService) Create(ctx context.Context, input CreateExecutionInput) (model.Execution, error) {
-	shouldResolve := s.spiderVersionResolver != nil && (strings.TrimSpace(input.Image) == "" || (strings.TrimSpace(input.RegistryAuthRef) == "" && input.SpiderVersion > 0))
-	if shouldResolve {
-		version, registryAuthRef, image, command, err := s.spiderVersionResolver.Resolve(ctx, input.SpiderID, input.SpiderVersion)
-		if err != nil {
-			return model.Execution{}, err
-		}
-		if input.SpiderVersion == 0 && version > 0 {
-			input.SpiderVersion = version
-		}
-		if strings.TrimSpace(input.RegistryAuthRef) == "" {
-			input.RegistryAuthRef = registryAuthRef
-		}
-		if strings.TrimSpace(input.Image) == "" {
-			input.Image = image
-		}
-		if len(input.Command) == 0 {
-			input.Command = command
-		}
-	}
-	input.Image = strings.TrimSpace(input.Image)
-	if input.Image == "" {
-		return model.Execution{}, ErrExecutionImageRequired
-	}
-
 	triggerSource := input.TriggerSource
 	if triggerSource == "" {
 		triggerSource = "manual"
 	}
 
 	exec := model.Execution{
-		ID:                 uuid.NewString(),
-		ProjectID:          input.ProjectID,
-		SpiderID:           input.SpiderID,
-		SpiderVersion:      input.SpiderVersion,
-		RegistryAuthRef:    strings.TrimSpace(input.RegistryAuthRef),
-		Status:             "pending",
-		TriggerSource:      triggerSource,
-		Image:              input.Image,
-		Command:            append([]string(nil), input.Command...),
-		CPUCores:           input.CPUCores,
-		MemoryMB:           input.MemoryMB,
-		TimeoutSeconds:     input.TimeoutSeconds,
-		RetryLimit:         input.RetryLimit,
-		RetryCount:         input.RetryCount,
-		RetryDelaySeconds:  input.RetryDelaySeconds,
+		ID:                uuid.NewString(),
+		ProjectID:         input.ProjectID,
+		SpiderID:          input.SpiderID,
+		Status:            "pending",
+		TriggerSource:     triggerSource,
+		Image:             input.Image,
+		Command:           append([]string(nil), input.Command...),
+		RetryLimit:        input.RetryLimit,
+		RetryCount:        input.RetryCount,
+		RetryDelaySeconds: input.RetryDelaySeconds,
 		RetryOfExecutionID: input.RetryOfExecutionID,
-		CreatedAt:          time.Now().UTC(),
+		CreatedAt:         time.Now().UTC(),
 	}
 
 	created, err := s.execRepo.Create(ctx, exec)
@@ -251,19 +118,14 @@ func (s *ExecutionService) MaterializeRetry(ctx context.Context) (model.Executio
 	}
 
 	created, err := s.Create(ctx, CreateExecutionInput{
-		ProjectID:          candidate.ProjectID,
-		SpiderID:           candidate.SpiderID,
-		SpiderVersion:      candidate.SpiderVersion,
-		RegistryAuthRef:    candidate.RegistryAuthRef,
-		Image:              candidate.Image,
-		Command:            candidate.Command,
-		CPUCores:           candidate.CPUCores,
-		MemoryMB:           candidate.MemoryMB,
-		TimeoutSeconds:     candidate.TimeoutSeconds,
-		TriggerSource:      "retry",
-		RetryLimit:         candidate.RetryLimit,
-		RetryCount:         candidate.RetryCount + 1,
-		RetryDelaySeconds:  candidate.RetryDelaySeconds,
+		ProjectID:         candidate.ProjectID,
+		SpiderID:          candidate.SpiderID,
+		Image:             candidate.Image,
+		Command:           candidate.Command,
+		TriggerSource:     "retry",
+		RetryLimit:        candidate.RetryLimit,
+		RetryCount:        candidate.RetryCount + 1,
+		RetryDelaySeconds: candidate.RetryDelaySeconds,
 		RetryOfExecutionID: candidate.ID,
 	})
 	if err != nil {
@@ -291,22 +153,6 @@ func (s *ExecutionService) Get(ctx context.Context, id string) (model.Execution,
 	}
 	exec.Logs = logs
 	return exec, nil
-}
-
-func (s *ExecutionService) List(ctx context.Context, query ListExecutionsQuery) ([]model.Execution, int64, error) {
-	normalized, err := query.Normalize()
-	if err != nil {
-		return nil, 0, err
-	}
-	items, err := s.execRepo.ListByProject(ctx, normalized)
-	if err != nil {
-		return nil, 0, err
-	}
-	total, err := s.execRepo.CountByProject(ctx, normalized)
-	if err != nil {
-		return nil, 0, err
-	}
-	return items, total, nil
 }
 
 func (s *ExecutionService) AppendLog(ctx context.Context, executionID, message string) (model.ExecutionLog, error) {

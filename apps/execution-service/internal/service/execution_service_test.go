@@ -29,67 +29,6 @@ func (r *fakeExecutionRepo) Create(_ context.Context, exec model.Execution) (mod
 	return exec, nil
 }
 
-func (r *fakeExecutionRepo) ListByProject(_ context.Context, query ListExecutionsQuery) ([]model.Execution, error) {
-	all := make([]model.Execution, 0)
-	for _, exec := range r.executions {
-		if exec.ProjectID != query.ProjectID {
-			continue
-		}
-		if query.Status != "" && exec.Status != query.Status {
-			continue
-		}
-		if query.Trigger != "" && exec.TriggerSource != query.Trigger {
-			continue
-		}
-		if query.SpiderID != "" && exec.SpiderID != query.SpiderID {
-			continue
-		}
-		if query.From != nil && exec.CreatedAt.Before(*query.From) {
-			continue
-		}
-		if query.To != nil && exec.CreatedAt.After(*query.To) {
-			continue
-		}
-		{
-			all = append(all, exec)
-		}
-	}
-	if query.Offset >= len(all) {
-		return []model.Execution{}, nil
-	}
-	end := query.Offset + query.Limit
-	if end > len(all) {
-		end = len(all)
-	}
-	return append([]model.Execution(nil), all[query.Offset:end]...), nil
-}
-
-func (r *fakeExecutionRepo) CountByProject(_ context.Context, query ListExecutionsQuery) (int64, error) {
-	var total int64
-	for _, exec := range r.executions {
-		if exec.ProjectID != query.ProjectID {
-			continue
-		}
-		if query.Status != "" && exec.Status != query.Status {
-			continue
-		}
-		if query.Trigger != "" && exec.TriggerSource != query.Trigger {
-			continue
-		}
-		if query.SpiderID != "" && exec.SpiderID != query.SpiderID {
-			continue
-		}
-		if query.From != nil && exec.CreatedAt.Before(*query.From) {
-			continue
-		}
-		if query.To != nil && exec.CreatedAt.After(*query.To) {
-			continue
-		}
-		total++
-	}
-	return total, nil
-}
-
 func (r *fakeExecutionRepo) Get(_ context.Context, id string) (model.Execution, error) {
 	exec, ok := r.executions[id]
 	if !ok {
@@ -252,21 +191,6 @@ func (q *fakeQueue) Release(_ context.Context, executionID string) error {
 	return q.err
 }
 
-type fakeSpiderVersionResolver struct {
-	version         int
-	registryAuthRef string
-	image           string
-	command         []string
-	err             error
-}
-
-func (r *fakeSpiderVersionResolver) Resolve(_ context.Context, _ string, _ int) (int, string, string, []string, error) {
-	if r.err != nil {
-		return 0, "", "", nil, r.err
-	}
-	return r.version, r.registryAuthRef, r.image, append([]string(nil), r.command...), nil
-}
-
 func TestCreateManualEnqueuesPendingExecution(t *testing.T) {
 	execRepo := newFakeExecutionRepo()
 	logRepo := newFakeLogRepo()
@@ -313,20 +237,15 @@ func TestCreateExecutionUsesProvidedTriggerSource(t *testing.T) {
 	svc := NewExecutionService(execRepo, logRepo, queue)
 
 	exec, err := svc.Create(context.Background(), CreateExecutionInput{
-		ProjectID:          "project-1",
-		SpiderID:           "spider-1",
-		SpiderVersion:      2,
-		RegistryAuthRef:    "ghcr-prod",
-		Image:              "crawler/go-echo:latest",
-		Command:            []string{"./go-echo"},
-		TriggerSource:      "scheduled",
-		RetryLimit:         3,
-		RetryCount:         1,
-		RetryDelaySeconds:  45,
+		ProjectID:     "project-1",
+		SpiderID:      "spider-1",
+		Image:         "crawler/go-echo:latest",
+		Command:       []string{"./go-echo"},
+		TriggerSource: "scheduled",
+		RetryLimit:    3,
+		RetryCount:    1,
+		RetryDelaySeconds: 45,
 		RetryOfExecutionID: "exec-root",
-		CPUCores:           1.5,
-		MemoryMB:           768,
-		TimeoutSeconds:     120,
 	})
 	if err != nil {
 		t.Fatalf("Create returned error: %v", err)
@@ -338,110 +257,8 @@ func TestCreateExecutionUsesProvidedTriggerSource(t *testing.T) {
 	if exec.RetryLimit != 3 || exec.RetryCount != 1 || exec.RetryDelaySeconds != 45 || exec.RetryOfExecutionID != "exec-root" {
 		t.Fatalf("expected retry metadata to persist, got %+v", exec)
 	}
-	if exec.CPUCores != 1.5 || exec.MemoryMB != 768 || exec.TimeoutSeconds != 120 {
-		t.Fatalf("expected resource limits to persist, got %+v", exec)
-	}
-	if exec.SpiderVersion != 2 {
-		t.Fatalf("expected spider version to persist, got %+v", exec)
-	}
-	if exec.RegistryAuthRef != "ghcr-prod" {
-		t.Fatalf("expected registry auth ref to persist, got %+v", exec)
-	}
 	if queue.lastEnqueued != exec.ID {
 		t.Fatalf("expected execution %s to be enqueued, got %s", exec.ID, queue.lastEnqueued)
-	}
-}
-
-func TestCreateExecutionResolvesSpiderVersionWhenImageAndCommandMissing(t *testing.T) {
-	execRepo := newFakeExecutionRepo()
-	logRepo := newFakeLogRepo()
-	queue := &fakeQueue{}
-	resolver := &fakeSpiderVersionResolver{
-		version:         3,
-		registryAuthRef: "ghcr-prod",
-		image:           "crawler/go:v3",
-		command:         []string{"./crawler", "--v3"},
-	}
-	svc := NewExecutionService(execRepo, logRepo, queue).WithSpiderVersionResolver(resolver)
-
-	exec, err := svc.Create(context.Background(), CreateExecutionInput{
-		ProjectID:     "project-1",
-		SpiderID:      "spider-1",
-		SpiderVersion: 3,
-		TriggerSource: "manual",
-	})
-	if err != nil {
-		t.Fatalf("Create returned error: %v", err)
-	}
-	if exec.SpiderVersion != 3 || exec.Image != "crawler/go:v3" {
-		t.Fatalf("expected resolved spider version/image, got %+v", exec)
-	}
-	if len(exec.Command) != 2 || exec.Command[0] != "./crawler" || exec.Command[1] != "--v3" {
-		t.Fatalf("expected resolved command, got %+v", exec.Command)
-	}
-	if exec.RegistryAuthRef != "ghcr-prod" {
-		t.Fatalf("expected resolved registry auth ref, got %+v", exec)
-	}
-}
-
-func TestCreateExecutionKeepsProvidedRegistryAuthRefOverResolvedOne(t *testing.T) {
-	execRepo := newFakeExecutionRepo()
-	logRepo := newFakeLogRepo()
-	queue := &fakeQueue{}
-	resolver := &fakeSpiderVersionResolver{
-		version:         3,
-		registryAuthRef: "ghcr-default",
-		image:           "crawler/go:v3",
-		command:         []string{"./crawler", "--v3"},
-	}
-	svc := NewExecutionService(execRepo, logRepo, queue).WithSpiderVersionResolver(resolver)
-
-	exec, err := svc.Create(context.Background(), CreateExecutionInput{
-		ProjectID:       "project-1",
-		SpiderID:        "spider-1",
-		SpiderVersion:   3,
-		RegistryAuthRef: "ghcr-override",
-		TriggerSource:   "manual",
-	})
-	if err != nil {
-		t.Fatalf("Create returned error: %v", err)
-	}
-	if exec.RegistryAuthRef != "ghcr-override" {
-		t.Fatalf("expected explicit registry auth ref to win, got %+v", exec)
-	}
-}
-
-func TestCreateExecutionResolvesRegistryAuthRefWhenImageProvided(t *testing.T) {
-	execRepo := newFakeExecutionRepo()
-	logRepo := newFakeLogRepo()
-	queue := &fakeQueue{}
-	resolver := &fakeSpiderVersionResolver{
-		version:         3,
-		registryAuthRef: "ghcr-derived",
-		image:           "crawler/go:v3-from-resolver",
-		command:         []string{"./crawler", "--resolver"},
-	}
-	svc := NewExecutionService(execRepo, logRepo, queue).WithSpiderVersionResolver(resolver)
-
-	exec, err := svc.Create(context.Background(), CreateExecutionInput{
-		ProjectID:     "project-1",
-		SpiderID:      "spider-1",
-		SpiderVersion: 3,
-		Image:         "crawler/go:v3-explicit",
-		Command:       []string{"./crawler", "--explicit"},
-		TriggerSource: "manual",
-	})
-	if err != nil {
-		t.Fatalf("Create returned error: %v", err)
-	}
-	if exec.RegistryAuthRef != "ghcr-derived" {
-		t.Fatalf("expected registry auth ref from resolver, got %+v", exec)
-	}
-	if exec.Image != "crawler/go:v3-explicit" {
-		t.Fatalf("expected explicit image to remain unchanged, got %+v", exec)
-	}
-	if len(exec.Command) != 2 || exec.Command[1] != "--explicit" {
-		t.Fatalf("expected explicit command to remain unchanged, got %+v", exec.Command)
 	}
 }
 

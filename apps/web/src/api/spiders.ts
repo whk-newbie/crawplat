@@ -10,16 +10,6 @@ export type Spider = {
   command?: string[]
 }
 
-export type SpiderVersion = {
-  id: string
-  spiderId: string
-  version: number
-  registryAuthRef?: string
-  image: string
-  command: string[]
-  createdAt: string
-}
-
 export type CreateSpiderInput = {
   projectId: string
   name: string
@@ -27,13 +17,6 @@ export type CreateSpiderInput = {
   runtime: 'docker'
   image: string
   command: string[]
-}
-
-export type PaginatedSpiders = {
-  items: Spider[]
-  total: number
-  limit: number
-  offset: number
 }
 
 export function createSpider(input: CreateSpiderInput) {
@@ -45,21 +28,5 @@ export function createSpider(input: CreateSpiderInput) {
 }
 
 export function listSpiders(projectId: string) {
-  return apiFetch<PaginatedSpiders>(`/projects/${projectId}/spiders`)
-}
-
-export function listRegistryAuthRefs(projectId: string) {
-  return apiFetch<string[]>(`/projects/${encodeURIComponent(projectId)}/registry-auth-refs`)
-}
-
-export function listSpiderVersions(spiderId: string) {
-  return apiFetch<SpiderVersion[]>(`/spiders/${encodeURIComponent(spiderId)}/versions`)
-}
-
-export function createSpiderVersion(input: { spiderId: string; registryAuthRef?: string; image: string; command: string[] }) {
-  const { spiderId, ...body } = input
-  return apiFetch<SpiderVersion>(`/spiders/${encodeURIComponent(spiderId)}/versions`, {
-    method: 'POST',
-    body: JSON.stringify(body),
-  })
+  return apiFetch<Spider[]>(`/projects/${projectId}/spiders`)
 }

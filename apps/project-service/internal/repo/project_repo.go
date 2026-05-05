@@ -23,13 +23,12 @@ func (r *PostgresRepository) Create(ctx context.Context, project model.Project) 
 	return err
 }
 
-func (r *PostgresRepository) List(ctx context.Context, limit, offset int) ([]model.Project, error) {
+func (r *PostgresRepository) List(ctx context.Context) ([]model.Project, error) {
 	rows, err := r.db.QueryContext(ctx, `
 		SELECT id, code, name
 		FROM projects
 		ORDER BY created_at DESC, id DESC
-		LIMIT $1 OFFSET $2
-	`, limit, offset)
+	`)
 	if err != nil {
 		return nil, err
 	}
@@ -47,10 +46,4 @@ func (r *PostgresRepository) List(ctx context.Context, limit, offset int) ([]mod
 		return nil, err
 	}
 	return projects, nil
-}
-
-func (r *PostgresRepository) Count(ctx context.Context) (int64, error) {
-	var count int64
-	err := r.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM projects`).Scan(&count)
-	return count, err
 }

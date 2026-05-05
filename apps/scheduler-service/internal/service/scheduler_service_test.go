@@ -82,7 +82,7 @@ func TestSchedulerServiceCreatePersistsThroughRepo(t *testing.T) {
 	repo := &fakeScheduleRepo{}
 	svc := NewSchedulerService(repo, nil)
 
-	schedule, err := svc.Create("project-1", "spider-1", 0, "", "nightly", "0 * * * *", "crawler/go-echo:latest", []string{"./go-echo"}, true, 0, 0)
+	schedule, err := svc.Create("project-1", "spider-1", "nightly", "0 * * * *", "crawler/go-echo:latest", []string{"./go-echo"}, true, 0, 0)
 	if err != nil {
 		t.Fatalf("Create returned error: %v", err)
 	}
@@ -102,23 +102,10 @@ func TestSchedulerServiceCreatePersistsThroughRepo(t *testing.T) {
 	}
 }
 
-func TestSchedulerServiceCreateAllowsSpiderVersionWithoutImage(t *testing.T) {
-	repo := &fakeScheduleRepo{}
-	svc := NewSchedulerService(repo, nil)
-
-	schedule, err := svc.Create("project-1", "spider-1", 3, "ghcr-prod", "nightly", "0 * * * *", "", nil, true, 0, 0)
-	if err != nil {
-		t.Fatalf("Create returned error: %v", err)
-	}
-	if schedule.SpiderVersion != 3 || schedule.Image != "" || schedule.RegistryAuthRef != "ghcr-prod" {
-		t.Fatalf("expected spiderVersion-only schedule, got %+v", schedule)
-	}
-}
-
 func TestSchedulerServiceCreateRejectsMissingFields(t *testing.T) {
 	svc := NewSchedulerService(&fakeScheduleRepo{}, nil)
 
-	_, err := svc.Create("", "spider-1", 0, "", "nightly", "0 * * * *", "crawler/go-echo:latest", nil, true, 0, 0)
+	_, err := svc.Create("", "spider-1", "nightly", "0 * * * *", "crawler/go-echo:latest", nil, true, 0, 0)
 	if err != ErrInvalidSchedule {
 		t.Fatalf("expected ErrInvalidSchedule, got %v", err)
 	}
@@ -128,17 +115,14 @@ func TestSchedulerServiceListReturnsRepoSchedules(t *testing.T) {
 	repo := &fakeScheduleRepo{}
 	svc := NewSchedulerService(repo, nil)
 
-	created, err := svc.Create("project-1", "spider-1", 0, "", "nightly", "0 * * * *", "crawler/go-echo:latest", []string{"./go-echo"}, true, 0, 0)
+	created, err := svc.Create("project-1", "spider-1", "nightly", "0 * * * *", "crawler/go-echo:latest", []string{"./go-echo"}, true, 0, 0)
 	if err != nil {
 		t.Fatalf("Create returned error: %v", err)
 	}
 
-	schedules, total, err := svc.List(20, 0)
+	schedules, err := svc.List()
 	if err != nil {
 		t.Fatalf("List returned error: %v", err)
-	}
-	if total != 1 {
-		t.Fatalf("expected total 1, got %d", total)
 	}
 	if len(schedules) != 1 {
 		t.Fatalf("expected 1 schedule, got %d", len(schedules))
@@ -148,43 +132,21 @@ func TestSchedulerServiceListReturnsRepoSchedules(t *testing.T) {
 	}
 }
 
-func TestSchedulerServiceListPagination(t *testing.T) {
-	repo := &fakeScheduleRepo{}
-	svc := NewSchedulerService(repo, nil)
-
-	for i := 0; i < 3; i++ {
-		if _, err := svc.Create("project-1", "spider-1", 0, "", "nightly", "0 * * * *", "crawler/go-echo:latest", []string{"./go-echo"}, true, 0, 0); err != nil {
-			t.Fatalf("Create returned error: %v", err)
-		}
-	}
-
-	schedules, total, err := svc.List(1, 1)
-	if err != nil {
-		t.Fatalf("List returned error: %v", err)
-	}
-	if total != 3 {
-		t.Fatalf("expected total 3, got %d", total)
-	}
-	if len(schedules) != 1 {
-		t.Fatalf("expected 1 schedule, got %d", len(schedules))
-	}
-}
-
 func TestMaterializeDueBackfillsScheduledExecutions(t *testing.T) {
 	now := time.Date(2026, 4, 23, 23, 45, 0, 0, time.UTC)
 	repo := &fakeScheduleRepo{
 		schedules: []model.Schedule{{
-			ID:                "sched-1",
-			ProjectID:         "project-1",
-			SpiderID:          "spider-1",
-			Name:              "nightly",
-			CronExpr:          "*/5 * * * *",
-			Enabled:           true,
-			Image:             "crawler/go-echo:latest",
-			Command:           []string{"./go-echo"},
-			RetryLimit:        2,
+			ID:        "sched-1",
+			ProjectID: "project-1",
+			SpiderID:  "spider-1",
+			Name:      "nightly",
+			CronExpr:  "*/5 * * * *",
+			Enabled:   true,
+			Image:     "crawler/go-echo:latest",
+			Command:   []string{"./go-echo"},
+			RetryLimit: 2,
 			RetryDelaySeconds: 30,
-			CreatedAt:         now.Add(-20 * time.Minute),
+			CreatedAt: now.Add(-20 * time.Minute),
 		}},
 	}
 	client := &fakeExecutionClient{}
@@ -205,9 +167,6 @@ func TestMaterializeDueBackfillsScheduledExecutions(t *testing.T) {
 	}
 	if client.requests[0].RetryLimit != 2 || client.requests[0].RetryDelaySeconds != 30 || client.requests[0].RetryCount != 0 {
 		t.Fatalf("expected retry config to flow into execution request, got %+v", client.requests[0])
-	}
-	if client.requests[0].SpiderVersion != 0 {
-		t.Fatalf("expected default spider version 0 to flow into execution request, got %+v", client.requests[0])
 	}
 	got := repo.mustGet("sched-1")
 	if got.LastMaterializedAt == nil || !got.LastMaterializedAt.Equal(now) {

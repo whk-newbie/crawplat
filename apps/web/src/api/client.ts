@@ -1,5 +1,3 @@
-import { loadPersistedToken } from '../stores/auth'
-
 const defaultBaseURL = '/api/v1'
 
 function resolveBaseURL() {
@@ -8,18 +6,12 @@ function resolveBaseURL() {
 }
 
 export async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
-  const headers = new Headers(init?.headers)
-  if (!headers.has('Content-Type')) {
-    headers.set('Content-Type', 'application/json')
-  }
-  const token = loadPersistedToken()
-  if (token && !headers.has('Authorization')) {
-    headers.set('Authorization', `Bearer ${token}`)
-  }
-
   const response = await fetch(`${resolveBaseURL()}${path}`, {
     ...init,
-    headers,
+    headers: {
+      'Content-Type': 'application/json',
+      ...(init?.headers ?? {}),
+    },
   })
 
   if (!response.ok) {

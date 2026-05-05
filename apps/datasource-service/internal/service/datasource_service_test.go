@@ -2,7 +2,6 @@ package service
 
 import (
 	"context"
-	"errors"
 	"testing"
 
 	"crawler-platform/apps/datasource-service/internal/model"
@@ -12,57 +11,19 @@ type fakeDatasourceRepo struct {
 	datasources []model.Datasource
 }
 
-type fakeProber struct {
-	testResult    model.TestResult
-	previewResult model.PreviewResult
-	testErr       error
-	previewErr    error
-}
-
-func (p *fakeProber) Test(_ context.Context, _ model.Datasource) (model.TestResult, error) {
-	if p.testErr != nil {
-		return model.TestResult{}, p.testErr
-	}
-	return p.testResult, nil
-}
-
-func (p *fakeProber) Preview(_ context.Context, _ model.Datasource) (model.PreviewResult, error) {
-	if p.previewErr != nil {
-		return model.PreviewResult{}, p.previewErr
-	}
-	return p.previewResult, nil
-}
-
 func (r *fakeDatasourceRepo) Create(_ context.Context, datasource model.Datasource) error {
 	r.datasources = append(r.datasources, datasource)
 	return nil
 }
 
-func (r *fakeDatasourceRepo) ListByProject(_ context.Context, projectID string, limit, offset int) ([]model.Datasource, error) {
-	var all []model.Datasource
+func (r *fakeDatasourceRepo) ListByProject(_ context.Context, projectID string) ([]model.Datasource, error) {
+	var datasources []model.Datasource
 	for _, datasource := range r.datasources {
 		if projectID == "" || datasource.ProjectID == projectID {
-			all = append(all, datasource)
+			datasources = append(datasources, datasource)
 		}
 	}
-	if offset >= len(all) {
-		return nil, nil
-	}
-	end := offset + limit
-	if end > len(all) {
-		end = len(all)
-	}
-	return all[offset:end], nil
-}
-
-func (r *fakeDatasourceRepo) CountByProject(_ context.Context, projectID string) (int64, error) {
-	var count int64
-	for _, datasource := range r.datasources {
-		if projectID == "" || datasource.ProjectID == projectID {
-			count++
-		}
-	}
-	return count, nil
+	return datasources, nil
 }
 
 func (r *fakeDatasourceRepo) Get(_ context.Context, id string) (model.Datasource, bool, error) {
@@ -103,27 +64,16 @@ func TestCreateDatasourcePersistsThroughRepo(t *testing.T) {
 
 func TestDatasourceServiceListAndReadUseRepo(t *testing.T) {
 	repo := &fakeDatasourceRepo{}
-	svc := NewDatasourceService(repo).WithProber(&fakeProber{
-		testResult: model.TestResult{
-			Status:  "ok",
-			Message: "connection test passed",
-		},
-		previewResult: model.PreviewResult{
-			Rows: []map[string]string{{"key": "k1"}},
-		},
-	})
+	svc := NewDatasourceService(repo)
 
 	created, err := svc.Create("project-1", "main", "redis", map[string]string{"db": "0"})
 	if err != nil {
 		t.Fatalf("Create returned error: %v", err)
 	}
 
-	listed, total, err := svc.List("project-1", 20, 0)
+	listed, err := svc.List("project-1")
 	if err != nil {
 		t.Fatalf("List returned error: %v", err)
-	}
-	if total != 1 {
-		t.Fatalf("unexpected total: %d", total)
 	}
 	if len(listed) != 1 {
 		t.Fatalf("unexpected list length: %#v", listed)
@@ -146,21 +96,5 @@ func TestDatasourceServiceListAndReadUseRepo(t *testing.T) {
 	}
 	if preview.DatasourceType != "redis" {
 		t.Fatalf("unexpected preview result: %#v", preview)
-	}
-}
-
-func TestDatasourceServiceProbeErrorIsReturned(t *testing.T) {
-	repo := &fakeDatasourceRepo{}
-	svc := NewDatasourceService(repo).WithProber(&fakeProber{
-		testErr: errors.New("probe failed"),
-	})
-
-	created, err := svc.Create("project-1", "main", "redis", map[string]string{"addr": "redis:6379"})
-	if err != nil {
-		t.Fatalf("Create returned error: %v", err)
-	}
-
-	if _, err := svc.Test(created.ID); err == nil {
-		t.Fatal("expected probe error")
 	}
 }

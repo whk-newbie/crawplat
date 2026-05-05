@@ -16,21 +16,10 @@ func (r *fakeProjectRepo) Create(_ context.Context, project model.Project) error
 	return nil
 }
 
-func (r *fakeProjectRepo) List(_ context.Context, limit, offset int) ([]model.Project, error) {
-	if offset >= len(r.projects) {
-		return nil, nil
-	}
-	end := offset + limit
-	if end > len(r.projects) {
-		end = len(r.projects)
-	}
-	result := make([]model.Project, end-offset)
-	copy(result, r.projects[offset:end])
-	return result, nil
-}
-
-func (r *fakeProjectRepo) Count(_ context.Context) (int64, error) {
-	return int64(len(r.projects)), nil
+func (r *fakeProjectRepo) List(_ context.Context) ([]model.Project, error) {
+	projects := make([]model.Project, len(r.projects))
+	copy(projects, r.projects)
+	return projects, nil
 }
 
 func (r *fakeProjectRepo) mustGet(id string) model.Project {
@@ -69,47 +58,14 @@ func TestProjectServiceListReturnsRepoProjects(t *testing.T) {
 		t.Fatalf("Create returned error: %v", err)
 	}
 
-	projects, total, err := svc.List(20, 0)
+	projects, err := svc.List()
 	if err != nil {
 		t.Fatalf("List returned error: %v", err)
-	}
-	if total != 1 {
-		t.Fatalf("expected total 1, got %d", total)
 	}
 	if len(projects) != 1 {
 		t.Fatalf("expected 1 project, got %d", len(projects))
 	}
 	if projects[0] != created {
 		t.Fatalf("expected list to return created project, got %+v want %+v", projects[0], created)
-	}
-}
-
-func TestProjectServiceListPagination(t *testing.T) {
-	repo := &fakeProjectRepo{}
-	svc := NewProjectService(repo)
-
-	for i := 0; i < 5; i++ {
-		if _, err := svc.Create("code", "name"); err != nil {
-			t.Fatal(err)
-		}
-	}
-
-	projects, total, err := svc.List(2, 0)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if total != 5 {
-		t.Fatalf("expected total 5, got %d", total)
-	}
-	if len(projects) != 2 {
-		t.Fatalf("expected 2 projects, got %d", len(projects))
-	}
-
-	projects2, _, err := svc.List(2, 4)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(projects2) != 1 {
-		t.Fatalf("expected 1 project at offset 4, got %d", len(projects2))
 	}
 }

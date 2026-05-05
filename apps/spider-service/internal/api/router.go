@@ -2,10 +2,8 @@ package api
 
 import (
 	"net/http"
-	"strconv"
 
 	"crawler-platform/apps/spider-service/internal/service"
-	"crawler-platform/packages/go-common/httpx"
 	"github.com/gin-gonic/gin"
 )
 
@@ -14,9 +12,9 @@ func NewRouter(spiderService *service.SpiderService) *gin.Engine {
 
 	router.POST("/api/v1/projects/:projectId/spiders", func(c *gin.Context) {
 		var req struct {
-			Name     string   `json:"name" binding:"required"`
-			Language string   `json:"language" binding:"required"`
-			Runtime  string   `json:"runtime" binding:"required"`
+			Name     string `json:"name" binding:"required"`
+			Language string `json:"language" binding:"required"`
+			Runtime  string `json:"runtime" binding:"required"`
 			Image    string   `json:"image"`
 			Command  []string `json:"command"`
 		}
@@ -40,70 +38,12 @@ func NewRouter(spiderService *service.SpiderService) *gin.Engine {
 	})
 
 	router.GET("/api/v1/projects/:projectId/spiders", func(c *gin.Context) {
-		limit, _ := strconv.Atoi(c.DefaultQuery("limit", "20"))
-		offset, _ := strconv.Atoi(c.DefaultQuery("offset", "0"))
-		p := httpx.DefaultPagination(limit, offset)
-
-		spiders, total, err := spiderService.List(c.Param("projectId"), p.Limit, p.Offset)
+		spiders, err := spiderService.List(c.Param("projectId"))
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
 		}
-		c.JSON(http.StatusOK, httpx.PaginatedResponse{
-			Items:  spiders,
-			Total:  total,
-			Limit:  p.Limit,
-			Offset: p.Offset,
-		})
-	})
-
-	router.GET("/api/v1/projects/:projectId/registry-auth-refs", func(c *gin.Context) {
-		refs, err := spiderService.ListRegistryAuthRefsByProject(c.Param("projectId"))
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-			return
-		}
-		c.JSON(http.StatusOK, refs)
-	})
-
-	router.POST("/api/v1/spiders/:spiderId/versions", func(c *gin.Context) {
-		var req struct {
-			RegistryAuthRef string   `json:"registryAuthRef"`
-			Image           string   `json:"image"`
-			Command         []string `json:"command"`
-		}
-		if err := c.ShouldBindJSON(&req); err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-			return
-		}
-
-		version, err := spiderService.CreateVersion(c.Param("spiderId"), req.RegistryAuthRef, req.Image, req.Command)
-		if err != nil {
-			switch err {
-			case service.ErrSpiderNotFound:
-				c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
-			case service.ErrImageRequired:
-				c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-			default:
-				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-			}
-			return
-		}
-		c.JSON(http.StatusCreated, version)
-	})
-
-	router.GET("/api/v1/spiders/:spiderId/versions", func(c *gin.Context) {
-		versions, err := spiderService.ListVersions(c.Param("spiderId"))
-		if err != nil {
-			switch err {
-			case service.ErrSpiderNotFound:
-				c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
-			default:
-				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-			}
-			return
-		}
-		c.JSON(http.StatusOK, versions)
+		c.JSON(http.StatusOK, spiders)
 	})
 
 	return router

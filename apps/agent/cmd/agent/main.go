@@ -22,7 +22,6 @@ type config struct {
 	nodeName            string
 	internalToken       string
 	pollInterval        time.Duration
-	registryCreds       map[string]agentruntime.RegistryCredential
 }
 
 func main() {
@@ -33,7 +32,7 @@ func main() {
 
 	execPoller := poller.New(
 		poller.NewExecutionClient(cfg.executionServiceURL, cfg.internalToken),
-		agentruntime.NewDockerRunner(nil, cfg.registryCreds),
+		agentruntime.NewDockerRunner(nil),
 		cfg.nodeName,
 		cfg.pollInterval,
 	)
@@ -55,19 +54,12 @@ func loadConfig() config {
 		}
 	}
 
-	registryCreds, err := agentruntime.ParseRegistryCredentials(strings.TrimSpace(os.Getenv("IMAGE_REGISTRY_AUTH_MAP")))
-	if err != nil {
-		log.Printf("invalid IMAGE_REGISTRY_AUTH_MAP: %v", err)
-		registryCreds = nil
-	}
-
 	return config{
 		nodeServiceURL:      envOrDefault("NODE_SERVICE_URL", "http://localhost:8084"),
 		executionServiceURL: envOrDefault("EXECUTION_SERVICE_URL", "http://localhost:8085"),
 		nodeName:            envOrDefault("NODE_NAME", "node-a"),
 		internalToken:       strings.TrimSpace(os.Getenv("INTERNAL_API_TOKEN")),
 		pollInterval:        pollInterval,
-		registryCreds:       registryCreds,
 	}
 }
 

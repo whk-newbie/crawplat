@@ -1,6 +1,5 @@
 import { createApp, nextTick } from 'vue'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import ElementPlus from 'element-plus'
 import MonitorView from '../MonitorView.vue'
 
 const flushPromises = async () => {
@@ -18,65 +17,46 @@ describe('monitor view', () => {
     document.body.innerHTML = ''
   })
 
-  it('loads overview, rules and events', async () => {
-    const fetchMock = vi.fn()
-      .mockResolvedValueOnce({
-        ok: true,
-        status: 200,
-        json: async () => ({
-          executions: { total: 12, pending: 7, running: 3, failed: 1, succeeded: 1 },
-          nodes: { total: 4, online: 2, offline: 2 },
-        }),
-      })
-      .mockResolvedValueOnce({
-        ok: true,
-        status: 200,
-        json: async () => ([{
-          id: 'r1',
-          name: 'node offline',
-          ruleType: 'node_offline',
-          enabled: true,
-          webhookUrl: 'https://example.com',
-          cooldownSeconds: 60,
-          timeoutSeconds: 3,
-          offlineGraceSeconds: 60,
-          createdAt: '2026-05-01T00:00:00Z',
-          updatedAt: '2026-05-01T00:00:00Z',
-        }]),
-      })
-      .mockResolvedValueOnce({
-        ok: true,
-        status: 200,
-        json: async () => ({
-          items: [{
-            id: 'e1',
-            ruleType: 'node_offline',
-            entityId: 'mvp-node',
-            deliveryStatus: 'failed',
-            createdAt: '2026-05-01T00:00:00Z',
-          }],
-          total: 1,
-          limit: 20,
-          offset: 0,
-        }),
-      })
+  it('loads and renders monitor overview counters', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        executions: {
+          total: 12,
+          pending: 7,
+          running: 3,
+          failed: 1,
+          succeeded: 1,
+        },
+        nodes: {
+          total: 4,
+          online: 2,
+          offline: 2,
+        },
+        generatedAt: '2026-04-23T08:00:00Z',
+      }),
+    })
 
     vi.stubGlobal('fetch', fetchMock)
 
     const container = document.createElement('div')
     document.body.appendChild(container)
 
-    createApp(MonitorView).use(ElementPlus).mount(container)
+    createApp(MonitorView).mount(container)
+    expect(container.textContent).toContain('Loading overview...')
+
     await flushPromises()
 
-    expect(fetchMock).toHaveBeenNthCalledWith(1, '/api/v1/monitor/overview', expect.any(Object))
-    expect(fetchMock).toHaveBeenNthCalledWith(2, '/api/v1/monitor/alerts/rules', expect.any(Object))
-    expect(fetchMock).toHaveBeenNthCalledWith(3, '/api/v1/monitor/alerts/events?limit=20&offset=0', expect.any(Object))
-
-    expect(container.textContent).toContain('Alert Rules')
-    expect(container.textContent).toContain('node offline')
-    expect(container.textContent).toContain('Recent Alert Events')
-    expect(container.textContent).toContain('mvp-node')
+    expect(fetchMock).toHaveBeenCalledWith('/api/v1/monitor/overview', expect.any(Object))
+    expect(container.textContent).toContain('Total executions')
+    expect(container.textContent).toContain('12')
+    expect(container.textContent).toContain('Pending executions')
+    expect(container.textContent).toContain('7')
+    expect(container.textContent).toContain('Running executions')
+    expect(container.textContent).toContain('3')
+    expect(container.textContent).toContain('Nodes online')
+    expect(container.textContent).toContain('2')
   })
 
   it('shows an error when the overview request fails', async () => {
@@ -91,7 +71,7 @@ describe('monitor view', () => {
     const container = document.createElement('div')
     document.body.appendChild(container)
 
-    createApp(MonitorView).use(ElementPlus).mount(container)
+    createApp(MonitorView).mount(container)
     await flushPromises()
 
     expect(container.textContent).toContain('monitor unavailable')
