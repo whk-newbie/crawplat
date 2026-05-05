@@ -2,7 +2,7 @@ export const supportedLocales = ['zh-CN', 'en-US'] as const
 
 export type Locale = (typeof supportedLocales)[number]
 
-type MessageTree = Record<string, string | MessageTree>
+type MessageTree = { [key: string]: string | MessageTree }
 
 export const defaultLocale: Locale = 'zh-CN'
 export const fallbackLocale: Locale = 'en-US'
