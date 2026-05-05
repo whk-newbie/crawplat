@@ -39,12 +39,19 @@ type ExecutionService struct {
 type ExecutionRepository interface {
 	Create(ctx context.Context, exec model.Execution) (model.Execution, error)
 	Get(ctx context.Context, id string) (model.Execution, error)
+	List(ctx context.Context, limit, offset int, status string) (*ListResult, error)
 	MarkRunning(ctx context.Context, id, nodeID string, startedAt time.Time) (model.Execution, error)
 	Complete(ctx context.Context, id string, finishedAt time.Time) (model.Execution, error)
 	Fail(ctx context.Context, id, errorMessage string, finishedAt time.Time) (model.Execution, error)
 	ClaimNextRetryCandidate(ctx context.Context, now time.Time) (model.Execution, bool, error)
 	ResetRetryClaim(ctx context.Context, id string) error
 	Delete(ctx context.Context, id string) error
+}
+
+// ListResult 包含分页执行列表查询的结果。
+type ListResult struct {
+	Executions []model.Execution
+	Total      int64
 }
 
 // LogRepository 定义日志持久化接口，由 MongoDB 实现。
@@ -227,6 +234,11 @@ func (s *ExecutionService) Get(ctx context.Context, id string) (model.Execution,
 	}
 	exec.Logs = logs
 	return exec, nil
+}
+
+// ListExecutions 分页查询执行记录，支持按 status 过滤。
+func (s *ExecutionService) ListExecutions(ctx context.Context, limit, offset int, status string) (*ListResult, error) {
+	return s.execRepo.List(ctx, limit, offset, status)
 }
 
 // AppendLog 向指定执行追加一条日志。

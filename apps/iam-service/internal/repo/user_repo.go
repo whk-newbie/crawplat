@@ -1,5 +1,5 @@
 // Package repo 是用户仓储层，负责用户数据的存取。
-// 当前采用内存存储（map），不依赖外部数据库。
+// 提供两种实现：UserRepo（内存存储，非并发安全）、PostgresUserRepo（PostgreSQL 持久化）。
 // 仅做数据存取，不做业务校验——认证逻辑属于 service 层。
 package repo
 
@@ -8,6 +8,7 @@ import (
 	"fmt"
 
 	"crawler-platform/apps/iam-service/internal/model"
+	"golang.org/x/crypto/bcrypt"
 )
 
 // ErrUserNotFound 表示用户不存在。service 层在 Login 失败时会统一返回
@@ -23,12 +24,14 @@ type UserRepo struct {
 }
 
 // NewUserRepo 创建用户仓储。enableSeedAdmin 为 true 时预置 admin/admin123。
+// 预置密码使用 bcrypt 哈希存储。
 func NewUserRepo(enableSeedAdmin bool) *UserRepo {
 	users := make(map[string]model.User)
 	if enableSeedAdmin {
+		hash, _ := bcrypt.GenerateFromPassword([]byte("admin123"), bcrypt.DefaultCost)
 		users["admin"] = model.User{
-			Username: "admin",
-			Password: "admin123",
+			Username:     "admin",
+			PasswordHash: string(hash),
 		}
 	}
 
