@@ -1,3 +1,6 @@
+// Package repo 是 Monitor 服务的持久层，直接访问 PostgreSQL 和 Redis。
+// 负责：执行/节点聚合查询、告警规则 CRUD、告警事件持久化、失败执行/离线节点轮询。
+// 不包含告警评估逻辑——该职责属于 service/alerting。
 package repo
 
 import (
@@ -17,6 +20,8 @@ const (
 	nodeIndexKey  = "nodes:online"
 )
 
+// OverviewRepository 通过 PostgreSQL 聚合执行/节点统计，通过 Redis 判定在线节点。
+// 同时管理告警规则和告警事件的持久化。
 type OverviewRepository struct {
 	db     *sql.DB
 	client *redis.Client
@@ -26,6 +31,7 @@ func NewOverviewRepository(db *sql.DB, client *redis.Client) *OverviewRepository
 	return &OverviewRepository{db: db, client: client}
 }
 
+// Overview 返回聚合后的执行和节点统计概览。
 func (r *OverviewRepository) Overview(ctx context.Context) (model.Overview, error) {
 	executions, err := r.executionSummary(ctx)
 	if err != nil {
@@ -103,6 +109,8 @@ func (r *OverviewRepository) nodeSummary(ctx context.Context) (model.NodeSummary
 	}, nil
 }
 
+// countOnlineNodes 通过 Redis SMEMBERS + GET 判定在线节点数。
+// 惰性清理：若节点键已过期但仍在 SET 中，则从 SET 中移除，避免离线计数漂移。
 func (r *OverviewRepository) countOnlineNodes(ctx context.Context) (int, error) {
 	nodeIDs, err := r.client.SMembers(ctx, nodeIndexKey).Result()
 	if err != nil {

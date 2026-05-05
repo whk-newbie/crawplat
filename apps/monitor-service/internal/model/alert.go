@@ -1,3 +1,5 @@
+// Package model 定义 Monitor 服务的数据模型。
+// 包含告警规则（支持执行失败和节点离线两种类型）、告警事件、轮询候选实体等结构。
 package model
 
 import "time"

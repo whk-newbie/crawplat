@@ -1,3 +1,5 @@
+// Package main 是 Monitor 服务的程序入口。
+// 负责创建 MonitorService 实例、注册 HTTP 路由并监听 :8088 端口。
 package main
 
 import (

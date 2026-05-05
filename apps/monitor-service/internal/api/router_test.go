@@ -1,3 +1,4 @@
+// Package api 的 HTTP 层集成测试。使用 fake repository 验证 /monitor/overview 端点。
 package api
 
 import (

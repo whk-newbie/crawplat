@@ -1,3 +1,4 @@
+// Package service 的监控总览单元测试。验证 Overview、内存回退、错误传递。
 package service
 
 import (
