@@ -5,8 +5,10 @@ const localeStore = useLocaleStore()
 </script>
 
 <template>
-  <main>
-    <h1>{{ localeStore.t('pages.login.title') }}</h1>
+  <el-card>
+    <template #header>
+      <h1>{{ localeStore.t('pages.login.title') }}</h1>
+    </template>
     <p>{{ localeStore.t('pages.login.placeholder') }}</p>
-  </main>
+  </el-card>
 </template>

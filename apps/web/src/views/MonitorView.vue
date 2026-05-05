@@ -1,42 +1,49 @@
 <template>
-  <main class="page">
-    <section class="hero card">
-      <div>
-        <p class="eyebrow">Control plane</p>
-        <h1>Monitor</h1>
-        <p>Live overview pulled from the gateway monitor endpoint.</p>
-      </div>
-      <button class="refresh" :disabled="loading" @click="loadOverview">
-        {{ loading ? 'Refreshing...' : 'Refresh' }}
-      </button>
-    </section>
-
-    <section class="card">
-      <p v-if="loading">Loading overview...</p>
-      <p v-else-if="error" class="error">{{ error }}</p>
-      <template v-else>
-        <dl v-if="counterEntries.length" class="counters">
-          <div v-for="item in counterEntries" :key="item.label">
-            <dt>{{ item.label }}</dt>
-            <dd>{{ item.value }}</dd>
+  <div class="page">
+    <el-card>
+      <template #header>
+        <div class="hero">
+          <div>
+            <h1>{{ localeStore.t('pages.monitor.title') }}</h1>
+            <p class="subtitle">Live overview pulled from the gateway monitor endpoint.</p>
           </div>
-        </dl>
-        <p v-else>No counters returned yet.</p>
+          <el-button :loading="loading" @click="loadOverview">
+            {{ loading ? localeStore.t('common.state.loading') : localeStore.t('common.actions.refresh') }}
+          </el-button>
+        </div>
       </template>
-    </section>
+    </el-card>
 
-    <section class="card">
-      <h2>Overview payload</h2>
+    <AppLoadingState v-if="loading" />
+    <AppErrorState v-else-if="error" :message="error" @retry="loadOverview" />
+
+    <el-card v-if="!loading && !error">
+      <el-row v-if="counterEntries.length" :gutter="16">
+        <el-col v-for="item in counterEntries" :key="item.label" :span="6" :xs="12">
+          <el-statistic :title="item.label" :value="item.value" />
+        </el-col>
+      </el-row>
+      <el-empty v-else description="No counters returned yet." />
+    </el-card>
+
+    <el-card v-if="!loading && !error">
+      <template #header>
+        <h2>Raw overview payload</h2>
+      </template>
       <pre v-if="overview" class="payload">{{ payloadText }}</pre>
-      <p v-else>No overview loaded.</p>
-    </section>
-  </main>
+      <el-empty v-else description="No overview loaded." />
+    </el-card>
+  </div>
 </template>
 
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
+import { useLocaleStore } from '../stores/locale'
 import { getMonitorOverview, type MonitorOverview } from '../api/monitor'
+import AppLoadingState from '../components/AppLoadingState.vue'
+import AppErrorState from '../components/AppErrorState.vue'
 
+const localeStore = useLocaleStore()
 const overview = ref<MonitorOverview | null>(null)
 const loading = ref(true)
 const error = ref('')
@@ -92,67 +99,22 @@ onMounted(() => {
 .page {
   display: grid;
   gap: 1rem;
-  padding: 1rem;
 }
-
-.card {
-  border: 1px solid #d0d7de;
-  border-radius: 8px;
-  padding: 1rem;
-}
-
 .hero {
-  display: flex;
   align-items: flex-start;
+  display: flex;
   justify-content: space-between;
-  gap: 1rem;
+  width: 100%;
 }
-
-.eyebrow {
-  margin: 0 0 0.25rem;
-  font-size: 0.75rem;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: #57606a;
+.subtitle {
+  color: var(--el-text-color-secondary);
+  margin: 4px 0 0;
 }
-
-.refresh {
-  white-space: nowrap;
-}
-
-.counters {
-  display: grid;
-  gap: 0.75rem;
-  grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr));
-}
-
-.counters div {
-  border: 1px solid #d0d7de;
-  border-radius: 8px;
-  padding: 0.75rem;
-  background: #f6f8fa;
-}
-
-.counters dt {
-  font-size: 0.8rem;
-  color: #57606a;
-}
-
-.counters dd {
-  margin: 0.25rem 0 0;
-  font-size: 1.5rem;
-  font-weight: 600;
-}
-
 .payload {
-  overflow: auto;
-  margin: 0;
-  padding: 0.75rem;
+  background: var(--el-fill-color-light);
   border-radius: 8px;
-  background: #f6f8fa;
-}
-
-.error {
-  color: #b42318;
+  margin: 0;
+  overflow: auto;
+  padding: 0.75rem;
 }
 </style>

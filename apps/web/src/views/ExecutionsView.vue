@@ -1,54 +1,68 @@
 <template>
-  <main class="page">
-    <section class="card">
-      <h1>Executions</h1>
-      <p>Create a manual execution and jump into its detail page, or inspect an existing execution by ID.</p>
-    </section>
+  <div class="page">
+    <el-card>
+      <template #header>
+        <h1>{{ localeStore.t('pages.executions.title') }}</h1>
+      </template>
+      <p>{{ localeStore.t('pages.executions.placeholder') }}</p>
+    </el-card>
 
-    <section class="card">
-      <h2>Create Execution</h2>
-      <form class="form" @submit.prevent="submit">
-        <label>
-          Project ID
-          <input v-model="form.projectId" required />
-        </label>
-        <label>
-          Spider ID
-          <input v-model="form.spiderId" required />
-        </label>
-        <label>
-          Image
-          <input v-model="form.image" required placeholder="crawler/go-echo:latest" />
-        </label>
-        <label>
-          Command
-          <input v-model="form.command" placeholder="./go-echo" />
-        </label>
-        <button :disabled="submitting" type="submit">{{ submitting ? 'Creating...' : 'Create Execution' }}</button>
-      </form>
-      <p v-if="error" class="error">{{ error }}</p>
-      <p v-if="createdExecutionId" class="success">
-        Created execution
-        <router-link :to="`/executions/${createdExecutionId}`">{{ createdExecutionId }}</router-link>
-      </p>
-    </section>
+    <el-card>
+      <template #header>
+        <h2>{{ localeStore.t('pages.executions.createTitle') }}</h2>
+      </template>
+      <el-form label-width="120px" @submit.prevent="submit">
+        <el-form-item :label="localeStore.t('pages.executions.projectId')">
+          <el-input v-model="form.projectId" required />
+        </el-form-item>
+        <el-form-item :label="localeStore.t('pages.executions.spiderId')">
+          <el-input v-model="form.spiderId" required />
+        </el-form-item>
+        <el-form-item :label="localeStore.t('pages.executions.image')">
+          <el-input v-model="form.image" required placeholder="crawler/go-echo:latest" />
+        </el-form-item>
+        <el-form-item :label="localeStore.t('pages.executions.command')">
+          <el-input v-model="form.command" placeholder="./go-echo" />
+        </el-form-item>
+        <el-form-item>
+          <el-button type="primary" :loading="submitting" native-type="submit">
+            {{ submitting ? localeStore.t('pages.executions.creating') : localeStore.t('pages.executions.createAction') }}
+          </el-button>
+        </el-form-item>
+      </el-form>
+      <el-alert v-if="error" :title="error" type="error" show-icon closable @close="error = ''" />
+      <el-alert v-if="createdExecutionId" type="success" show-icon>
+        <template #title>
+          {{ localeStore.t('pages.executions.createdMessage') }}
+          <router-link :to="`/executions/${createdExecutionId}`">{{ createdExecutionId }}</router-link>
+        </template>
+      </el-alert>
+    </el-card>
 
-    <section class="card">
-      <h2>Open Execution Detail</h2>
+    <el-card>
+      <template #header>
+        <h2>{{ localeStore.t('pages.executions.lookupTitle') }}</h2>
+      </template>
       <div class="toolbar">
-        <input v-model="lookupId" placeholder="execution id" />
-        <button @click="openExecution">Open</button>
+        <el-input
+          v-model="lookupId"
+          :placeholder="localeStore.t('pages.executions.lookupPlaceholder')"
+          style="max-width: 300px"
+        />
+        <el-button @click="openExecution">{{ localeStore.t('pages.executions.openAction') }}</el-button>
       </div>
-    </section>
-  </main>
+    </el-card>
+  </div>
 </template>
 
 <script setup lang="ts">
 import { reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
+import { useLocaleStore } from '../stores/locale'
 import { createExecution } from '../api/executions'
 
 const router = useRouter()
+const localeStore = useLocaleStore()
 
 const form = reactive({
   projectId: 'project-1',
@@ -102,31 +116,10 @@ async function openExecution() {
 .page {
   display: grid;
   gap: 1rem;
-  padding: 1rem;
 }
-
-.card {
-  border: 1px solid #d0d7de;
-  border-radius: 8px;
-  padding: 1rem;
-}
-
-.form {
-  display: grid;
-  gap: 0.75rem;
-  max-width: 32rem;
-}
-
 .toolbar {
+  align-items: center;
   display: flex;
   gap: 0.75rem;
-}
-
-.error {
-  color: #b42318;
-}
-
-.success {
-  color: #027a48;
 }
 </style>
