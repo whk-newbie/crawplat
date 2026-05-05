@@ -14,17 +14,5 @@ const localeStore = useLocaleStore()
 </script>
 
 <template>
-  <section class="empty-state" role="status">
-    <p>{{ localeStore.t(props.messageKey) }}</p>
-  </section>
+  <el-empty :description="localeStore.t(props.messageKey)" />
 </template>
-
-<style scoped>
-.empty-state {
-  border: 1px dashed #c0c4cc;
-  border-radius: 0.5rem;
-  color: #606266;
-  padding: 2rem;
-  text-align: center;
-}
-</style>

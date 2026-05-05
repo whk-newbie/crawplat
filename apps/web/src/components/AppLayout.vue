@@ -1,34 +1,60 @@
 <script setup lang="ts">
+import { computed } from 'vue'
+import { useRoute } from 'vue-router'
 import AppLanguageSwitcher from './AppLanguageSwitcher.vue'
 import { useLocaleStore } from '../stores/locale'
 
 const localeStore = useLocaleStore()
+const route = useRoute()
+
+const activeIndex = computed(() => {
+  const path = route.path
+  if (path.startsWith('/login')) return '/login'
+  if (path.startsWith('/projects')) return '/projects'
+  if (path.startsWith('/spiders')) return '/spiders'
+  if (path.startsWith('/executions')) return '/executions'
+  if (path.startsWith('/monitor')) return '/monitor'
+  if (path.startsWith('/datasources')) return '/datasources'
+  if (path.startsWith('/nodes')) return '/nodes'
+  if (path.startsWith('/schedules')) return '/schedules'
+  return '/projects'
+})
 
 const navItems = [
-  { to: '/login', labelKey: 'navigation.login' },
-  { to: '/projects', labelKey: 'navigation.projects' },
-  { to: '/spiders', labelKey: 'navigation.spiders' },
-  { to: '/executions', labelKey: 'navigation.executions' },
-  { to: '/monitor', labelKey: 'navigation.monitor' },
-  { to: '/datasources', labelKey: 'navigation.datasources' },
+  { index: '/login', labelKey: 'navigation.login' },
+  { index: '/projects', labelKey: 'navigation.projects' },
+  { index: '/spiders', labelKey: 'navigation.spiders' },
+  { index: '/executions', labelKey: 'navigation.executions' },
+  { index: '/schedules', labelKey: 'navigation.schedules' },
+  { index: '/nodes', labelKey: 'navigation.nodes' },
+  { index: '/monitor', labelKey: 'navigation.monitor' },
+  { index: '/datasources', labelKey: 'navigation.datasources' },
 ]
 </script>
 
 <template>
-  <div class="app-layout">
-    <header class="app-header">
-      <router-link class="brand" to="/projects">{{ localeStore.t('app.title') }}</router-link>
-      <nav class="main-nav" :aria-label="localeStore.t('navigation.main')">
-        <router-link v-for="item in navItems" :key="item.to" :to="item.to">
-          {{ localeStore.t(item.labelKey) }}
-        </router-link>
-      </nav>
+  <el-container class="app-layout">
+    <el-header class="app-header" height="auto">
+      <div class="header-left">
+        <router-link class="brand" to="/projects">{{ localeStore.t('app.title') }}</router-link>
+        <el-menu
+          :default-active="activeIndex"
+          mode="horizontal"
+          router
+          :ellipsis="false"
+          class="main-menu"
+        >
+          <el-menu-item v-for="item in navItems" :key="item.index" :index="item.index">
+            {{ localeStore.t(item.labelKey) }}
+          </el-menu-item>
+        </el-menu>
+      </div>
       <AppLanguageSwitcher />
-    </header>
-    <main class="app-content">
+    </el-header>
+    <el-main class="app-content">
       <slot />
-    </main>
-  </div>
+    </el-main>
+  </el-container>
 </template>
 
 <style scoped>
@@ -38,34 +64,27 @@ const navItems = [
 
 .app-header {
   align-items: center;
-  border-bottom: 1px solid #dcdfe6;
+  border-bottom: 1px solid var(--el-border-color-light);
   display: flex;
-  flex-wrap: wrap;
+  justify-content: space-between;
+  padding: 0 1rem;
+}
+
+.header-left {
+  align-items: center;
+  display: flex;
   gap: 1rem;
-  padding: 1rem;
 }
 
 .brand {
-  color: #303133;
+  color: var(--el-text-color-primary);
   font-weight: 700;
   text-decoration: none;
+  white-space: nowrap;
 }
 
-.main-nav {
-  display: flex;
-  flex: 1;
-  flex-wrap: wrap;
-  gap: 0.75rem;
-}
-
-.main-nav a {
-  color: #409eff;
-  text-decoration: none;
-}
-
-.main-nav a.router-link-active {
-  color: #1f5fbf;
-  font-weight: 600;
+.main-menu {
+  border-bottom: none;
 }
 
 .app-content {
