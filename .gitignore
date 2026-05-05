@@ -1,5 +1,8 @@
 .worktrees/
 .superpowers/
+.cursor-cache/
+.gocache/
+.npm-home/
 .env
 .env.local
 node_modules/
