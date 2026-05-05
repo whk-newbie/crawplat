@@ -1,3 +1,4 @@
+// Package repo 的单元测试。使用 sqlmock + miniredis 验证 Overview 聚合逻辑。
 package repo
 
 import (

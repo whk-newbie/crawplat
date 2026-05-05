@@ -1,3 +1,5 @@
+// Package model 的监控总览数据结构。
+// Overview 聚合执行和节点两维度的统计数据，由 repo 层查询后组装。
 package model
 
 type ExecutionSummary struct {

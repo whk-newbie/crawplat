@@ -1,3 +1,4 @@
+// Package service 的告警单元测试。验证规则创建、评估、冷却跳过、按类型过滤等路径。
 package service
 
 import (

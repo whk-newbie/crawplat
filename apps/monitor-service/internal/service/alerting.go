@@ -1,5 +1,9 @@
 package service
 
+// Package service 的告警评估与 Webhook 投递逻辑。
+// 核心流程：轮询告警规则 → 查询候选实体（失败执行/离线节点）→
+// 冷却检查 → 构建 payload → Webhook 投递 → 事件持久化。
+
 import (
 	"bytes"
 	"context"
@@ -130,6 +134,8 @@ func (s *MonitorService) startAlertTicker(ctx context.Context, interval time.Dur
 	}()
 }
 
+// CreateAlertRule 校验并创建告警规则，对未设置的超时/冷却参数取默认值。
+// 节点离线类的默认超时 3s、冷却 60s；执行失败类默认超时 5s、冷却 120s。
 func (s *MonitorService) CreateAlertRule(input CreateAlertRuleInput) (model.AlertRule, error) {
 	name := strings.TrimSpace(input.Name)
 	if name == "" {
@@ -163,6 +169,8 @@ func (s *MonitorService) EvaluateAlerts(ctx context.Context) error {
 	return s.EvaluateAlertsByRuleTypes(ctx)
 }
 
+// EvaluateAlertsByRuleTypes 遍历已启用告警规则，按类型分流评估。
+// 可选参数 ruleTypes 为空时评估所有类型。
 func (s *MonitorService) EvaluateAlertsByRuleTypes(ctx context.Context, ruleTypes ...string) error {
 	rules, err := s.repo.ListAlertRules(ctx)
 	if err != nil {
@@ -258,6 +266,7 @@ func (s *MonitorService) evaluateNodeOfflineRule(ctx context.Context, rule model
 	return nil
 }
 
+// shouldNotify 判断是否应发送告警：若无历史事件则发送；若上条事件在冷却期内则跳过。
 func (s *MonitorService) shouldNotify(ctx context.Context, rule model.AlertRule, dedupeKey string, now time.Time) bool {
 	last, err := s.repo.LastAlertEventAt(ctx, rule.ID, dedupeKey)
 	if err != nil {
@@ -270,6 +279,7 @@ func (s *MonitorService) shouldNotify(ctx context.Context, rule model.AlertRule,
 	return last.Add(cooldown).Before(now)
 }
 
+// emitEvent 投递 Webhook 并持久化告警事件记录。投递失败时 status 标记为 "failed"。
 func (s *MonitorService) emitEvent(ctx context.Context, rule model.AlertRule, dedupeKey string, payload webhookPayload, now time.Time) error {
 	body, err := json.Marshal(payload)
 	if err != nil {

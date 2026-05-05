@@ -1,3 +1,6 @@
+// Package service 是 Monitor 服务的业务逻辑层。
+// 核心职责：监控总览聚合、告警规则管理、告警评估（轮询）、Webhook 通知投递。
+// 不直接访问数据库——该职责属于 repo 层。
 package service
 
 import (
