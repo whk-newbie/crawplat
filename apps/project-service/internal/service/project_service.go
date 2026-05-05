@@ -5,11 +5,15 @@ package service
 
 import (
 	"context"
+	"errors"
 	"sync"
 
 	"crawler-platform/apps/project-service/internal/model"
 	"github.com/google/uuid"
 )
+
+// ErrProjectCodeExists 表示项目 code 已被占用。
+var ErrProjectCodeExists = errors.New("project code already exists")
 
 // ProjectService 处理项目的创建和查询。
 type ProjectService struct {
@@ -19,7 +23,8 @@ type ProjectService struct {
 // Repository 定义项目持久化接口，由 PostgreSQL 或内存实现满足。
 type Repository interface {
 	Create(ctx context.Context, project model.Project) error
-	List(ctx context.Context) ([]model.Project, error)
+	List(ctx context.Context, limit, offset int) ([]model.Project, error)
+	ExistsByCode(ctx context.Context, code string) (bool, error)
 }
 
 // memoryRepository 基于内存切片的轻量实现，用于测试和 MVP 阶段。
@@ -37,13 +42,36 @@ func (r *memoryRepository) Create(_ context.Context, project model.Project) erro
 	return nil
 }
 
-func (r *memoryRepository) List(_ context.Context) ([]model.Project, error) {
+func (r *memoryRepository) List(_ context.Context, limit, offset int) ([]model.Project, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
-	projects := make([]model.Project, len(r.projects))
-	copy(projects, r.projects)
+	if limit <= 0 {
+		limit = 20
+	}
+	if offset >= len(r.projects) {
+		return []model.Project{}, nil
+	}
+	end := offset + limit
+	if end > len(r.projects) {
+		end = len(r.projects)
+	}
+
+	projects := make([]model.Project, end-offset)
+	copy(projects, r.projects[offset:end])
 	return projects, nil
+}
+
+func (r *memoryRepository) ExistsByCode(_ context.Context, code string) (bool, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	for _, p := range r.projects {
+		if p.Code == code {
+			return true, nil
+		}
+	}
+	return false, nil
 }
 
 // NewProjectService 创建 ProjectService。接受可选 Repository，为 nil 时回退内存实现。
@@ -55,8 +83,17 @@ func NewProjectService(repos ...Repository) *ProjectService {
 	return &ProjectService{repo: &memoryRepository{}}
 }
 
-// Create 创建项目：生成 UUID 并持久化。成功返回完整的 Project 对象。
+// Create 创建项目：先检查 code 唯一性，再生成 UUID 并持久化。
+// code 已存在时返回 ErrProjectCodeExists。
 func (s *ProjectService) Create(code, name string) (model.Project, error) {
+	exists, err := s.repo.ExistsByCode(context.Background(), code)
+	if err != nil {
+		return model.Project{}, err
+	}
+	if exists {
+		return model.Project{}, ErrProjectCodeExists
+	}
+
 	project := model.Project{
 		ID:   uuid.NewString(),
 		Code: code,
@@ -69,7 +106,8 @@ func (s *ProjectService) Create(code, name string) (model.Project, error) {
 	return project, nil
 }
 
-// List 返回全量项目列表，由 repo 层控制排序。
-func (s *ProjectService) List() ([]model.Project, error) {
-	return s.repo.List(context.Background())
+// List 分页返回项目列表，由 repo 层控制排序。
+// limit <= 0 时由 repo 层使用默认值。
+func (s *ProjectService) List(limit, offset int) ([]model.Project, error) {
+	return s.repo.List(context.Background(), limit, offset)
 }

@@ -29,14 +29,18 @@ func (r *PostgresRepository) Create(ctx context.Context, project model.Project) 
 	return err
 }
 
-// List 查询所有项目，按 created_at DESC, id DESC 排序。
-// rows.Err() 检查确保迭代过程中无被忽略的错误。
-func (r *PostgresRepository) List(ctx context.Context) ([]model.Project, error) {
+// List 分页查询项目，按 created_at DESC, id DESC 排序。
+// limit <= 0 时默认返回 20 条。
+func (r *PostgresRepository) List(ctx context.Context, limit, offset int) ([]model.Project, error) {
+	if limit <= 0 {
+		limit = 20
+	}
 	rows, err := r.db.QueryContext(ctx, `
 		SELECT id, code, name
 		FROM projects
 		ORDER BY created_at DESC, id DESC
-	`)
+		LIMIT $1 OFFSET $2
+	`, limit, offset)
 	if err != nil {
 		return nil, err
 	}
@@ -54,4 +58,13 @@ func (r *PostgresRepository) List(ctx context.Context) ([]model.Project, error) 
 		return nil, err
 	}
 	return projects, nil
+}
+
+// ExistsByCode 检查指定 code 的项目是否已存在。
+func (r *PostgresRepository) ExistsByCode(ctx context.Context, code string) (bool, error) {
+	var exists bool
+	err := r.db.QueryRowContext(ctx, `
+		SELECT EXISTS(SELECT 1 FROM projects WHERE code = $1)
+	`, code).Scan(&exists)
+	return exists, err
 }

@@ -49,14 +49,40 @@ func TestPostgresRepositoryList(t *testing.T) {
 		SELECT id, code, name
 		FROM projects
 		ORDER BY created_at DESC, id DESC
-	`)).WillReturnRows(rows)
+		LIMIT $1 OFFSET $2
+	`)).WithArgs(20, 0).WillReturnRows(rows)
 
-	projects, err := repo.List(context.Background())
+	projects, err := repo.List(context.Background(), 20, 0)
 	if err != nil {
 		t.Fatalf("List returned error: %v", err)
 	}
 	if len(projects) != 1 || projects[0].ID != "p1" {
 		t.Fatalf("unexpected projects: %#v", projects)
+	}
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Fatalf("ExpectationsWereMet returned error: %v", err)
+	}
+}
+
+func TestPostgresRepositoryExistsByCode(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	if err != nil {
+		t.Fatalf("sqlmock.New returned error: %v", err)
+	}
+	defer db.Close()
+
+	repo := NewPostgresRepository(db)
+
+	mock.ExpectQuery(regexp.QuoteMeta(`
+		SELECT EXISTS(SELECT 1 FROM projects WHERE code = $1)
+	`)).WithArgs("crawler").WillReturnRows(sqlmock.NewRows([]string{"exists"}).AddRow(true))
+
+	exists, err := repo.ExistsByCode(context.Background(), "crawler")
+	if err != nil {
+		t.Fatalf("ExistsByCode returned error: %v", err)
+	}
+	if !exists {
+		t.Fatal("expected exists=true")
 	}
 	if err := mock.ExpectationsWereMet(); err != nil {
 		t.Fatalf("ExpectationsWereMet returned error: %v", err)
