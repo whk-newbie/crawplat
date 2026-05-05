@@ -59,22 +59,27 @@
             <el-button link type="primary" @click="openExecutionById(row.id)">{{ row.id }}</el-button>
           </template>
         </el-table-column>
+        <el-table-column prop="projectId" label="Project" min-width="140" />
         <el-table-column prop="spiderId" label="Spider" min-width="140" />
+        <el-table-column prop="nodeId" label="Node" min-width="140" />
         <el-table-column prop="status" label="Status" width="120" />
         <el-table-column prop="triggerSource" label="Trigger" width="120" />
         <el-table-column prop="createdAt" label="Created At" min-width="200" />
+        <el-table-column prop="startedAt" label="Started At" min-width="200" />
+        <el-table-column prop="finishedAt" label="Finished At" min-width="200" />
         <template #empty>
           <el-empty v-if="!loadingList" description="No executions" />
         </template>
       </el-table>
       <div style="display: flex; justify-content: flex-end; margin-top: 12px">
         <el-pagination
-          v-model:current-page="currentPage"
-          v-model:page-size="pageSize"
-          layout="prev, pager, next, total"
+          v-model:current-page="query.pagination.currentPage"
+          v-model:page-size="query.pagination.pageSize"
+          layout="sizes, prev, pager, next, total"
           :total="total"
-          :page-sizes="[20]"
+          :page-sizes="[10, 20, 50, 100]"
           @current-change="loadExecutions"
+          @size-change="handlePageSizeChange"
         />
       </div>
     </el-card>
@@ -172,8 +177,23 @@ const loadingProjects = ref(false)
 const executions = ref<Execution[]>([])
 const loadingList = ref(false)
 const total = ref(0)
-const pageSize = ref(20)
-const currentPage = ref(1)
+const query = reactive({
+  filters: {
+    spiderId: '',
+    nodeId: '',
+    status: '',
+    triggerSource: '',
+    timeRange: null as [Date, Date] | null,
+  },
+  pagination: {
+    pageSize: 20,
+    currentPage: 1,
+  },
+  sorting: {
+    sortBy: 'created_at',
+    sortOrder: 'desc' as 'asc' | 'desc',
+  },
+})
 const executionSpiderId = ref('')
 const executionNodeId = ref('')
 const executionStatus = ref('')
@@ -298,24 +318,26 @@ async function loadExecutions() {
     ElMessage.warning('Project ID is required')
     return
   }
-  let executionFrom: string | undefined
-  let executionTo: string | undefined
-  if (executionTimeRange.value && executionTimeRange.value.length === 2) {
-    executionFrom = executionTimeRange.value[0].toISOString()
-    executionTo = executionTimeRange.value[1].toISOString()
+  let from: string | undefined
+  let to: string | undefined
+  if (query.filters.timeRange && query.filters.timeRange.length === 2) {
+    from = query.filters.timeRange[0].toISOString()
+    to = query.filters.timeRange[1].toISOString()
   }
   loadingList.value = true
   try {
     const response = await listExecutions({
       projectId: projectID,
-      limit: pageSize.value,
-      offset: (currentPage.value - 1) * pageSize.value,
-      spiderId: executionSpiderId.value || undefined,
-      nodeId: executionNodeId.value || undefined,
-      executionStatus: executionStatus.value || undefined,
-      executionTriggerSource: executionTriggerSource.value || undefined,
-      executionFrom,
-      executionTo,
+      limit: query.pagination.pageSize,
+      offset: (query.pagination.currentPage - 1) * query.pagination.pageSize,
+      spiderId: query.filters.spiderId || undefined,
+      nodeId: query.filters.nodeId || undefined,
+      status: query.filters.status || undefined,
+      triggerSource: query.filters.triggerSource || undefined,
+      from,
+      to,
+      sortBy: query.sorting.sortBy,
+      sortOrder: query.sorting.sortOrder,
     })
     executions.value = response.items
     total.value = response.total
@@ -327,7 +349,12 @@ async function loadExecutions() {
 }
 
 async function applyExecutionFilters() {
-  currentPage.value = 1
+  query.filters.spiderId = executionSpiderId.value.trim()
+  query.filters.nodeId = executionNodeId.value.trim()
+  query.filters.status = executionStatus.value
+  query.filters.triggerSource = executionTriggerSource.value
+  query.filters.timeRange = executionTimeRange.value
+  query.pagination.currentPage = 1
   await loadExecutions()
 }
 
@@ -337,7 +364,17 @@ async function resetExecutionFilters() {
   executionStatus.value = ''
   executionTriggerSource.value = ''
   executionTimeRange.value = null
-  currentPage.value = 1
+  query.filters.spiderId = ''
+  query.filters.nodeId = ''
+  query.filters.status = ''
+  query.filters.triggerSource = ''
+  query.filters.timeRange = null
+  query.pagination.currentPage = 1
+  await loadExecutions()
+}
+
+async function handlePageSizeChange() {
+  query.pagination.currentPage = 1
   await loadExecutions()
 }
 
