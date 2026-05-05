@@ -9,9 +9,10 @@ import "time"
 // 状态机：pending → running → succeeded / failed（见 service 层的 transitionToRunning / Complete / Fail）。
 // 重试通过 RetryOfExecutionID 字段形成执行链，MaterializeRetry 负责将 failed 执行物化为新的 pending 执行。
 type Execution struct {
-	ID              string `json:"id"`
-	ProjectID       string `json:"projectId"`
-	SpiderID        string `json:"spiderId"`
+	ID             string `json:"id"`
+	ProjectID      string `json:"projectId"`
+	OrganizationID string `json:"organizationId,omitempty"`
+	SpiderID       string `json:"spiderId"`
 	SpiderVersion   string `json:"spiderVersion,omitempty"`
 	RegistryAuthRef string `json:"registryAuthRef,omitempty"`
 	// NodeID 是认领该执行的工作节点标识，在 ClaimNext 时写入，用于后续 Start/Complete/Fail 的节点校验。

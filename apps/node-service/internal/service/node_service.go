@@ -8,11 +8,12 @@ import (
 )
 
 type Node struct {
-	ID           string    `json:"id"`
-	Name         string    `json:"name"`
-	Status       string    `json:"status"`
-	Capabilities []string  `json:"capabilities"`
-	LastSeenAt   time.Time `json:"lastSeenAt"`
+	ID             string    `json:"id"`
+	Name           string    `json:"name"`
+	OrganizationID string    `json:"organizationId,omitempty"`
+	Status         string    `json:"status"`
+	Capabilities   []string  `json:"capabilities"`
+	LastSeenAt     time.Time `json:"lastSeenAt"`
 }
 
 type NodeHeartbeat struct {

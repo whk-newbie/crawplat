@@ -5,13 +5,15 @@ package model
 // Datasource 表示一个已注册的外部数据源配置。
 // Config 字段为扁平化的 key-value 配置（如 host、port、password 等），不同数据源类型使用不同键值。
 // Readonly 字段固定为 true，表示爬虫平台对所有外部数据源均为只读访问。
+// OrganizationID 是租户隔离标识，当前允许为空（向后兼容），Phase 4 加固时改为必填。
 type Datasource struct {
-	ID        string            `json:"id"`
-	ProjectID string            `json:"projectId"`
-	Name      string            `json:"name"`
-	Type      string            `json:"type"`
-	Readonly  bool              `json:"readonly"`
-	Config    map[string]string `json:"config,omitempty"`
+	ID             string            `json:"id"`
+	ProjectID      string            `json:"projectId"`
+	OrganizationID string            `json:"organizationId,omitempty"`
+	Name           string            `json:"name"`
+	Type           string            `json:"type"`
+	Readonly       bool              `json:"readonly"`
+	Config         map[string]string `json:"config,omitempty"`
 }
 
 // TestResult 表示连接测试的结果，由真实探针（非 mock）探测外部数据源后返回。

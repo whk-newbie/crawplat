@@ -14,7 +14,7 @@ import (
 
 // NewRouter 创建并配置 Gin 路由引擎。
 // 注册 POST /api/v1/auth/login：接收 username/password JSON，
-// 校验失败返回 400，认证失败返回 401，成功返回 {"token": "..."}。
+// 校验失败返回 400，认证失败返回 401，成功返回 {"token": "...", "organizations": [...]}。
 // 注册 POST /api/v1/auth/register：接收 username/password JSON，
 // 校验失败返回 400，用户名已存在返回 409，成功返回 201。
 func NewRouter(authService *service.AuthService) *gin.Engine {
@@ -31,13 +31,16 @@ func NewRouter(authService *service.AuthService) *gin.Engine {
 		}
 
 		req.Username = strings.TrimSpace(req.Username)
-		token, err := authService.Login(req.Username, req.Password)
+		result, err := authService.Login(req.Username, req.Password)
 		if err != nil {
 			c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid credentials"})
 			return
 		}
 
-		c.JSON(http.StatusOK, gin.H{"token": token})
+		c.JSON(http.StatusOK, gin.H{
+			"token":         result.Token,
+			"organizations": result.Memberships,
+		})
 	})
 
 	router.POST("/api/v1/auth/register", func(c *gin.Context) {

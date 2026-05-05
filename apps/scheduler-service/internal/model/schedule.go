@@ -20,6 +20,7 @@ import "time"
 type Schedule struct {
 	ID                 string     `json:"id"`
 	ProjectID          string     `json:"projectId"`
+	OrganizationID     string     `json:"organizationId,omitempty"`
 	SpiderID           string     `json:"spiderId"`
 	SpiderVersion      string     `json:"spiderVersion,omitempty"`
 	RegistryAuthRef    string     `json:"registryAuthRef,omitempty"`

@@ -11,6 +11,7 @@ const (
 
 type AlertRule struct {
 	ID                  string    `json:"id"`
+	OrganizationID      string    `json:"organizationId,omitempty"`
 	Name                string    `json:"name"`
 	RuleType            string    `json:"ruleType"`
 	Enabled             bool      `json:"enabled"`

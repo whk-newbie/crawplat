@@ -25,6 +25,7 @@ func main() {
 	enableSeedAdmin := strings.EqualFold(os.Getenv("IAM_ENABLE_SEED_ADMIN"), "true")
 
 	var userRepo service.UserRepository
+	var orgRepo service.OrgRepository
 	if dsn := os.Getenv("DATABASE_DSN"); strings.TrimSpace(dsn) != "" {
 		db, err := postgres.Open(strings.TrimSpace(dsn))
 		if err != nil {
@@ -38,13 +39,15 @@ func main() {
 			log.Fatalf("init postgres user repo: %v", err)
 		}
 		userRepo = pgRepo
+		orgRepo = repo.NewPostgresOrgRepo(db)
 		log.Println("using postgres user repository")
 	} else {
 		userRepo = repo.NewUserRepo(enableSeedAdmin)
+		orgRepo = repo.NewMemoryOrgRepo()
 		log.Println("using in-memory user repository")
 	}
 
-	router := api.NewRouter(service.NewAuthService(secret, userRepo))
+	router := api.NewRouter(service.NewAuthService(secret, userRepo, orgRepo))
 	if err := router.Run(":8081"); err != nil {
 		log.Fatal(err)
 	}

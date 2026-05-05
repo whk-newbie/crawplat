@@ -1,10 +1,12 @@
 package api
 
 import (
+	"log"
 	"net/http"
 	"strings"
 
 	"crawler-platform/apps/gateway/internal/proxy"
+	"crawler-platform/packages/go-common/auth"
 
 	"github.com/gin-gonic/gin"
 )
@@ -115,6 +117,7 @@ func normalizeAPIVersion(version string) string {
 }
 
 // requireJWT 统一保护公共业务 API，显式区分缺少凭证和凭证无效两类失败。
+// 解析 JWT 后提取 UserClaims，将 OrganizationID 注入 X-Org-ID 请求头供上游服务使用。
 func requireJWT(secret string) gin.HandlerFunc {
 	secret = strings.TrimSpace(secret)
 	return func(c *gin.Context) {
@@ -138,10 +141,21 @@ func requireJWT(secret string) gin.HandlerFunc {
 			respondError(c, http.StatusUnauthorized, "missing bearer token")
 			return
 		}
-		if token != secret {
+
+		claims, err := auth.ParseUserToken(secret, token)
+		if err != nil {
+			log.Printf("jwt validation failed: %v", err)
 			respondError(c, http.StatusUnauthorized, "invalid bearer token")
 			return
 		}
+
+		// 将 org 上下文注入请求头，上游服务通过 X-Org-ID 获取当前租户
+		if claims.OrganizationID != "" {
+			c.Request.Header.Set("X-Org-ID", claims.OrganizationID)
+		}
+
+		// 存储完整 claims 供后续中间件或日志使用
+		c.Set("userClaims", claims)
 		c.Next()
 	}
 }

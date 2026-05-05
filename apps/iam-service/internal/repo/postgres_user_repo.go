@@ -34,9 +34,9 @@ func NewPostgresUserRepo(db *sql.DB, enableSeedAdmin bool) (*PostgresUserRepo, e
 func (r *PostgresUserRepo) FindByUsername(username string) (model.User, error) {
 	var user model.User
 	err := r.db.QueryRow(
-		`SELECT username, password_hash FROM users WHERE username = $1`,
+		`SELECT id, username, password_hash FROM users WHERE username = $1`,
 		strings.TrimSpace(username),
-	).Scan(&user.Username, &user.PasswordHash)
+	).Scan(&user.ID, &user.Username, &user.PasswordHash)
 	if err == sql.ErrNoRows {
 		return model.User{}, ErrUserNotFound
 	}

@@ -8,19 +8,23 @@ import (
 	"crawler-platform/apps/iam-service/internal/repo"
 )
 
+func newTestAuthService(seedAdmin bool) *AuthService {
+	return NewAuthService("secret", repo.NewUserRepo(seedAdmin), repo.NewMemoryOrgRepo())
+}
+
 func TestLoginReturnsTokenForSeedUser(t *testing.T) {
-	svc := NewAuthService("secret", repo.NewUserRepo(true))
-	token, err := svc.Login("admin", "admin123")
+	svc := newTestAuthService(true)
+	result, err := svc.Login("admin", "admin123")
 	if err != nil {
 		t.Fatalf("expected login success, got error: %v", err)
 	}
-	if token == "" {
+	if result.Token == "" {
 		t.Fatal("expected non-empty token")
 	}
 }
 
 func TestLoginRejectsWrongPassword(t *testing.T) {
-	svc := NewAuthService("secret", repo.NewUserRepo(true))
+	svc := newTestAuthService(true)
 
 	_, err := svc.Login("admin", "wrong-password")
 	if !errors.Is(err, ErrInvalidCredentials) {
@@ -29,7 +33,7 @@ func TestLoginRejectsWrongPassword(t *testing.T) {
 }
 
 func TestLoginRejectsSeedAdminWhenDisabled(t *testing.T) {
-	svc := NewAuthService("secret", repo.NewUserRepo(false))
+	svc := newTestAuthService(false)
 
 	_, err := svc.Login("admin", "admin123")
 	if !errors.Is(err, ErrInvalidCredentials) {
@@ -38,18 +42,18 @@ func TestLoginRejectsSeedAdminWhenDisabled(t *testing.T) {
 }
 
 func TestLoginTrimsWhitespace(t *testing.T) {
-	svc := NewAuthService("secret", repo.NewUserRepo(true))
-	token, err := svc.Login("  admin  ", "admin123")
+	svc := newTestAuthService(true)
+	result, err := svc.Login("  admin  ", "admin123")
 	if err != nil {
 		t.Fatalf("expected login success with trimmed username, got error: %v", err)
 	}
-	if token == "" {
+	if result.Token == "" {
 		t.Fatal("expected non-empty token")
 	}
 }
 
 func TestRegisterCreatesUser(t *testing.T) {
-	svc := NewAuthService("secret", repo.NewUserRepo(false))
+	svc := newTestAuthService(false)
 	user, err := svc.Register("newuser", "password123")
 	if err != nil {
 		t.Fatalf("expected register success, got error: %v", err)
@@ -59,14 +63,17 @@ func TestRegisterCreatesUser(t *testing.T) {
 	}
 
 	// 注册成功后应该可以登录
-	_, err = svc.Login("newuser", "password123")
+	result, err := svc.Login("newuser", "password123")
 	if err != nil {
 		t.Fatalf("expected login success after register, got error: %v", err)
+	}
+	if len(result.Memberships) == 0 {
+		t.Fatal("expected at least one organization membership after register")
 	}
 }
 
 func TestRegisterRejectsDuplicateUsername(t *testing.T) {
-	svc := NewAuthService("secret", repo.NewUserRepo(true))
+	svc := newTestAuthService(true)
 	_, err := svc.Register("admin", "password123")
 	if !errors.Is(err, ErrUserAlreadyExists) {
 		t.Fatalf("expected ErrUserAlreadyExists, got: %v", err)
@@ -74,7 +81,7 @@ func TestRegisterRejectsDuplicateUsername(t *testing.T) {
 }
 
 func TestRegisterRejectsEmptyFields(t *testing.T) {
-	svc := NewAuthService("secret", repo.NewUserRepo(false))
+	svc := newTestAuthService(false)
 
 	_, err := svc.Register("", "password")
 	if err == nil {

@@ -30,6 +30,7 @@ func NewUserRepo(enableSeedAdmin bool) *UserRepo {
 	if enableSeedAdmin {
 		hash, _ := bcrypt.GenerateFromPassword([]byte("admin123"), bcrypt.DefaultCost)
 		users["admin"] = model.User{
+			ID:           "seed-admin",
 			Username:     "admin",
 			PasswordHash: string(hash),
 		}
@@ -48,9 +49,13 @@ func (r *UserRepo) FindByUsername(username string) (model.User, error) {
 }
 
 // Create 创建新用户，用户名已存在时返回 ErrUserAlreadyExists。
+// 内存模式下使用 "mem-" 前缀 + 用户名作为模拟 ID。
 func (r *UserRepo) Create(user model.User) error {
 	if _, ok := r.users[user.Username]; ok {
 		return fmt.Errorf("%w: %s", ErrUserAlreadyExists, user.Username)
+	}
+	if user.ID == "" {
+		user.ID = "mem-" + user.Username
 	}
 	r.users[user.Username] = user
 	return nil

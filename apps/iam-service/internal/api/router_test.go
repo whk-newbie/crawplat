@@ -13,7 +13,7 @@ import (
 )
 
 func newTestRouter(seedAdmin bool) *gin.Engine {
-	return NewRouter(service.NewAuthService("secret", repo.NewUserRepo(seedAdmin)))
+	return NewRouter(service.NewAuthService("secret", repo.NewUserRepo(seedAdmin), repo.NewMemoryOrgRepo()))
 }
 
 func TestLoginHandlerReturnsToken(t *testing.T) {
