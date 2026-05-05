@@ -9,6 +9,7 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
+// ResolveServiceURL 将平台服务名解析为 Docker Compose 网络内的上游地址。
 func ResolveServiceURL(name string) string {
 	switch name {
 	case "iam-service":
@@ -32,29 +33,34 @@ func ResolveServiceURL(name string) string {
 	}
 }
 
+// ProxyTo 创建到指定上游服务的反向代理，并把上游连接失败统一映射为 gateway 错误响应。
 func ProxyTo(serviceName string) gin.HandlerFunc {
 	target := ResolveServiceURL(serviceName)
 	if target == "" {
 		return func(c *gin.Context) {
-			c.JSON(http.StatusBadGateway, gin.H{"error": "unknown upstream service"})
+			writeError(c.Writer, http.StatusBadGateway, "unknown upstream service")
 		}
 	}
 
 	targetURL, err := url.Parse(target)
 	if err != nil {
 		return func(c *gin.Context) {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "invalid upstream service url"})
+			writeError(c.Writer, http.StatusInternalServerError, "invalid upstream service url")
 		}
 	}
 
 	reverseProxy := httputil.NewSingleHostReverseProxy(targetURL)
 	reverseProxy.ErrorHandler = func(w http.ResponseWriter, _ *http.Request, _ error) {
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusBadGateway)
-		_ = json.NewEncoder(w).Encode(gin.H{"error": "upstream service unavailable"})
+		writeError(w, http.StatusBadGateway, "upstream service unavailable")
 	}
 
 	return func(c *gin.Context) {
 		reverseProxy.ServeHTTP(c.Writer, c.Request)
 	}
+}
+
+func writeError(w http.ResponseWriter, status int, message string) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(status)
+	_ = json.NewEncoder(w).Encode(gin.H{"error": message})
 }
