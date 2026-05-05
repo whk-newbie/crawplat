@@ -1,3 +1,11 @@
+// 文件职责：PostgreSQL 仓库的单元测试。
+// 测试范围：
+//   - UpsertCatalog/ListCatalog：节点写入与列表查询
+//   - GetByID：按 ID 查找节点及 not-found 错误处理
+//   - ListHeartbeatHistory：心跳历史查询（多行返回）
+//   - ListRecentExecutions：执行记录过滤（基础查询、状态过滤、时间范围过滤）
+//   - 接口满足检查（编译时验证 PostgresNodeRepository 实现了 service.CatalogRepository 接口）
+// 使用 go-sqlmock 模拟 PostgreSQL 数据库，无需真实数据库实例。
 package repo
 
 import (
