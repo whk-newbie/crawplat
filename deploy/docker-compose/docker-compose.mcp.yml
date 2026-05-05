@@ -1,6 +1,19 @@
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
+x-health-defaults: &health-defaults
+  interval: 30s
+  timeout: 5s
+  retries: 3
+  start_period: 10s
+
 services:
   postgres:
     image: postgres:16
+    restart: unless-stopped
     env_file:
       - ../env/.env.example
     environment:
@@ -9,17 +22,48 @@ services:
       POSTGRES_DB: ${POSTGRES_DB:-crawler}
     volumes:
       - ../migrations/postgres:/migrations:ro
+    logging: *logging
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-crawler}"]
+      <<: *health-defaults
+    deploy:
+      resources:
+        limits:
+          cpus: "1"
+          memory: 512M
 
   redis:
     image: redis:7
+    restart: unless-stopped
+    logging: *logging
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli ping"]
+      <<: *health-defaults
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 256M
 
   mongo:
     image: mongo:7
+    restart: unless-stopped
+    logging: *logging
+    healthcheck:
+      test: ["CMD-SHELL", "mongosh --eval 'db.adminCommand(\"ping\")'"]
+      <<: *health-defaults
+      start_period: 15s
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 512M
 
   gateway:
     build:
       context: ../..
       dockerfile: apps/gateway/Dockerfile
+    restart: unless-stopped
     depends_on:
       - iam-service
       - project-service
@@ -31,71 +75,130 @@ services:
       - ../env/.env.example
     ports:
       - "8080:8080"
+    logging: *logging
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 128M
 
   iam-service:
     build:
       context: ../..
       dockerfile: apps/iam-service/Dockerfile
+    restart: unless-stopped
     depends_on:
-      - postgres
+      postgres:
+        condition: service_healthy
     env_file:
       - ../env/.env.example
     environment:
       IAM_ENABLE_SEED_ADMIN: "true"
+    logging: *logging
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 128M
 
   project-service:
     build:
       context: ../..
       dockerfile: apps/project-service/Dockerfile
+    restart: unless-stopped
     depends_on:
-      - postgres
+      postgres:
+        condition: service_healthy
     env_file:
       - ../env/.env.example
+    logging: *logging
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 128M
 
   spider-service:
     build:
       context: ../..
       dockerfile: apps/spider-service/Dockerfile
+    restart: unless-stopped
     depends_on:
-      - postgres
+      postgres:
+        condition: service_healthy
     env_file:
       - ../env/.env.example
+    logging: *logging
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 128M
 
   execution-service:
     build:
       context: ../..
       dockerfile: apps/execution-service/Dockerfile
+    restart: unless-stopped
     depends_on:
-      - postgres
-      - redis
-      - mongo
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      mongo:
+        condition: service_healthy
     env_file:
       - ../env/.env.example
+    logging: *logging
+    deploy:
+      resources:
+        limits:
+          cpus: "1"
+          memory: 256M
 
   node-service:
     build:
       context: ../..
       dockerfile: apps/node-service/Dockerfile
+    restart: unless-stopped
     depends_on:
-      - redis
+      redis:
+        condition: service_healthy
     env_file:
       - ../env/.env.example
+    logging: *logging
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 128M
 
   datasource-service:
     build:
       context: ../..
       dockerfile: apps/datasource-service/Dockerfile
+    restart: unless-stopped
     depends_on:
-      - postgres
-      - redis
-      - mongo
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      mongo:
+        condition: service_healthy
     env_file:
       - ../env/.env.example
+    logging: *logging
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 256M
 
   agent:
     build:
       context: ../..
       dockerfile: apps/agent/Dockerfile
+    restart: unless-stopped
     depends_on:
       - node-service
       - execution-service
@@ -107,12 +210,28 @@ services:
       NODE_NAME: mvp-node
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
+    logging: *logging
+    deploy:
+      resources:
+        limits:
+          cpus: "1"
+          memory: 256M
 
   web:
     build:
       context: ../..
       dockerfile: apps/web/Dockerfile
+    restart: unless-stopped
     depends_on:
       - gateway
     ports:
       - "3000:80"
+    logging: *logging
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:80/ || exit 1"]
+      <<: *health-defaults
+    deploy:
+      resources:
+        limits:
+          cpus: "0.25"
+          memory: 64M

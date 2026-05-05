@@ -1,6 +1,7 @@
-.PHONY: test docker-binaries web-assets migrate up down
+.PHONY: test docker-binaries web-assets migrate up down dev-up dev-down lint
 
 COMPOSE_FILE := deploy/docker-compose/docker-compose.mcp.yml
+DEV_COMPOSE_FILE := deploy/docker-compose/docker-compose.dev.yml
 DOCKER_BIN_DIR := .docker-bin
 
 NESTED_GO_MODULES := $(shell find packages apps -name go.mod -exec dirname {} \; | sort)
@@ -35,3 +36,16 @@ up: docker-binaries web-assets migrate
 
 down:
 	docker compose -f $(COMPOSE_FILE) down -v --remove-orphans
+
+dev-up:
+	docker compose -f $(DEV_COMPOSE_FILE) up --build -d
+
+dev-down:
+	docker compose -f $(DEV_COMPOSE_FILE) down -v --remove-orphans
+
+lint:
+	@set -e; \
+	for mod in $(NESTED_GO_MODULES); do \
+		( cd "$$mod" && go vet ./... ); \
+	done
+	( cd apps/web && npx tsc --noEmit )

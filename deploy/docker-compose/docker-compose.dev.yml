@@ -1,6 +1,13 @@
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
 services:
   postgres:
     image: postgres:16
+    restart: unless-stopped
     env_file:
       - ../env/.env.example
     environment:
@@ -9,17 +16,23 @@ services:
       POSTGRES_DB: ${POSTGRES_DB:-crawler}
     volumes:
       - ../migrations/postgres:/migrations:ro
+    logging: *logging
 
   redis:
     image: redis:7
+    restart: unless-stopped
+    logging: *logging
 
   mongo:
     image: mongo:7
+    restart: unless-stopped
+    logging: *logging
 
   gateway:
     build:
       context: ../..
       dockerfile: deploy/docker/dev/go-dev.Dockerfile
+    restart: unless-stopped
     depends_on:
       - iam-service
       - project-service
@@ -42,11 +55,13 @@ services:
       - go-build-cache:/root/.cache/go-build
     ports:
       - "8080:8080"
+    logging: *logging
 
   iam-service:
     build:
       context: ../..
       dockerfile: deploy/docker/dev/go-dev.Dockerfile
+    restart: unless-stopped
     depends_on:
       - postgres
     env_file:
@@ -61,11 +76,13 @@ services:
       - ../..:/workspace
       - go-mod-cache:/go/pkg/mod
       - go-build-cache:/root/.cache/go-build
+    logging: *logging
 
   project-service:
     build:
       context: ../..
       dockerfile: deploy/docker/dev/go-dev.Dockerfile
+    restart: unless-stopped
     depends_on:
       - postgres
     env_file:
@@ -79,11 +96,13 @@ services:
       - ../..:/workspace
       - go-mod-cache:/go/pkg/mod
       - go-build-cache:/root/.cache/go-build
+    logging: *logging
 
   spider-service:
     build:
       context: ../..
       dockerfile: deploy/docker/dev/go-dev.Dockerfile
+    restart: unless-stopped
     depends_on:
       - postgres
     env_file:
@@ -97,11 +116,13 @@ services:
       - ../..:/workspace
       - go-mod-cache:/go/pkg/mod
       - go-build-cache:/root/.cache/go-build
+    logging: *logging
 
   execution-service:
     build:
       context: ../..
       dockerfile: deploy/docker/dev/go-dev.Dockerfile
+    restart: unless-stopped
     depends_on:
       - postgres
       - redis
@@ -117,11 +138,13 @@ services:
       - ../..:/workspace
       - go-mod-cache:/go/pkg/mod
       - go-build-cache:/root/.cache/go-build
+    logging: *logging
 
   node-service:
     build:
       context: ../..
       dockerfile: deploy/docker/dev/go-dev.Dockerfile
+    restart: unless-stopped
     depends_on:
       - redis
     env_file:
@@ -135,11 +158,13 @@ services:
       - ../..:/workspace
       - go-mod-cache:/go/pkg/mod
       - go-build-cache:/root/.cache/go-build
+    logging: *logging
 
   datasource-service:
     build:
       context: ../..
       dockerfile: deploy/docker/dev/go-dev.Dockerfile
+    restart: unless-stopped
     depends_on:
       - postgres
       - redis
@@ -155,11 +180,13 @@ services:
       - ../..:/workspace
       - go-mod-cache:/go/pkg/mod
       - go-build-cache:/root/.cache/go-build
+    logging: *logging
 
   scheduler-service:
     build:
       context: ../..
       dockerfile: deploy/docker/dev/go-dev.Dockerfile
+    restart: unless-stopped
     depends_on:
       - postgres
       - execution-service
@@ -175,11 +202,13 @@ services:
       - ../..:/workspace
       - go-mod-cache:/go/pkg/mod
       - go-build-cache:/root/.cache/go-build
+    logging: *logging
 
   monitor-service:
     build:
       context: ../..
       dockerfile: deploy/docker/dev/go-dev.Dockerfile
+    restart: unless-stopped
     depends_on:
       - postgres
       - redis
@@ -195,11 +224,13 @@ services:
       - ../..:/workspace
       - go-mod-cache:/go/pkg/mod
       - go-build-cache:/root/.cache/go-build
+    logging: *logging
 
   agent:
     build:
       context: ../..
       dockerfile: deploy/docker/dev/go-dev.Dockerfile
+    restart: unless-stopped
     depends_on:
       - node-service
       - execution-service
@@ -218,9 +249,11 @@ services:
       - go-mod-cache:/go/pkg/mod
       - go-build-cache:/root/.cache/go-build
       - /var/run/docker.sock:/var/run/docker.sock
+    logging: *logging
 
   web:
     image: node:22-alpine
+    restart: unless-stopped
     depends_on:
       - gateway
     working_dir: /workspace/apps/web
@@ -233,6 +266,7 @@ services:
       - web-node-modules:/workspace/apps/web/node_modules
     ports:
       - "3000:3000"
+    logging: *logging
 
 volumes:
   go-mod-cache:
