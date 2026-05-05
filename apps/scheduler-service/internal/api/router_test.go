@@ -1,3 +1,9 @@
+// Package api 测试：验证路由层的请求参数绑定、响应格式和状态码。
+//
+// 该文件负责：
+//   - TestCreateScheduleReturnsLowerCaseJSON：验证创建调度的请求/响应 JSON 字段为小写 camelCase。
+//   - TestCreateScheduleAcceptsRetryConfiguration：验证 retryLimit 和 retryDelaySeconds 参数能正确透传。
+//   - TestListSchedulesReturnsLowerCaseJSON：验证列表接口返回的 JSON 字段格式。
 package api
 
 import (
@@ -12,6 +18,7 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
+// TestCreateScheduleReturnsLowerCaseJSON 验证 POST /api/v1/schedules 返回的 JSON 使用小写 camelCase 键名。
 func TestCreateScheduleReturnsLowerCaseJSON(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
@@ -42,6 +49,7 @@ func TestCreateScheduleReturnsLowerCaseJSON(t *testing.T) {
 	}
 }
 
+// TestCreateScheduleAcceptsRetryConfiguration 验证重试配置（retryLimit、retryDelaySeconds）能正确传入并返回。
 func TestCreateScheduleAcceptsRetryConfiguration(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
@@ -65,6 +73,7 @@ func TestCreateScheduleAcceptsRetryConfiguration(t *testing.T) {
 	}
 }
 
+// TestListSchedulesReturnsLowerCaseJSON 验证 GET /api/v1/schedules 返回小写 camelCase JSON 数组。
 func TestListSchedulesReturnsLowerCaseJSON(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
