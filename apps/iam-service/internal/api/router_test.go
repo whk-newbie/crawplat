@@ -1,3 +1,4 @@
+// Package api 包含 IAM HTTP 路由层的 httptest 集成测试。
 package api
 
 import (

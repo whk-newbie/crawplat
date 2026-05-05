@@ -1,3 +1,6 @@
+// Package main 是 IAM 认证服务的程序入口。
+// 负责加载配置、创建认证服务实例、注册 HTTP 路由并监听 :8081 端口。
+// 不处理路由注册细节——该职责属于 internal/api。
 package main
 
 import (

@@ -1,3 +1,4 @@
+// Package service 的单元测试：验证 Login 成功/失败路径和种子账号行为。
 package service
 
 import (
