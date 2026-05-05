@@ -54,33 +54,37 @@ export function listExecutions(input: {
   offset?: number
   spiderId?: string
   nodeId?: string
-  executionStatus?: string
-  executionTriggerSource?: string
-  executionFrom?: string
-  executionTo?: string
+  status?: string
+  triggerSource?: string
+  from?: string
+  to?: string
+  sortBy?: string
+  sortOrder?: 'asc' | 'desc'
 }) {
   const params = new URLSearchParams({
-    projectId: input.projectId,
+    project_id: input.projectId,
     limit: String(input.limit ?? 20),
     offset: String(input.offset ?? 0),
+    sort_by: input.sortBy ?? 'created_at',
+    sort_order: input.sortOrder ?? 'desc',
   })
-  if (input.executionStatus?.trim()) {
-    params.set('executionStatus', input.executionStatus.trim())
+  if (input.status?.trim()) {
+    params.set('status', input.status.trim())
   }
-  if (input.executionTriggerSource?.trim()) {
-    params.set('executionTriggerSource', input.executionTriggerSource.trim())
+  if (input.triggerSource?.trim()) {
+    params.set('trigger_source', input.triggerSource.trim())
   }
   if (input.spiderId?.trim()) {
-    params.set('spiderId', input.spiderId.trim())
+    params.set('spider_id', input.spiderId.trim())
   }
   if (input.nodeId?.trim()) {
-    params.set('nodeId', input.nodeId.trim())
+    params.set('node_id', input.nodeId.trim())
   }
-  if (input.executionFrom?.trim()) {
-    params.set('executionFrom', input.executionFrom.trim())
+  if (input.from?.trim()) {
+    params.set('from', input.from.trim())
   }
-  if (input.executionTo?.trim()) {
-    params.set('executionTo', input.executionTo.trim())
+  if (input.to?.trim()) {
+    params.set('to', input.to.trim())
   }
   return apiFetch<PaginatedExecutions>(`/executions?${params.toString()}`)
 }

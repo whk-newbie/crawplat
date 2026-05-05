@@ -123,30 +123,29 @@ func NewRouter(executionService *service.ExecutionService) *gin.Engine {
 
 	router.POST("/api/v1/executions", createExecutionHandler)
 	router.GET("/api/v1/executions", func(c *gin.Context) {
-		projectID := c.Query("projectId")
-		if projectID == "" {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "projectId is required"})
-			return
-		}
-		limit, _ := strconv.Atoi(c.DefaultQuery("limit", "20"))
-		offset, _ := strconv.Atoi(c.DefaultQuery("offset", "0"))
-		p := httpx.DefaultPagination(limit, offset)
-		spiderID := strings.TrimSpace(c.Query("spiderId"))
-		nodeID := strings.TrimSpace(c.Query("nodeId"))
-		status := strings.TrimSpace(c.Query("executionStatus"))
-		triggerSource := strings.TrimSpace(c.Query("executionTriggerSource"))
-		executionFrom, err := parseRFC3339Query(c, "executionFrom")
+		projectID := firstQuery(c, "project_id", "projectId")
+		limit, err := parseIntQuery(c, "limit", service.DefaultExecutionListLimit)
 		if err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "executionFrom must be RFC3339"})
+			c.JSON(http.StatusBadRequest, gin.H{"error": "limit must be an integer"})
 			return
 		}
-		executionTo, err := parseRFC3339Query(c, "executionTo")
+		offset, err := parseIntQuery(c, "offset", 0)
 		if err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "executionTo must be RFC3339"})
+			c.JSON(http.StatusBadRequest, gin.H{"error": "offset must be an integer"})
 			return
 		}
-		if executionFrom != nil && executionTo != nil && executionFrom.After(*executionTo) {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "executionFrom must be before or equal to executionTo"})
+		spiderID := firstQuery(c, "spider_id", "spiderId")
+		nodeID := firstQuery(c, "node_id", "nodeId")
+		status := firstQuery(c, "status", "executionStatus")
+		triggerSource := firstQuery(c, "trigger_source", "executionTriggerSource")
+		executionFrom, err := parseRFC3339Query(c, "from", "executionFrom")
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "from must be RFC3339"})
+			return
+		}
+		executionTo, err := parseRFC3339Query(c, "to", "executionTo")
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "to must be RFC3339"})
 			return
 		}
 
@@ -158,18 +157,37 @@ func NewRouter(executionService *service.ExecutionService) *gin.Engine {
 			Trigger:   triggerSource,
 			From:      executionFrom,
 			To:        executionTo,
-			Limit:     p.Limit,
-			Offset:    p.Offset,
+			Limit:     limit,
+			Offset:    offset,
+			SortBy:    firstQuery(c, "sort_by", "sortBy"),
+			SortOrder: firstQuery(c, "sort_order", "sortOrder"),
 		})
 		if err != nil {
+			if errors.Is(err, service.ErrInvalidExecutionListQuery) {
+				c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+				return
+			}
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
 		}
+		normalized, _ := (service.ListExecutionsQuery{
+			ProjectID: projectID,
+			SpiderID:  spiderID,
+			NodeID:    nodeID,
+			Status:    status,
+			Trigger:   triggerSource,
+			From:      executionFrom,
+			To:        executionTo,
+			Limit:     limit,
+			Offset:    offset,
+			SortBy:    firstQuery(c, "sort_by", "sortBy"),
+			SortOrder: firstQuery(c, "sort_order", "sortOrder"),
+		}).Normalize()
 		c.JSON(http.StatusOK, httpx.PaginatedResponse{
 			Items:  items,
 			Total:  total,
-			Limit:  p.Limit,
-			Offset: p.Offset,
+			Limit:  normalized.Limit,
+			Offset: normalized.Offset,
 		})
 	})
 	router.POST("/api/v1/executions/:id/logs", appendLogHandler)
@@ -288,8 +306,25 @@ func NewRouter(executionService *service.ExecutionService) *gin.Engine {
 	return router
 }
 
-func parseRFC3339Query(c *gin.Context, key string) (*time.Time, error) {
-	raw := c.Query(key)
+func firstQuery(c *gin.Context, keys ...string) string {
+	for _, key := range keys {
+		if value := strings.TrimSpace(c.Query(key)); value != "" {
+			return value
+		}
+	}
+	return ""
+}
+
+func parseIntQuery(c *gin.Context, key string, defaultValue int) (int, error) {
+	raw := strings.TrimSpace(c.Query(key))
+	if raw == "" {
+		return defaultValue, nil
+	}
+	return strconv.Atoi(raw)
+}
+
+func parseRFC3339Query(c *gin.Context, keys ...string) (*time.Time, error) {
+	raw := firstQuery(c, keys...)
 	if raw == "" {
 		return nil, nil
 	}
