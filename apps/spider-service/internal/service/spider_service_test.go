@@ -1,5 +1,5 @@
 // 该文件为 Service 层的单元测试，使用 fakeSpiderRepo 替代真实数据库，
-// 验证业务校验逻辑（language/runtime/image）、ID 生成和按项目 ID 过滤列表行为。
+// 验证业务校验逻辑（language/runtime/image）、ID 生成、分页、版本管理和 registry auth ref 行为。
 // 不依赖数据库或 HTTP 层。
 package service
 
@@ -12,7 +12,8 @@ import (
 )
 
 type fakeSpiderRepo struct {
-	spiders []model.Spider
+	spiders  []model.Spider
+	versions []model.SpiderVersion
 }
 
 func (r *fakeSpiderRepo) Create(_ context.Context, spider model.Spider) error {
@@ -20,14 +21,24 @@ func (r *fakeSpiderRepo) Create(_ context.Context, spider model.Spider) error {
 	return nil
 }
 
-func (r *fakeSpiderRepo) ListByProject(_ context.Context, projectID string) ([]model.Spider, error) {
+func (r *fakeSpiderRepo) ListByProject(_ context.Context, projectID string, limit, offset int) ([]model.Spider, error) {
+	if limit <= 0 {
+		limit = 20
+	}
 	var spiders []model.Spider
 	for _, spider := range r.spiders {
 		if spider.ProjectID == projectID {
 			spiders = append(spiders, spider)
 		}
 	}
-	return spiders, nil
+	if offset >= len(spiders) {
+		return []model.Spider{}, nil
+	}
+	end := offset + limit
+	if end > len(spiders) {
+		end = len(spiders)
+	}
+	return spiders[offset:end], nil
 }
 
 func (r *fakeSpiderRepo) Get(_ context.Context, id string) (model.Spider, bool, error) {
@@ -37,6 +48,25 @@ func (r *fakeSpiderRepo) Get(_ context.Context, id string) (model.Spider, bool, 
 		}
 	}
 	return model.Spider{}, false, nil
+}
+
+func (r *fakeSpiderRepo) CreateVersion(_ context.Context, version model.SpiderVersion) error {
+	r.versions = append(r.versions, version)
+	return nil
+}
+
+func (r *fakeSpiderRepo) ListVersions(_ context.Context, spiderID string) ([]model.SpiderVersion, error) {
+	var versions []model.SpiderVersion
+	for _, v := range r.versions {
+		if v.SpiderID == spiderID {
+			versions = append(versions, v)
+		}
+	}
+	return versions, nil
+}
+
+func (r *fakeSpiderRepo) ListRegistryAuthRefs(_ context.Context, _ string) ([]model.RegistryAuthRef, error) {
+	return []model.RegistryAuthRef{}, nil
 }
 
 func TestCreateSpiderRejectsUnknownLanguage(t *testing.T) {
@@ -93,7 +123,7 @@ func TestCreateSpiderAssignsIDAndPersistsSpider(t *testing.T) {
 		t.Fatalf("expected command to persist, got %#v", spider.Command)
 	}
 
-	listed, err := svc.List("p1")
+	listed, err := svc.List("p1", 20, 0)
 	if err != nil {
 		t.Fatalf("List returned error: %v", err)
 	}
@@ -117,7 +147,7 @@ func TestListFiltersByProjectID(t *testing.T) {
 		t.Fatalf("expected create success, got error: %v", err)
 	}
 
-	listedP1, err := svc.List("p1")
+	listedP1, err := svc.List("p1", 20, 0)
 	if err != nil {
 		t.Fatalf("List returned error: %v", err)
 	}
@@ -128,7 +158,7 @@ func TestListFiltersByProjectID(t *testing.T) {
 		t.Fatalf("expected p1 spider %+v, got %+v", spiderA, listedP1[0])
 	}
 
-	listedP2, err := svc.List("p2")
+	listedP2, err := svc.List("p2", 20, 0)
 	if err != nil {
 		t.Fatalf("List returned error: %v", err)
 	}
@@ -137,5 +167,60 @@ func TestListFiltersByProjectID(t *testing.T) {
 	}
 	if listedP2[0].ID != spiderB.ID {
 		t.Fatalf("expected p2 spider %+v, got %+v", spiderB, listedP2[0])
+	}
+}
+
+func TestCreateVersionRequiresExistingSpider(t *testing.T) {
+	repo := &fakeSpiderRepo{}
+	svc := NewSpiderService(repo)
+
+	_, err := svc.CreateVersion("nonexistent", "v1.0", "img:latest", "", nil)
+	if !errors.Is(err, ErrSpiderNotFound) {
+		t.Fatalf("expected ErrSpiderNotFound, got: %v", err)
+	}
+}
+
+func TestCreateVersionAndList(t *testing.T) {
+	repo := &fakeSpiderRepo{}
+	svc := NewSpiderService(repo)
+
+	spider, err := svc.Create("p1", "crawler", "go", "docker", "img:latest", nil)
+	if err != nil {
+		t.Fatalf("Create returned error: %v", err)
+	}
+
+	v, err := svc.CreateVersion(spider.ID, "v1.0", "img:v1", "my-registry", []string{"./run"})
+	if err != nil {
+		t.Fatalf("CreateVersion returned error: %v", err)
+	}
+	if v.ID == "" {
+		t.Fatal("expected generated id for version")
+	}
+	if v.SpiderID != spider.ID {
+		t.Fatalf("expected spiderID %s, got %s", spider.ID, v.SpiderID)
+	}
+	if v.RegistryAuthRef != "my-registry" {
+		t.Fatalf("expected registryAuthRef my-registry, got %s", v.RegistryAuthRef)
+	}
+
+	versions, err := svc.ListVersions(spider.ID)
+	if err != nil {
+		t.Fatalf("ListVersions returned error: %v", err)
+	}
+	if len(versions) != 1 {
+		t.Fatalf("expected 1 version, got %d", len(versions))
+	}
+}
+
+func TestListRegistryAuthRefs(t *testing.T) {
+	repo := &fakeSpiderRepo{}
+	svc := NewSpiderService(repo)
+
+	refs, err := svc.ListRegistryAuthRefs("p1")
+	if err != nil {
+		t.Fatalf("ListRegistryAuthRefs returned error: %v", err)
+	}
+	if refs == nil {
+		t.Fatal("expected non-nil slice, got nil")
 	}
 }

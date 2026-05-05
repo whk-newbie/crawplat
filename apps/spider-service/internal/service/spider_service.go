@@ -1,5 +1,5 @@
 // 该文件为 Spider 业务服务层，负责核心业务逻辑：创建爬虫时的参数校验、ID 生成和持久化；
-// 按项目 ID 列表查询爬虫。
+// 按项目 ID 列表查询爬虫；管理爬虫版本和镜像仓库认证引用。
 //
 // 通过 Repository 接口与持久化层解耦：生产环境注入 PostgresRepository，测试或零配置启动时
 // 回退到内置的 memoryRepository（线程安全的内存存储）。
@@ -21,6 +21,7 @@ var (
 	ErrInvalidLanguage = errors.New("invalid language")
 	ErrInvalidRuntime  = errors.New("invalid runtime")
 	ErrImageRequired   = errors.New("image is required for docker runtime")
+	ErrSpiderNotFound  = errors.New("spider not found")
 )
 
 // SpiderService 提供 Spider 的业务操作，依赖 Repository 接口进行持久化。
@@ -32,16 +33,18 @@ type SpiderService struct {
 // 通过接口解耦，使 Service 层不直接依赖具体的数据库实现。
 type Repository interface {
 	Create(ctx context.Context, spider model.Spider) error
-	ListByProject(ctx context.Context, projectID string) ([]model.Spider, error)
+	ListByProject(ctx context.Context, projectID string, limit, offset int) ([]model.Spider, error)
 	Get(ctx context.Context, id string) (model.Spider, bool, error)
+	CreateVersion(ctx context.Context, version model.SpiderVersion) error
+	ListVersions(ctx context.Context, spiderID string) ([]model.SpiderVersion, error)
+	ListRegistryAuthRefs(ctx context.Context, projectID string) ([]model.RegistryAuthRef, error)
 }
 
 // memoryRepository 是 Repository 接口的线程安全内存实现，用于测试和零配置启动场景。
-// 使用 sync.Mutex 保护并发访问；ListByProject 和 Get 返回数据时会深拷贝 Command 切片，
-// 防止调用方意外修改内部状态。
 type memoryRepository struct {
-	mu      sync.Mutex
-	spiders []model.Spider
+	mu       sync.Mutex
+	spiders  []model.Spider
+	versions []model.SpiderVersion
 }
 
 func (r *memoryRepository) Create(_ context.Context, spider model.Spider) error {
@@ -52,9 +55,13 @@ func (r *memoryRepository) Create(_ context.Context, spider model.Spider) error 
 	return nil
 }
 
-func (r *memoryRepository) ListByProject(_ context.Context, projectID string) ([]model.Spider, error) {
+func (r *memoryRepository) ListByProject(_ context.Context, projectID string, limit, offset int) ([]model.Spider, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
+
+	if limit <= 0 {
+		limit = 20
+	}
 
 	var spiders []model.Spider
 	for _, spider := range r.spiders {
@@ -63,7 +70,15 @@ func (r *memoryRepository) ListByProject(_ context.Context, projectID string) ([
 			spiders = append(spiders, spider)
 		}
 	}
-	return spiders, nil
+
+	if offset >= len(spiders) {
+		return []model.Spider{}, nil
+	}
+	end := offset + limit
+	if end > len(spiders) {
+		end = len(spiders)
+	}
+	return spiders[offset:end], nil
 }
 
 func (r *memoryRepository) Get(_ context.Context, id string) (model.Spider, bool, error) {
@@ -77,6 +92,35 @@ func (r *memoryRepository) Get(_ context.Context, id string) (model.Spider, bool
 		}
 	}
 	return model.Spider{}, false, nil
+}
+
+func (r *memoryRepository) CreateVersion(_ context.Context, version model.SpiderVersion) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	r.versions = append(r.versions, version)
+	return nil
+}
+
+func (r *memoryRepository) ListVersions(_ context.Context, spiderID string) ([]model.SpiderVersion, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	var versions []model.SpiderVersion
+	for _, v := range r.versions {
+		if v.SpiderID == spiderID {
+			v.Command = append([]string(nil), v.Command...)
+			versions = append(versions, v)
+		}
+	}
+	return versions, nil
+}
+
+func (r *memoryRepository) ListRegistryAuthRefs(_ context.Context, _ string) ([]model.RegistryAuthRef, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	return []model.RegistryAuthRef{}, nil
 }
 
 // NewSpiderService 创建 SpiderService 实例。接受可选的 Repository 实现：
@@ -125,8 +169,42 @@ func (s *SpiderService) Create(projectID, name, language, runtime, image string,
 	return spider, nil
 }
 
-// List 返回指定项目下所有爬虫的列表。委托 Repository.ListByProject 执行查询，
-// 内部使用 context.Background()，适合无超时要求的场景。
-func (s *SpiderService) List(projectID string) ([]model.Spider, error) {
-	return s.repo.ListByProject(context.Background(), projectID)
+// List 分页返回指定项目下爬虫列表。limit <= 0 时由 repo 层使用默认值。
+func (s *SpiderService) List(projectID string, limit, offset int) ([]model.Spider, error) {
+	return s.repo.ListByProject(context.Background(), projectID, limit, offset)
+}
+
+// CreateVersion 为指定 Spider 创建一个新版本。
+// 先校验 Spider 是否存在，再生成版本记录。
+func (s *SpiderService) CreateVersion(spiderID, version, image, registryAuthRef string, command []string) (model.SpiderVersion, error) {
+	_, ok, err := s.repo.Get(context.Background(), spiderID)
+	if err != nil {
+		return model.SpiderVersion{}, err
+	}
+	if !ok {
+		return model.SpiderVersion{}, ErrSpiderNotFound
+	}
+
+	v := model.SpiderVersion{
+		ID:              uuid.NewString(),
+		SpiderID:        spiderID,
+		Version:         version,
+		Image:           image,
+		RegistryAuthRef: registryAuthRef,
+		Command:         append([]string(nil), command...),
+	}
+	if err := s.repo.CreateVersion(context.Background(), v); err != nil {
+		return model.SpiderVersion{}, err
+	}
+	return v, nil
+}
+
+// ListVersions 返回指定 Spider 的所有版本。
+func (s *SpiderService) ListVersions(spiderID string) ([]model.SpiderVersion, error) {
+	return s.repo.ListVersions(context.Background(), spiderID)
+}
+
+// ListRegistryAuthRefs 返回项目关联的镜像仓库认证引用列表。
+func (s *SpiderService) ListRegistryAuthRefs(projectID string) ([]model.RegistryAuthRef, error) {
+	return s.repo.ListRegistryAuthRefs(context.Background(), projectID)
 }
