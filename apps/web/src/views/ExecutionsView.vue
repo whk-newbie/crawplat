@@ -98,7 +98,7 @@ async function submit() {
     lookupId.value = execution.id
     await router.push(`/executions/${execution.id}`)
   } catch (err) {
-    error.value = err instanceof Error ? err.message : 'failed to create execution'
+    error.value = err instanceof Error ? err.message : localeStore.t('pages.executions.errors.createFailed')
   } finally {
     submitting.value = false
   }

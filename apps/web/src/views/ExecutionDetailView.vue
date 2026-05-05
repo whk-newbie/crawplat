@@ -7,17 +7,31 @@
       <AppLoadingState v-if="loading" :rows="5" />
       <AppErrorState v-else-if="error" :message="error" @retry="loadExecution(route.params.id as string)" />
       <el-descriptions v-else-if="execution" :column="2" border>
-        <el-descriptions-item label="ID">{{ execution.id }}</el-descriptions-item>
-        <el-descriptions-item :label="localeStore.t('common.state.pending')">
-          <el-tag :type="statusTagType(execution.status)" size="small">{{ execution.status }}</el-tag>
+        <el-descriptions-item :label="localeStore.t('pages.executions.id')">
+          {{ execution.id }}
         </el-descriptions-item>
-        <el-descriptions-item label="Node">{{ execution.nodeId || '-' }}</el-descriptions-item>
-        <el-descriptions-item label="Trigger">{{ execution.triggerSource }}</el-descriptions-item>
-        <el-descriptions-item label="Image">{{ execution.image }}</el-descriptions-item>
-        <el-descriptions-item label="Command">
+        <el-descriptions-item :label="localeStore.t('pages.executions.status')">
+          <el-tag :type="statusTagType(execution.status)" size="small">
+            {{ execution.status }}
+          </el-tag>
+        </el-descriptions-item>
+        <el-descriptions-item :label="localeStore.t('pages.executions.node')">
+          {{ execution.nodeId || '-' }}
+        </el-descriptions-item>
+        <el-descriptions-item :label="localeStore.t('pages.executions.trigger')">
+          {{ execution.triggerSource }}
+        </el-descriptions-item>
+        <el-descriptions-item :label="localeStore.t('pages.executions.image')">
+          {{ execution.image }}
+        </el-descriptions-item>
+        <el-descriptions-item :label="localeStore.t('pages.executions.command')">
           {{ execution.command?.length ? execution.command.join(' ') : '-' }}
         </el-descriptions-item>
-        <el-descriptions-item v-if="execution.errorMessage" :span="2" label="Error">
+        <el-descriptions-item
+          v-if="execution.errorMessage"
+          :span="2"
+          :label="localeStore.t('pages.executions.error')"
+        >
           <span class="error-text">{{ execution.errorMessage }}</span>
         </el-descriptions-item>
       </el-descriptions>
@@ -25,7 +39,7 @@
 
     <el-card>
       <template #header>
-        <h2>Logs</h2>
+        <h2>{{ localeStore.t('pages.executions.logs') }}</h2>
       </template>
       <el-timeline v-if="logs.length">
         <el-timeline-item
@@ -37,7 +51,7 @@
           {{ entry.message }}
         </el-timeline-item>
       </el-timeline>
-      <el-empty v-else-if="!loading" description="No logs yet." />
+      <el-empty v-else-if="!loading" :description="localeStore.t('pages.executions.logsEmpty')" />
     </el-card>
   </div>
 </template>
@@ -79,7 +93,7 @@ async function loadExecution(executionId: string) {
     execution.value = executionDetail
     logs.value = executionLogs
   } catch (err) {
-    error.value = err instanceof Error ? err.message : 'failed to load execution'
+    error.value = err instanceof Error ? err.message : localeStore.t('pages.executions.errors.loadFailed')
   } finally {
     loading.value = false
   }

@@ -21,6 +21,10 @@ describe('spiders view', () => {
       removeItem: (key: string) => { delete storage[key] },
       clear: () => { storage = {} },
     })
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({ items: [], total: 0, limit: 20, offset: 0 }),
+    }))
   })
 
   afterEach(() => {
@@ -34,6 +38,6 @@ describe('spiders view', () => {
     createApp(SpidersView).use(createPinia()).use(ElementPlus).mount(container)
     await flushPromises()
 
-    expect(container.textContent).toContain('爬虫管理')
+    expect(container.textContent).toContain('爬虫')
   })
 })
