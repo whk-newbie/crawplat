@@ -51,11 +51,11 @@ describe('monitor view', () => {
     await flushPromises()
 
     expect(fetchMock).toHaveBeenCalledWith('/api/v1/monitor/overview', expect.any(Object))
-    expect(container.textContent).toContain('Total executions')
+    expect(container.textContent).toContain('总执行数')
     expect(container.textContent).toContain('12')
-    expect(container.textContent).toContain('Pending executions')
+    expect(container.textContent).toContain('等待中执行')
     expect(container.textContent).toContain('7')
-    expect(container.textContent).toContain('Nodes online')
+    expect(container.textContent).toContain('在线节点')
     expect(container.textContent).toContain('2')
   })
 

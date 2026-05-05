@@ -5,7 +5,7 @@
         <div class="hero">
           <div>
             <h1>{{ localeStore.t('pages.monitor.title') }}</h1>
-            <p class="subtitle">Live overview pulled from the gateway monitor endpoint.</p>
+            <p class="subtitle">{{ localeStore.t('pages.monitor.subtitle') }}</p>
           </div>
           <el-button :loading="loading" @click="loadOverview">
             {{ loading ? localeStore.t('common.state.loading') : localeStore.t('common.actions.refresh') }}
@@ -23,15 +23,15 @@
           <el-statistic :title="item.label" :value="item.value" />
         </el-col>
       </el-row>
-      <el-empty v-else description="No counters returned yet." />
+      <el-empty v-else :description="localeStore.t('pages.monitor.noCounters')" />
     </el-card>
 
     <el-card v-if="!loading && !error">
       <template #header>
-        <h2>Raw overview payload</h2>
+        <h2>{{ localeStore.t('pages.monitor.rawPayload') }}</h2>
       </template>
       <pre v-if="overview" class="payload">{{ payloadText }}</pre>
-      <el-empty v-else description="No overview loaded." />
+      <el-empty v-else :description="localeStore.t('pages.monitor.noOverview')" />
     </el-card>
   </div>
 </template>
@@ -49,14 +49,14 @@ const loading = ref(true)
 const error = ref('')
 
 const counterDefinitions = [
-  ['executions.total', 'Total executions'],
-  ['executions.pending', 'Pending executions'],
-  ['executions.running', 'Running executions'],
-  ['executions.failed', 'Failed executions'],
-  ['executions.succeeded', 'Succeeded executions'],
-  ['nodes.total', 'Total nodes'],
-  ['nodes.online', 'Nodes online'],
-  ['nodes.offline', 'Nodes offline'],
+  ['executions.total', 'pages.monitor.counters.executionsTotal'],
+  ['executions.pending', 'pages.monitor.counters.executionsPending'],
+  ['executions.running', 'pages.monitor.counters.executionsRunning'],
+  ['executions.failed', 'pages.monitor.counters.executionsFailed'],
+  ['executions.succeeded', 'pages.monitor.counters.executionsSucceeded'],
+  ['nodes.total', 'pages.monitor.counters.nodesTotal'],
+  ['nodes.online', 'pages.monitor.counters.nodesOnline'],
+  ['nodes.offline', 'pages.monitor.counters.nodesOffline'],
 ]
 
 const counterEntries = computed(() =>
@@ -69,7 +69,7 @@ const counterEntries = computed(() =>
         return undefined
       }, overview.value)
       return typeof value === 'number' || typeof value === 'string'
-        ? { label, value }
+        ? { label: localeStore.t(label), value }
         : null
     })
     .filter((item): item is { label: string; value: string | number } => item !== null),
@@ -84,7 +84,7 @@ async function loadOverview() {
   try {
     overview.value = await getMonitorOverview()
   } catch (err) {
-    error.value = err instanceof Error ? err.message : 'failed to load monitor overview'
+    error.value = err instanceof Error ? err.message : 'pages.monitor.errors.loadFailed'
   } finally {
     loading.value = false
   }
