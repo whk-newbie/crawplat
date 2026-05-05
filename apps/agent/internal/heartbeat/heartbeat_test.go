@@ -28,7 +28,8 @@ func TestPostHeartbeatSendsExpectedRequest(t *testing.T) {
 	}))
 	defer server.Close()
 
-	if err := postHeartbeat(context.Background(), server.URL, "node-a"); err != nil {
+	caps := []string{"docker", "python", "go"}
+	if err := postHeartbeat(context.Background(), server.URL, "node-a", caps); err != nil {
 		t.Fatalf("postHeartbeat returned error: %v", err)
 	}
 
@@ -49,7 +50,8 @@ func TestPostHeartbeatReturnsErrorOnNon2xx(t *testing.T) {
 	}))
 	defer server.Close()
 
-	if err := postHeartbeat(context.Background(), server.URL, "node-a"); err == nil {
+	caps := []string{"docker"}
+	if err := postHeartbeat(context.Background(), server.URL, "node-a", caps); err == nil {
 		t.Fatal("expected error for non-2xx response")
 	}
 }
@@ -60,7 +62,7 @@ func TestRunReturnsErrorOnInitialHeartbeatFailure(t *testing.T) {
 	}))
 	defer server.Close()
 
-	if err := Run(context.Background(), server.URL, "node-a"); err == nil {
+	if err := Run(context.Background(), server.URL, "node-a", []string{"docker"}); err == nil {
 		t.Fatal("expected startup heartbeat failure")
 	}
 }
@@ -73,7 +75,7 @@ func TestPostHeartbeatRejectsInvalidNodeName(t *testing.T) {
 	}))
 	defer server.Close()
 
-	err := postHeartbeat(context.Background(), server.URL, "node/a")
+	err := postHeartbeat(context.Background(), server.URL, "node/a", []string{"docker"})
 	if err == nil {
 		t.Fatal("expected invalid node name error")
 	}
@@ -94,7 +96,7 @@ func TestPostHeartbeatRespectsContextCancellation(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 
-	err := postHeartbeat(ctx, server.URL, "node-a")
+	err := postHeartbeat(ctx, server.URL, "node-a", []string{"docker"})
 	if err == nil || !errors.Is(err, context.Canceled) {
 		t.Fatalf("expected context canceled error, got %v", err)
 	}

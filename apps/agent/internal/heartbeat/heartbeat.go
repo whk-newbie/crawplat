@@ -16,8 +16,8 @@ type heartbeatRequest struct {
 	Capabilities []string `json:"capabilities"`
 }
 
-func Run(ctx context.Context, baseURL, nodeName string) error {
-	if err := postHeartbeat(ctx, baseURL, nodeName); err != nil {
+func Run(ctx context.Context, baseURL, nodeName string, capabilities []string) error {
+	if err := postHeartbeat(ctx, baseURL, nodeName, capabilities); err != nil {
 		return fmt.Errorf("initial heartbeat: %w", err)
 	}
 
@@ -29,20 +29,20 @@ func Run(ctx context.Context, baseURL, nodeName string) error {
 		case <-ctx.Done():
 			return ctx.Err()
 		case <-ticker.C:
-			if err := postHeartbeat(ctx, baseURL, nodeName); err != nil {
+			if err := postHeartbeat(ctx, baseURL, nodeName, capabilities); err != nil {
 				log.Printf("heartbeat failed: %v", err)
 			}
 		}
 	}
 }
 
-func postHeartbeat(ctx context.Context, baseURL, nodeName string) error {
+func postHeartbeat(ctx context.Context, baseURL, nodeName string, capabilities []string) error {
 	if err := validateNodeName(nodeName); err != nil {
 		return err
 	}
 
 	payload, err := json.Marshal(heartbeatRequest{
-		Capabilities: []string{"docker", "python", "go"},
+		Capabilities: capabilities,
 	})
 	if err != nil {
 		return err

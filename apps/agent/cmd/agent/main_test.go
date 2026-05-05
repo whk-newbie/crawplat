@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"errors"
+	"reflect"
 	"testing"
 	"time"
 )
@@ -45,6 +46,12 @@ func TestLoadConfigUsesDefaults(t *testing.T) {
 	if cfg.pollInterval != 5*time.Second {
 		t.Fatalf("unexpected poll interval: %v", cfg.pollInterval)
 	}
+	if cfg.internalToken != "" {
+		t.Fatalf("expected empty internal token by default, got %q", cfg.internalToken)
+	}
+	if !reflect.DeepEqual(cfg.capabilities, []string{"docker"}) {
+		t.Fatalf("expected default capabilities [docker], got %v", cfg.capabilities)
+	}
 }
 
 func TestLoadConfigReadsEnvironment(t *testing.T) {
@@ -53,6 +60,7 @@ func TestLoadConfigReadsEnvironment(t *testing.T) {
 	t.Setenv("NODE_NAME", "mvp-node")
 	t.Setenv("INTERNAL_API_TOKEN", "secret")
 	t.Setenv("POLL_INTERVAL", "2s")
+	t.Setenv("AGENT_CAPABILITIES", "docker,python,go")
 
 	cfg := loadConfig()
 
@@ -70,5 +78,17 @@ func TestLoadConfigReadsEnvironment(t *testing.T) {
 	}
 	if cfg.pollInterval != 2*time.Second {
 		t.Fatalf("unexpected poll interval: %v", cfg.pollInterval)
+	}
+	if !reflect.DeepEqual(cfg.capabilities, []string{"docker", "python", "go"}) {
+		t.Fatalf("unexpected capabilities: %v", cfg.capabilities)
+	}
+}
+
+func TestLoadConfigParsesRegistryCredentials(t *testing.T) {
+	t.Setenv("IMAGE_REGISTRY_AUTH_MAP", `{"docker.io":{"username":"u","password":"p"}}`)
+
+	cfg := loadConfig()
+	if cred, ok := cfg.registryCredentials["docker.io"]; !ok || cred.Username != "u" || cred.Password != "p" {
+		t.Fatalf("unexpected registry credentials: %+v", cfg.registryCredentials)
 	}
 }

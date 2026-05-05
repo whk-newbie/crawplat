@@ -13,11 +13,15 @@ import (
 const internalTokenHeader = "X-Internal-Token"
 
 type ClaimedExecution struct {
-	ID      string   `json:"id"`
-	NodeID  string   `json:"nodeId,omitempty"`
-	Status  string   `json:"status,omitempty"`
-	Image   string   `json:"image"`
-	Command []string `json:"command"`
+	ID              string   `json:"id"`
+	NodeID          string   `json:"nodeId,omitempty"`
+	Status          string   `json:"status,omitempty"`
+	Image           string   `json:"image"`
+	Command         []string `json:"command"`
+	RegistryAuthRef string   `json:"registryAuthRef,omitempty"`
+	CpuCores        float64  `json:"cpuCores,omitempty"`
+	MemoryMB        int      `json:"memoryMB,omitempty"`
+	TimeoutSeconds  int      `json:"timeoutSeconds,omitempty"`
 }
 
 type ExecutionClient interface {
