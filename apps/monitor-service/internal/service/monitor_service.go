@@ -81,3 +81,37 @@ func (s *MonitorService) WithWebhookDeliverer(deliverer WebhookDeliverer) *Monit
 func (s *MonitorService) Overview() (model.Overview, error) {
 	return s.repo.Overview(context.Background())
 }
+
+func (s *MonitorService) UpdateAlertRule(input UpdateAlertRuleInput) (model.AlertRule, error) {
+	if input.ID == "" {
+		return model.AlertRule{}, ErrInvalidRuleID
+	}
+	patch := model.AlertRulePatch{
+		Name:                input.Name,
+		Enabled:             input.Enabled,
+		WebhookURL:          input.WebhookURL,
+		CooldownSeconds:     input.CooldownSeconds,
+		TimeoutSeconds:      input.TimeoutSeconds,
+		OfflineGraceSeconds: input.OfflineGraceSeconds,
+		UpdatedAt:           time.Now().UTC(),
+	}
+	rule, found, err := s.repo.UpdateAlertRule(context.Background(), input.ID, patch)
+	if err != nil {
+		return model.AlertRule{}, err
+	}
+	if !found {
+		return model.AlertRule{}, ErrAlertRuleNotFound
+	}
+	return rule, nil
+}
+
+func (s *MonitorService) ListAlertRules() ([]model.AlertRule, error) {
+	return s.repo.ListAlertRules(context.Background())
+}
+
+func (s *MonitorService) ListAlertEvents(limit, offset int) ([]model.AlertEvent, error) {
+	if limit <= 0 {
+		limit = 20
+	}
+	return s.repo.ListAlertEvents(context.Background(), limit, offset)
+}
