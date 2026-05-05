@@ -15,6 +15,21 @@ var ErrExecutionNotFound = errors.New("execution not found")
 var ErrInvalidExecutionState = errors.New("invalid execution state transition")
 var ErrExecutionImageRequired = errors.New("image is required")
 var ErrSpiderVersionNotFound = errors.New("spider version not found")
+var ErrInvalidExecutionListQuery = errors.New("invalid execution list query")
+
+const (
+	DefaultExecutionListLimit  = 20
+	MaxExecutionListLimit      = 100
+	DefaultExecutionListSortBy = "created_at"
+	DefaultExecutionListOrder  = "desc"
+)
+
+var allowedExecutionSortFields = map[string]struct{}{
+	"created_at":  {},
+	"started_at":  {},
+	"finished_at": {},
+	"status":      {},
+}
 
 type ExecutionService struct {
 	execRepo              ExecutionRepository
@@ -92,6 +107,53 @@ type ListExecutionsQuery struct {
 	To        *time.Time
 	Limit     int
 	Offset    int
+	SortBy    string
+	SortOrder string
+}
+
+func (q ListExecutionsQuery) Normalize() (ListExecutionsQuery, error) {
+	query := q
+	query.ProjectID = strings.TrimSpace(query.ProjectID)
+	query.SpiderID = strings.TrimSpace(query.SpiderID)
+	query.NodeID = strings.TrimSpace(query.NodeID)
+	query.Status = strings.TrimSpace(query.Status)
+	query.Trigger = strings.TrimSpace(query.Trigger)
+	query.SortBy = strings.TrimSpace(strings.ToLower(query.SortBy))
+	query.SortOrder = strings.TrimSpace(strings.ToLower(query.SortOrder))
+
+	if query.ProjectID == "" {
+		return ListExecutionsQuery{}, fmt.Errorf("%w: project_id is required", ErrInvalidExecutionListQuery)
+	}
+	if query.Limit < 0 {
+		return ListExecutionsQuery{}, fmt.Errorf("%w: limit must be non-negative", ErrInvalidExecutionListQuery)
+	}
+	if query.Offset < 0 {
+		return ListExecutionsQuery{}, fmt.Errorf("%w: offset must be non-negative", ErrInvalidExecutionListQuery)
+	}
+	if query.From != nil && query.To != nil && query.From.After(*query.To) {
+		return ListExecutionsQuery{}, fmt.Errorf("%w: from must be before or equal to to", ErrInvalidExecutionListQuery)
+	}
+
+	if query.Limit == 0 {
+		query.Limit = DefaultExecutionListLimit
+	}
+	if query.Limit > MaxExecutionListLimit {
+		query.Limit = MaxExecutionListLimit
+	}
+	if query.SortBy == "" {
+		query.SortBy = DefaultExecutionListSortBy
+	}
+	if _, ok := allowedExecutionSortFields[query.SortBy]; !ok {
+		return ListExecutionsQuery{}, fmt.Errorf("%w: unsupported sort_by %q", ErrInvalidExecutionListQuery, query.SortBy)
+	}
+	if query.SortOrder == "" {
+		query.SortOrder = DefaultExecutionListOrder
+	}
+	if query.SortOrder != "asc" && query.SortOrder != "desc" {
+		return ListExecutionsQuery{}, fmt.Errorf("%w: unsupported sort_order %q", ErrInvalidExecutionListQuery, query.SortOrder)
+	}
+
+	return query, nil
 }
 
 func NewExecutionService(execRepo ExecutionRepository, logRepo LogRepository, queue Queue) *ExecutionService {
@@ -232,11 +294,15 @@ func (s *ExecutionService) Get(ctx context.Context, id string) (model.Execution,
 }
 
 func (s *ExecutionService) List(ctx context.Context, query ListExecutionsQuery) ([]model.Execution, int64, error) {
-	items, err := s.execRepo.ListByProject(ctx, query)
+	normalized, err := query.Normalize()
 	if err != nil {
 		return nil, 0, err
 	}
-	total, err := s.execRepo.CountByProject(ctx, query)
+	items, err := s.execRepo.ListByProject(ctx, normalized)
+	if err != nil {
+		return nil, 0, err
+	}
+	total, err := s.execRepo.CountByProject(ctx, normalized)
 	if err != nil {
 		return nil, 0, err
 	}
