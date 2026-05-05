@@ -19,7 +19,7 @@ func (r *fakeDatasourceRepo) Create(_ context.Context, datasource model.Datasour
 	return nil
 }
 
-func (r *fakeDatasourceRepo) ListByProject(_ context.Context, projectID string) ([]model.Datasource, error) {
+func (r *fakeDatasourceRepo) ListByProject(_ context.Context, projectID string, limit, offset int) ([]model.Datasource, error) {
 	var datasources []model.Datasource
 	for _, datasource := range r.datasources {
 		if projectID == "" || datasource.ProjectID == projectID {
@@ -79,7 +79,7 @@ func TestDatasourceServiceListAndReadUseRepo(t *testing.T) {
 		t.Fatalf("Create returned error: %v", err)
 	}
 
-	listed, err := svc.List("project-1")
+	listed, err := svc.List("project-1", 20, 0)
 	if err != nil {
 		t.Fatalf("List returned error: %v", err)
 	}

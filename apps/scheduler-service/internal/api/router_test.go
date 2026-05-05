@@ -78,7 +78,7 @@ func TestListSchedulesReturnsLowerCaseJSON(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
 	svc := service.NewSchedulerService(nil, nil)
-	if _, err := svc.Create("project-1", "spider-1", "nightly", "0 * * * *", "crawler/go-echo:latest", []string{"./go-echo"}, true, 0, 0); err != nil {
+	if _, err := svc.Create("project-1", "spider-1", "", "", "nightly", "0 * * * *", "crawler/go-echo:latest", []string{"./go-echo"}, true, 0, 0); err != nil {
 		t.Fatalf("Create returned error: %v", err)
 	}
 	router := NewRouter(svc)
