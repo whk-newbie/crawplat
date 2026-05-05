@@ -1,3 +1,9 @@
+// 文件职责：Redis 仓库的单元测试。
+// 测试范围：
+//   - 心跳写入（UpsertHeartbeat 成功后节点状态为 "online"）
+//   - 在线节点列表查询（ListOnline 返回已写入的节点）
+//   - 接口满足检查（编译时验证 RedisRepository 实现了 service.Repository 接口）
+// 使用 miniredis 模拟 Redis 服务端，无需真实 Redis 实例。
 package repo
 
 import (

@@ -1,3 +1,10 @@
+// 文件职责：API 路由层的单元测试。
+// 测试范围：
+//   - 心跳路由的状态持久化（POST /api/v1/nodes/:id/heartbeat 返回正常 JSON 响应）
+//   - 节点列表路由的数据一致性（GET /api/v1/nodes 返回已上报心跳的节点）
+//   - nodeID 校验（拒绝包含非法字符的 nodeID，如 "node!a"）
+// 使用 httptest.NewRecorder 模拟 HTTP 请求，不启动真实服务端。
+// 测试使用内存仓库（service.NewNodeService() 无参），不依赖 Redis/Postgres。
 package api
 
 import (

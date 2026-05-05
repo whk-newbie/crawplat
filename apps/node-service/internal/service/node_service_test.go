@@ -1,3 +1,8 @@
+// 文件职责：NodeService 服务层的单元测试。
+// 测试范围：
+//   - Heartbeat 标记节点为 "online"
+//   - List 返回所有已记录心跳的节点
+// 使用 fakeNodeRepo（内存 map）作为测试替身，验证服务层的委托逻辑和不变式。
 package service
 
 import (
