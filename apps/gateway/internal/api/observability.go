@@ -18,10 +18,11 @@ type observabilityConfig struct {
 	trustRequestID  bool
 }
 
+// attachRequestID 负责读取或生成 request-id，并同时写入请求、响应和上下文，便于上游透传与日志关联。
 func attachRequestID(cfg observabilityConfig) gin.HandlerFunc {
 	header := strings.TrimSpace(cfg.requestIDHeader)
 	if header == "" {
-		header = "X-Request-Id"
+		header = "X-Request-ID"
 	}
 
 	return func(c *gin.Context) {
@@ -35,16 +36,19 @@ func attachRequestID(cfg observabilityConfig) gin.HandlerFunc {
 
 		c.Set(requestPathContextKey, c.Request.URL.Path)
 		c.Request.Header.Set(header, requestID)
+		c.Request.Header.Set("X-Request-ID", requestID)
 		c.Writer.Header().Set(header, requestID)
+		c.Writer.Header().Set("X-Request-ID", requestID)
 		c.Set(requestIDContextKey, requestID)
 		c.Next()
 	}
 }
 
+// logRequest 输出结构化 access log，只记录路由、状态和 request-id，避免把 token 等敏感信息写入日志。
 func logRequest(cfg observabilityConfig) gin.HandlerFunc {
 	header := strings.TrimSpace(cfg.requestIDHeader)
 	if header == "" {
-		header = "X-Request-Id"
+		header = "X-Request-ID"
 	}
 
 	return func(c *gin.Context) {
@@ -62,7 +66,7 @@ func logRequest(cfg observabilityConfig) gin.HandlerFunc {
 		}
 
 		log.Printf(
-			"gateway_request method=%s path=%s status=%d latency_ms=%d ip=%s request_id=%s user_agent=%q",
+			"gateway_request method=%s path=%s status=%d duration_ms=%d ip=%s request_id=%s user_agent=%q",
 			c.Request.Method,
 			requestPath,
 			c.Writer.Status(),

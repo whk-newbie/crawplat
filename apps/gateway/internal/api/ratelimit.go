@@ -62,13 +62,12 @@ func (l *fixedWindowLimiter) allow(key string, now time.Time) bool {
 	return true
 }
 
+// requireRateLimit 使用固定窗口限流保护 gateway，避免单个客户端短时间内压垮上游服务。
 func requireRateLimit(cfg rateLimitConfig) gin.HandlerFunc {
 	limiter := newFixedWindowLimiter(cfg.windowSeconds, cfg.maxRequests)
 	return func(c *gin.Context) {
 		if !limiter.allow(rateLimitKey(c), time.Now()) {
-			c.AbortWithStatusJSON(http.StatusTooManyRequests, gin.H{
-				"error": "rate limit exceeded",
-			})
+			respondError(c, http.StatusTooManyRequests, "rate limit exceeded")
 			return
 		}
 		c.Next()
