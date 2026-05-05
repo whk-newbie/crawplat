@@ -1,3 +1,6 @@
+// 该文件为 Service 层的单元测试，使用 fakeSpiderRepo 替代真实数据库，
+// 验证业务校验逻辑（language/runtime/image）、ID 生成和按项目 ID 过滤列表行为。
+// 不依赖数据库或 HTTP 层。
 package service
 
 import (

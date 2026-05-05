@@ -1,3 +1,6 @@
+// 该文件为 PostgreSQL 持久化层的单元测试，使用 go-sqlmock 模拟数据库交互，
+// 验证 SQL 语句的正确性和结果映射逻辑（包括 Command 字段的 JSON 序列化/反序列化）。
+// 不创建真实数据库连接。
 package repo
 
 import (
