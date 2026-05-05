@@ -253,6 +253,8 @@ Ensure the gateway does not block frontend bilingual support, while providing st
 
 Adapt login, registration, and authentication pages and APIs for bilingual support, ensuring authentication errors are translatable.
 
+> Batch 6.6 completed: Auth backend infrastructure (bcrypt password hashing, PostgreSQL-backed PostgresUserRepo, DATABASE_DSN env support). The tasks below focus on frontend i18n and Chinese comments.
+
 #### 4.3.2 Implementation Items
 
 1. Chinese / English copy switching for the login page.
@@ -317,6 +319,8 @@ Clearly express Spider management, version management, and registryAuthRef capab
 #### 4.6.1 Goals
 
 Correctly express Execution creation, detail, logs, retry, and resource limit pages and docs in a bilingual environment.
+
+> Batch 6.6 completed: Execution list API (GET /api/v1/executions?limit=&offset=&status=), repo layer List pagination. The tasks below focus on frontend i18n and Chinese comments.
 
 #### 4.6.2 Implementation Items
 

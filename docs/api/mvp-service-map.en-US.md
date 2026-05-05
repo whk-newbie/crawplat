@@ -30,10 +30,12 @@
 - `ANY /internal/v1/executions/:id/logs`
 - `ANY /internal/v1/executions/:id/complete`
 - `ANY /internal/v1/executions/:id/fail`
+- `ANY /internal/v1/executions/retries/materialize`
 
 ### `iam-service`
 
 - `POST /api/v1/auth/login`
+- `POST /api/v1/auth/register`
 
 ### `project-service`
 
@@ -48,10 +50,12 @@
 ### `execution-service`
 
 - `POST /api/v1/executions`
+- `GET /api/v1/executions`
 - `POST /api/v1/executions/:id/logs`
 - `GET /api/v1/executions/:id`
 - `GET /api/v1/executions/:id/logs`
 - `POST /internal/v1/executions/claim`
+- `POST /internal/v1/executions/retries/materialize`
 - `POST /internal/v1/executions/:id/start`
 - `POST /internal/v1/executions/:id/logs`
 - `POST /internal/v1/executions/:id/complete`

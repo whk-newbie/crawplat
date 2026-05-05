@@ -51,9 +51,12 @@ Crawler Platform API 分为两类：
 ### execution-service
 
 - `POST /api/v1/executions`
+- `GET /api/v1/executions?limit=<n>&offset=<n>&status=<string>`
 - `GET /api/v1/executions/:id`
 - `GET /api/v1/executions/:id/logs`
 - `POST /api/v1/executions/:id/logs`
+
+`GET /api/v1/executions` 支持分页参数 `limit`（默认 20，最大 100）和 `offset`（默认 0），以及可选的 `status` 过滤。
 
 `POST /api/v1/executions` 支持：
 

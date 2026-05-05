@@ -253,6 +253,8 @@
 
 让登录、注册、认证相关页面和接口适配中英双语，并保证认证错误可翻译。
 
+> Batch 6.6 已完成：认证后端基础设施（bcrypt 密码哈希、PostgreSQL 持久化用户存储 PostgresUserRepo、DATABASE_DSN 环境变量支持）。以下任务聚焦前端 i18n 和中文注释。
+
 #### 4.3.2 需要实现的内容
 
 1. 登录页中文 / 英文文案切换。
@@ -317,6 +319,8 @@ Spider 管理、版本管理、registryAuthRef 相关能力在前端和后端文
 #### 4.6.1 目标
 
 Execution 创建、详情、日志、重试和资源限制相关页面与文档在双语环境下可正确表达。
+
+> Batch 6.6 已完成：执行列表 API（GET /api/v1/executions?limit=&offset=&status=）、Repo 层 List 分页查询。以下任务聚焦前端 i18n 和中文注释。
 
 #### 4.6.2 需要实现的内容
 
