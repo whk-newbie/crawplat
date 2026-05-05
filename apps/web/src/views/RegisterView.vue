@@ -2,33 +2,31 @@
 import { reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { login } from '../api/auth'
+import { register } from '../api/auth'
 import { ApiError } from '../api/client'
-import { useAuthStore } from '../stores/auth'
 import { useLocaleStore } from '../stores/locale'
 
 const localeStore = useLocaleStore()
-const authStore = useAuthStore()
 const router = useRouter()
 
 const form = reactive({ username: '', password: '' })
 const submitting = ref(false)
 
-async function handleLogin() {
+async function handleRegister() {
   if (!form.username.trim()) {
-    ElMessage.warning(localeStore.t('pages.login.errors.usernameRequired'))
+    ElMessage.warning(localeStore.t('pages.register.errors.usernameRequired'))
     return
   }
   if (!form.password) {
-    ElMessage.warning(localeStore.t('pages.login.errors.passwordRequired'))
+    ElMessage.warning(localeStore.t('pages.register.errors.passwordRequired'))
     return
   }
 
   submitting.value = true
   try {
-    const res = await login({ username: form.username.trim(), password: form.password })
-    authStore.setToken(res.token)
-    router.push('/projects')
+    await register({ username: form.username.trim(), password: form.password })
+    ElMessage.success(localeStore.t('pages.register.success'))
+    router.push('/login')
   } catch (err) {
     if (err instanceof ApiError) {
       ElMessage.error(localeStore.t(err.code))
@@ -45,26 +43,26 @@ async function handleLogin() {
   <main class="auth-page">
     <el-card class="auth-card">
       <template #header>
-        <h1>{{ localeStore.t('pages.login.title') }}</h1>
+        <h1>{{ localeStore.t('pages.register.title') }}</h1>
       </template>
 
       <el-form
         :model="form"
         label-position="top"
-        @keyup.enter="handleLogin"
+        @keyup.enter="handleRegister"
       >
-        <el-form-item :label="localeStore.t('pages.login.username')">
+        <el-form-item :label="localeStore.t('pages.register.username')">
           <el-input
             v-model="form.username"
             autocomplete="username"
           />
         </el-form-item>
 
-        <el-form-item :label="localeStore.t('pages.login.password')">
+        <el-form-item :label="localeStore.t('pages.register.password')">
           <el-input
             v-model="form.password"
             type="password"
-            autocomplete="current-password"
+            autocomplete="new-password"
             show-password
           />
         </el-form-item>
@@ -73,15 +71,15 @@ async function handleLogin() {
           type="primary"
           :loading="submitting"
           class="submit-btn"
-          @click="handleLogin"
+          @click="handleRegister"
         >
-          {{ localeStore.t('pages.login.submit') }}
+          {{ localeStore.t('pages.register.submit') }}
         </el-button>
       </el-form>
 
       <p class="auth-switch">
-        <router-link to="/register">
-          {{ localeStore.t('pages.login.toRegister') }}
+        <router-link to="/login">
+          {{ localeStore.t('pages.register.toLogin') }}
         </router-link>
       </p>
     </el-card>

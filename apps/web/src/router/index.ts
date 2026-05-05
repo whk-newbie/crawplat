@@ -1,5 +1,6 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import LoginView from '../views/LoginView.vue'
+import RegisterView from '../views/RegisterView.vue'
 import ProjectsView from '../views/ProjectsView.vue'
 import SpidersView from '../views/SpidersView.vue'
 import ExecutionsView from '../views/ExecutionsView.vue'
@@ -12,6 +13,7 @@ export const router = createRouter({
   routes: [
     { path: '/', redirect: '/login' },
     { path: '/login', component: LoginView },
+    { path: '/register', component: RegisterView },
     { path: '/projects', component: ProjectsView },
     { path: '/spiders', component: SpidersView },
     { path: '/executions', component: ExecutionsView },

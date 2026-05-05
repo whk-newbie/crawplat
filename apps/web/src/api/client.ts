@@ -1,8 +1,23 @@
+import { pinia } from '../main'
+import { useAuthStore } from '../stores/auth'
+
 const defaultBaseURL = '/api/v1'
 
 function resolveBaseURL() {
   const envValue = import.meta.env.VITE_API_BASE_URL as string | undefined
   return (envValue && envValue.trim()) || defaultBaseURL
+}
+
+function buildHeaders(init?: RequestInit): Record<string, string> {
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    ...(init?.headers as Record<string, string> ?? {}),
+  }
+  const authStore = useAuthStore(pinia)
+  if (authStore.token) {
+    headers['Authorization'] = `Bearer ${authStore.token}`
+  }
+  return headers
 }
 
 export class ApiError extends Error {
@@ -30,10 +45,7 @@ const defaultErrorCodes: Record<number, string> = {
 export async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(`${resolveBaseURL()}${path}`, {
     ...init,
-    headers: {
-      'Content-Type': 'application/json',
-      ...(init?.headers ?? {}),
-    },
+    headers: buildHeaders(init),
   })
 
   if (!response.ok) {

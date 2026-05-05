@@ -5,12 +5,24 @@ export type LoginInput = {
   password: string
 }
 
-export type LoginResponse = {
+export type RegisterInput = {
+  username: string
+  password: string
+}
+
+export type AuthResponse = {
   token: string
 }
 
 export function login(input: LoginInput) {
-  return apiFetch<LoginResponse>('/auth/login', {
+  return apiFetch<AuthResponse>('/auth/login', {
+    method: 'POST',
+    body: JSON.stringify(input),
+  })
+}
+
+export function register(input: RegisterInput) {
+  return apiFetch<AuthResponse>('/auth/register', {
     method: 'POST',
     body: JSON.stringify(input),
   })
