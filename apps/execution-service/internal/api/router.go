@@ -9,8 +9,10 @@ import (
 	"errors"
 	"net/http"
 	"os"
+	"strconv"
 
 	"crawler-platform/apps/execution-service/internal/service"
+	"crawler-platform/packages/go-common/httpx"
 	"github.com/gin-gonic/gin"
 )
 
@@ -129,6 +131,27 @@ func NewRouter(executionService *service.ExecutionService) *gin.Engine {
 		c.JSON(http.StatusOK, logs)
 	}
 
+	listExecutionsHandler := func(c *gin.Context) {
+		limit, _ := strconv.Atoi(c.DefaultQuery("limit", "20"))
+		offset, _ := strconv.Atoi(c.DefaultQuery("offset", "0"))
+		status := c.Query("status")
+		p := httpx.DefaultPagination(limit, offset)
+
+		result, err := executionService.ListExecutions(context.Background(), p.Limit, p.Offset, status)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+
+		c.JSON(http.StatusOK, httpx.PaginatedResponse{
+			Items:  result.Executions,
+			Total:  result.Total,
+			Limit:  p.Limit,
+			Offset: p.Offset,
+		})
+	}
+
+	router.GET("/api/v1/executions", listExecutionsHandler)
 	router.POST("/api/v1/executions", createExecutionHandler)
 	router.POST("/api/v1/executions/:id/logs", appendLogHandler)
 	router.GET("/api/v1/executions/:id", getExecutionHandler)

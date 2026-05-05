@@ -10,6 +10,7 @@ import (
 
 	"crawler-platform/apps/iam-service/internal/model"
 	"crawler-platform/packages/go-common/auth"
+	"golang.org/x/crypto/bcrypt"
 )
 
 // ErrInvalidCredentials 表示认证凭证无效（用户名或密码错误）。
@@ -51,7 +52,12 @@ func (s *AuthService) Login(username, password string) (string, error) {
 	if err != nil {
 		return "", ErrInvalidCredentials
 	}
-	if user.Password != password {
+
+	hashed := user.PasswordHash
+	if hashed == "" {
+		hashed = user.Password
+	}
+	if err := bcrypt.CompareHashAndPassword([]byte(hashed), []byte(password)); err != nil {
 		return "", ErrInvalidCredentials
 	}
 	return auth.IssueToken(s.secret, user.Username)
@@ -66,7 +72,11 @@ func (s *AuthService) Register(username, password string) (model.User, error) {
 		return model.User{}, errors.New("username and password are required")
 	}
 
-	user := model.User{Username: username, Password: password}
+	hash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
+	if err != nil {
+		return model.User{}, errors.New("failed to hash password")
+	}
+	user := model.User{Username: username, PasswordHash: string(hash)}
 	if err := s.users.Create(user); err != nil {
 		return model.User{}, ErrUserAlreadyExists
 	}

@@ -131,6 +131,101 @@ func (r *ExecutionRepository) Get(ctx context.Context, id string) (model.Executi
 	return exec, nil
 }
 
+// List 分页查询执行记录，支持按 status 过滤。
+// limit 和 offset 控制分页；status 为空时返回所有状态。
+func (r *ExecutionRepository) List(ctx context.Context, limit, offset int, status string) (*service.ListResult, error) {
+	var total int64
+	countQuery := `SELECT COUNT(*) FROM executions`
+	args := []any{}
+	if status != "" {
+		countQuery += ` WHERE status = $1`
+		args = append(args, status)
+	}
+	if err := r.db.QueryRowContext(ctx, countQuery, args...).Scan(&total); err != nil {
+		return nil, err
+	}
+
+	query := `
+		SELECT id, project_id, spider_id, spider_version, registry_auth_ref, cpu_cores, memory_mb, timeout_seconds, node_id, status, trigger_source, image, command, error_message, created_at, started_at, finished_at, retry_limit, retry_count, retry_delay_seconds, retry_of_execution_id, retried_at
+		FROM executions
+	`
+	queryArgs := []any{}
+	if status != "" {
+		query += ` WHERE status = $3`
+		queryArgs = append(queryArgs, status)
+	}
+	query += ` ORDER BY created_at DESC LIMIT $1 OFFSET $2`
+	queryArgs = append([]any{limit, offset}, queryArgs...)
+
+	rows, err := r.db.QueryContext(ctx, query, queryArgs...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var executions []model.Execution
+	for rows.Next() {
+		var exec model.Execution
+		var (
+			nodeID             sql.NullString
+			spiderVersion      sql.NullString
+			registryAuthRef    sql.NullString
+			commandRaw         []byte
+			errorMessage       sql.NullString
+			retryOfExecutionID sql.NullString
+			startedAt          sql.NullTime
+			finishedAt         sql.NullTime
+			retriedAt          sql.NullTime
+		)
+		if err := rows.Scan(
+			&exec.ID, &exec.ProjectID, &exec.SpiderID, &spiderVersion, &registryAuthRef,
+			&exec.CpuCores, &exec.MemoryMB, &exec.TimeoutSeconds, &nodeID,
+			&exec.Status, &exec.TriggerSource, &exec.Image, &commandRaw,
+			&errorMessage, &exec.CreatedAt, &startedAt, &finishedAt,
+			&exec.RetryLimit, &exec.RetryCount, &exec.RetryDelaySeconds,
+			&retryOfExecutionID, &retriedAt,
+		); err != nil {
+			return nil, err
+		}
+		if nodeID.Valid {
+			exec.NodeID = nodeID.String
+		}
+		if spiderVersion.Valid {
+			exec.SpiderVersion = spiderVersion.String
+		}
+		if registryAuthRef.Valid {
+			exec.RegistryAuthRef = registryAuthRef.String
+		}
+		if errorMessage.Valid {
+			exec.ErrorMessage = errorMessage.String
+		}
+		if retryOfExecutionID.Valid {
+			exec.RetryOfExecutionID = retryOfExecutionID.String
+		}
+		if startedAt.Valid {
+			t := startedAt.Time
+			exec.StartedAt = &t
+		}
+		if finishedAt.Valid {
+			t := finishedAt.Time
+			exec.FinishedAt = &t
+		}
+		if retriedAt.Valid {
+			t := retriedAt.Time
+			exec.RetriedAt = &t
+		}
+		if err := json.Unmarshal(commandRaw, &exec.Command); err != nil {
+			return nil, err
+		}
+		executions = append(executions, exec)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	return &service.ListResult{Executions: executions, Total: total}, nil
+}
+
 // MarkRunning 将执行状态从 pending 转换为 running。
 // 关键：使用条件 UPDATE (WHERE status = 'pending') 实现乐观并发控制——只有当前状态为 pending 时才允许转换。
 // 同时写入 nodeID 和 startedAt，并清空 finished_at 和 error_message（如果这是重试执行）。
