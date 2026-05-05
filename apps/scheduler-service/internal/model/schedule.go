@@ -21,6 +21,8 @@ type Schedule struct {
 	ID                 string     `json:"id"`
 	ProjectID          string     `json:"projectId"`
 	SpiderID           string     `json:"spiderId"`
+	SpiderVersion      string     `json:"spiderVersion,omitempty"`
+	RegistryAuthRef    string     `json:"registryAuthRef,omitempty"`
 	Name               string     `json:"name"`
 	CronExpr           string     `json:"cronExpr"`
 	Enabled            bool       `json:"enabled"`

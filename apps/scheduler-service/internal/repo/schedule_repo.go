@@ -50,20 +50,23 @@ func (r *PostgresRepository) Create(ctx context.Context, schedule model.Schedule
 	}
 
 	_, err = r.db.ExecContext(ctx, `
-		INSERT INTO scheduled_tasks (id, project_id, spider_id, name, cron_expr, enabled, image, command, retry_limit, retry_delay_seconds, created_at, last_materialized_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8::jsonb, $9, $10, $11, $12)
-	`, schedule.ID, schedule.ProjectID, schedule.SpiderID, schedule.Name, schedule.CronExpr, schedule.Enabled, schedule.Image, string(commandJSON), schedule.RetryLimit, schedule.RetryDelaySeconds, schedule.CreatedAt, lastMaterializedAt)
+		INSERT INTO scheduled_tasks (id, project_id, spider_id, spider_version, registry_auth_ref, name, cron_expr, enabled, image, command, retry_limit, retry_delay_seconds, created_at, last_materialized_at)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11::jsonb, $12, $13, $14, $15)
+	`, schedule.ID, schedule.ProjectID, schedule.SpiderID, nullableString(schedule.SpiderVersion), nullableString(schedule.RegistryAuthRef), schedule.Name, schedule.CronExpr, schedule.Enabled, schedule.Image, string(commandJSON), schedule.RetryLimit, schedule.RetryDelaySeconds, schedule.CreatedAt, lastMaterializedAt)
 	return err
 }
 
-// List 查询所有 Schedule 记录，按创建时间降序排列。
-// command 字段从 JSONB 反序列化为 []string；last_materialized_at 使用 sql.NullTime 处理 NULL 情况。
-func (r *PostgresRepository) List(ctx context.Context) ([]model.Schedule, error) {
+// List 分页查询 Schedule 记录，按创建时间降序排列。limit <= 0 时默认返回 20 条。
+func (r *PostgresRepository) List(ctx context.Context, limit, offset int) ([]model.Schedule, error) {
+	if limit <= 0 {
+		limit = 20
+	}
 	rows, err := r.db.QueryContext(ctx, `
-		SELECT id, project_id, spider_id, name, cron_expr, enabled, image, command, retry_limit, retry_delay_seconds, created_at, last_materialized_at
+		SELECT id, project_id, spider_id, spider_version, registry_auth_ref, name, cron_expr, enabled, image, command, retry_limit, retry_delay_seconds, created_at, last_materialized_at
 		FROM scheduled_tasks
 		ORDER BY created_at DESC, id DESC
-	`)
+		LIMIT $1 OFFSET $2
+	`, limit, offset)
 	if err != nil {
 		return nil, err
 	}
@@ -73,12 +76,19 @@ func (r *PostgresRepository) List(ctx context.Context) ([]model.Schedule, error)
 	for rows.Next() {
 		var schedule model.Schedule
 		var commandJSON string
+		var spiderVersion, registryAuthRef sql.NullString
 		var lastMaterializedAt sql.NullTime
-		if err := rows.Scan(&schedule.ID, &schedule.ProjectID, &schedule.SpiderID, &schedule.Name, &schedule.CronExpr, &schedule.Enabled, &schedule.Image, &commandJSON, &schedule.RetryLimit, &schedule.RetryDelaySeconds, &schedule.CreatedAt, &lastMaterializedAt); err != nil {
+		if err := rows.Scan(&schedule.ID, &schedule.ProjectID, &schedule.SpiderID, &spiderVersion, &registryAuthRef, &schedule.Name, &schedule.CronExpr, &schedule.Enabled, &schedule.Image, &commandJSON, &schedule.RetryLimit, &schedule.RetryDelaySeconds, &schedule.CreatedAt, &lastMaterializedAt); err != nil {
 			return nil, err
 		}
 		if err := json.Unmarshal([]byte(commandJSON), &schedule.Command); err != nil {
 			return nil, err
+		}
+		if spiderVersion.Valid {
+			schedule.SpiderVersion = spiderVersion.String
+		}
+		if registryAuthRef.Valid {
+			schedule.RegistryAuthRef = registryAuthRef.String
 		}
 		if lastMaterializedAt.Valid {
 			value := lastMaterializedAt.Time.UTC()
@@ -148,4 +158,12 @@ func (r *PostgresRepository) RestoreLastMaterialized(ctx context.Context, id str
 		WHERE id = $1 AND last_materialized_at = $2
 	`, id, current, *previous)
 	return err
+}
+
+// nullableString 将空字符串映射为 nil（数据库 NULL），非空字符串保持原值。
+func nullableString(value string) any {
+	if value == "" {
+		return nil
+	}
+	return value
 }
