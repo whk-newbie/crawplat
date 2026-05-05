@@ -143,6 +143,28 @@ Crawler Platform 是一个分布式爬虫管理平台，采用微服务架构，
 
 ---
 
+## Phase 8 - Worktree 公共基线 (进行中)
+
+**目标：** 冻结后续并行 worktree 共享的术语、双语、注释、错误和验收规范。
+
+**交付内容：**
+
+- [x] 平台术语表：`docs/standards/platform-terminology.md`
+- [x] 前端国际化规范：`docs/standards/i18n-guidelines.md`
+- [x] 代码中文注释规范：`docs/standards/code-comments.md`
+- [x] 错误消息规范：`docs/standards/error-messages.md`
+- [x] 双语文档规范：`docs/standards/bilingual-docs.md`
+- [x] worktree 验收规范：`docs/standards/worktree-acceptance.md`
+- [x] smoke / 回归检查模板：`docs/standards/smoke-checklist-template.md`
+
+**对应 worktree：**
+
+- `worktree-platform-spec`
+- `worktree-docs-bilingual-core`
+- `worktree-test-harness`
+
+---
+
 ## 已知技术债务
 
 | 项 | 所在阶段 | 说明 |
