@@ -41,6 +41,28 @@ func ParseRegistryCredentials(raw string) (map[string]RegistryCredential, error)
 	return out, nil
 }
 
+func registryHostFromImage(image string) string {
+	image = strings.TrimSpace(image)
+	if image == "" {
+		return "docker.io"
+	}
+
+	first := image
+	hasSlash := false
+	if idx := strings.IndexByte(image, '/'); idx >= 0 {
+		hasSlash = true
+		first = image[:idx]
+	}
+
+	if strings.Contains(first, ".") || first == "localhost" {
+		return strings.ToLower(first)
+	}
+	if hasSlash && strings.Contains(first, ":") {
+		return strings.ToLower(first)
+	}
+	return "docker.io"
+}
+
 func isLikelyRegistryHost(value string) bool {
 	if value == "localhost" {
 		return true

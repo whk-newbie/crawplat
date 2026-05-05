@@ -1,6 +1,7 @@
 package api
 
 import (
+	"net/http"
 	"strings"
 
 	"crawler-platform/apps/gateway/internal/proxy"
@@ -13,6 +14,11 @@ const stableAPIVersion = "v1"
 
 type apiVersionConfig struct {
 	supported []string
+}
+
+type authConfig struct {
+	enforceJWT bool
+	jwtSecret  string
 }
 
 func registerAPIVersion(router *gin.Engine, version string, cfg authConfig, rateLimitHandler gin.HandlerFunc) {
@@ -87,4 +93,26 @@ func normalizeAPIVersion(version string) string {
 		}
 	}
 	return version
+}
+
+func requireJWT(secret string) gin.HandlerFunc {
+	secret = strings.TrimSpace(secret)
+	return func(c *gin.Context) {
+		if secret == "" {
+			c.Next()
+			return
+		}
+		token := strings.TrimSpace(c.GetHeader("Authorization"))
+		if strings.HasPrefix(strings.ToLower(token), "bearer ") {
+			token = strings.TrimSpace(token[7:])
+		}
+		if token == "" {
+			token = strings.TrimSpace(c.GetHeader("X-Internal-Token"))
+		}
+		if token != secret {
+			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+			return
+		}
+		c.Next()
+	}
 }

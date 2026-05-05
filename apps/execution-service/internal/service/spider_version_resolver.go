@@ -25,6 +25,10 @@ func (r *StaticSpiderVersionResolver) Resolve(_ context.Context, _ string, reque
 	return version, strings.TrimSpace(r.RegistryAuthRef), strings.TrimSpace(r.Image), append([]string(nil), r.Command...), nil
 }
 
+type SpiderVersionResolver interface {
+	Resolve(ctx context.Context, spiderID string, requestedVersion int) (version int, registryAuthRef string, image string, command []string, err error)
+}
+
 type HTTPSpiderVersionResolver struct {
 	baseURL string
 	client  *http.Client

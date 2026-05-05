@@ -4,11 +4,14 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
+	"strings"
 	"time"
 
 	"crawler-platform/apps/monitor-service/internal/model"
+
 	"github.com/google/uuid"
 )
 
@@ -17,6 +20,34 @@ const (
 	defaultPollPeriod            = 15 * time.Second
 	defaultNodeOfflinePollPeriod = 5 * time.Second
 )
+
+var (
+	ErrInvalidRuleName   = errors.New("invalid rule name")
+	ErrInvalidRuleType   = errors.New("invalid rule type")
+	ErrInvalidWebhookURL = errors.New("invalid webhook url")
+	ErrInvalidRuleID     = errors.New("invalid rule id")
+	ErrAlertRuleNotFound = errors.New("alert rule not found")
+)
+
+type CreateAlertRuleInput struct {
+	Name                string
+	RuleType            string
+	Enabled             bool
+	WebhookURL          string
+	CooldownSeconds     int
+	TimeoutSeconds      int
+	OfflineGraceSeconds int
+}
+
+type UpdateAlertRuleInput struct {
+	ID                  string
+	Name                *string
+	Enabled             *bool
+	WebhookURL          *string
+	CooldownSeconds     *int
+	TimeoutSeconds      *int
+	OfflineGraceSeconds *int
+}
 
 type webhookPayload struct {
 	RuleID     string      `json:"ruleId"`
@@ -97,6 +128,35 @@ func (s *MonitorService) startAlertTicker(ctx context.Context, interval time.Dur
 			}
 		}
 	}()
+}
+
+func (s *MonitorService) CreateAlertRule(input CreateAlertRuleInput) (model.AlertRule, error) {
+	name := strings.TrimSpace(input.Name)
+	if name == "" {
+		return model.AlertRule{}, ErrInvalidRuleName
+	}
+	if input.RuleType != model.AlertRuleTypeExecutionFailed && input.RuleType != model.AlertRuleTypeNodeOffline {
+		return model.AlertRule{}, ErrInvalidRuleType
+	}
+	webhookURL := strings.TrimSpace(input.WebhookURL)
+	if webhookURL == "" {
+		return model.AlertRule{}, ErrInvalidWebhookURL
+	}
+
+	now := time.Now().UTC()
+	rule := model.AlertRule{
+		ID:                  uuid.NewString(),
+		Name:                name,
+		RuleType:            input.RuleType,
+		Enabled:             input.Enabled,
+		WebhookURL:          webhookURL,
+		CooldownSeconds:     normalizeCooldown(input.CooldownSeconds, input.RuleType),
+		TimeoutSeconds:      normalizeTimeout(input.TimeoutSeconds, input.RuleType),
+		OfflineGraceSeconds: normalizeOfflineGrace(input.OfflineGraceSeconds),
+		CreatedAt:           now,
+		UpdatedAt:           now,
+	}
+	return s.repo.CreateAlertRule(context.Background(), rule)
 }
 
 func (s *MonitorService) EvaluateAlerts(ctx context.Context) error {
@@ -270,4 +330,6 @@ func normalizeOfflineGrace(input int) int {
 	return 60
 }
 
-var _ WebhookDeliverer = (*httpWebhookDeliverer)(nil)
+var _ interface {
+	Deliver(ctx context.Context, webhookURL string, payload []byte, timeout time.Duration) (int, error)
+} = (*httpWebhookDeliverer)(nil)

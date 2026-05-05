@@ -12,6 +12,7 @@ import (
 
 var ErrExecutionNotFound = errors.New("execution not found")
 var ErrInvalidExecutionState = errors.New("invalid execution state transition")
+var ErrSpiderVersionNotFound = errors.New("spider version not found")
 
 type ExecutionService struct {
 	execRepo ExecutionRepository

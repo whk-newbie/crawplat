@@ -20,6 +20,11 @@ import (
 
 const probeTimeout = 5 * time.Second
 
+type Prober interface {
+	Test(ctx context.Context, datasource model.Datasource) (model.TestResult, error)
+	Preview(ctx context.Context, datasource model.Datasource) (model.PreviewResult, error)
+}
+
 func newLiveDatasourceProber() Prober {
 	return &liveDatasourceProber{}
 }

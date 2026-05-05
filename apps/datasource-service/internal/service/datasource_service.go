@@ -13,6 +13,10 @@ var ErrInvalidDatasourceType = errors.New("invalid datasource type")
 
 var ErrDatasourceNotFound = errors.New("datasource not found")
 
+var ErrDatasourceProbeFailed = errors.New("datasource probe failed")
+
+var ErrDatasourceConfigInvalid = errors.New("invalid datasource config")
+
 type Datasource = model.Datasource
 
 type DatasourceService struct {

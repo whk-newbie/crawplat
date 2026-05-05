@@ -20,6 +20,10 @@ func NewPostgresNodeRepository(db *sql.DB) *PostgresNodeRepository {
 	return &PostgresNodeRepository{db: db}
 }
 
+func (r *PostgresNodeRepository) UpsertHeartbeat(ctx context.Context, name string, capabilities []string) (service.Node, error) {
+	return r.UpsertCatalog(ctx, name, capabilities, time.Now().UTC())
+}
+
 func (r *PostgresNodeRepository) UpsertCatalog(ctx context.Context, name string, capabilities []string, seenAt time.Time) (service.Node, error) {
 	capabilitiesJSON, err := json.Marshal(capabilities)
 	if err != nil {
@@ -69,7 +73,7 @@ func (r *PostgresNodeRepository) ListCatalog(ctx context.Context) ([]service.Nod
 	nodes := make([]service.Node, 0)
 	for rows.Next() {
 		var (
-			node            service.Node
+			node           service.Node
 			capabilitiesRaw []byte
 		)
 		if err := rows.Scan(&node.ID, &node.Name, &capabilitiesRaw, &node.LastSeenAt); err != nil {
@@ -85,6 +89,10 @@ func (r *PostgresNodeRepository) ListCatalog(ctx context.Context) ([]service.Nod
 		return nil, err
 	}
 	return nodes, nil
+}
+
+func (r *PostgresNodeRepository) ListOnline(ctx context.Context) ([]service.Node, error) {
+	return r.ListCatalog(ctx)
 }
 
 func (r *PostgresNodeRepository) GetByID(ctx context.Context, nodeID string) (service.Node, error) {

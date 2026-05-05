@@ -13,6 +13,11 @@ import (
 const requestIDContextKey = "request_id"
 const requestPathContextKey = "request_path"
 
+type observabilityConfig struct {
+	requestIDHeader string
+	trustRequestID  bool
+}
+
 func attachRequestID(cfg observabilityConfig) gin.HandlerFunc {
 	header := strings.TrimSpace(cfg.requestIDHeader)
 	if header == "" {

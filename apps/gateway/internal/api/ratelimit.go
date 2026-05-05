@@ -21,6 +21,11 @@ type fixedWindowLimiter struct {
 	buckets       map[string]rateBucket
 }
 
+type rateLimitConfig struct {
+	windowSeconds int
+	maxRequests   int
+}
+
 func newFixedWindowLimiter(windowSeconds int, maxRequests int) *fixedWindowLimiter {
 	if windowSeconds <= 0 {
 		windowSeconds = 60
