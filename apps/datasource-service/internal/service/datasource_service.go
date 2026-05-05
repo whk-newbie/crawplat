@@ -25,7 +25,7 @@ type DatasourceService struct {
 
 type Repository interface {
 	Create(ctx context.Context, datasource model.Datasource) error
-	ListByProject(ctx context.Context, projectID string) ([]model.Datasource, error)
+	ListByProject(ctx context.Context, projectID string, limit, offset int) ([]model.Datasource, error)
 	Get(ctx context.Context, id string) (model.Datasource, bool, error)
 }
 
@@ -42,18 +42,25 @@ func (r *memoryRepository) Create(_ context.Context, datasource model.Datasource
 	return nil
 }
 
-func (r *memoryRepository) ListByProject(_ context.Context, projectID string) ([]model.Datasource, error) {
+func (r *memoryRepository) ListByProject(_ context.Context, projectID string, limit, offset int) ([]model.Datasource, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
-	var datasources []model.Datasource
+	var filtered []model.Datasource
 	for _, datasource := range r.datasources {
 		if projectID == "" || datasource.ProjectID == projectID {
 			datasource.Config = cloneConfig(datasource.Config)
-			datasources = append(datasources, datasource)
+			filtered = append(filtered, datasource)
 		}
 	}
-	return datasources, nil
+	if offset >= len(filtered) {
+		return []model.Datasource{}, nil
+	}
+	end := offset + limit
+	if limit <= 0 || end > len(filtered) {
+		end = len(filtered)
+	}
+	return filtered[offset:end], nil
 }
 
 func (r *memoryRepository) Get(_ context.Context, id string) (model.Datasource, bool, error) {
@@ -98,8 +105,8 @@ func (s *DatasourceService) Create(projectID, name, typ string, cfg map[string]s
 	return datasource, nil
 }
 
-func (s *DatasourceService) List(projectID string) ([]Datasource, error) {
-	return s.repo.ListByProject(context.Background(), projectID)
+func (s *DatasourceService) List(projectID string, limit, offset int) ([]Datasource, error) {
+	return s.repo.ListByProject(context.Background(), projectID, limit, offset)
 }
 
 func (s *DatasourceService) Get(id string) (Datasource, bool, error) {

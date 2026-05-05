@@ -57,9 +57,10 @@ func TestPostgresRepositoryListByProject(t *testing.T) {
 		FROM datasources
 		WHERE project_id = $1
 		ORDER BY created_at DESC, id DESC
-	`)).WithArgs("p1").WillReturnRows(rows)
+		LIMIT $2 OFFSET $3
+	`)).WithArgs("p1", 20, 0).WillReturnRows(rows)
 
-	datasources, err := repo.ListByProject(context.Background(), "p1")
+	datasources, err := repo.ListByProject(context.Background(), "p1", 20, 0)
 	if err != nil {
 		t.Fatalf("ListByProject returned error: %v", err)
 	}

@@ -29,13 +29,14 @@ func (r *PostgresRepository) Create(ctx context.Context, datasource model.Dataso
 	return err
 }
 
-func (r *PostgresRepository) ListByProject(ctx context.Context, projectID string) ([]model.Datasource, error) {
+func (r *PostgresRepository) ListByProject(ctx context.Context, projectID string, limit, offset int) ([]model.Datasource, error) {
 	rows, err := r.db.QueryContext(ctx, `
 		SELECT id, project_id, name, type, readonly, config_json
 		FROM datasources
 		WHERE project_id = $1
 		ORDER BY created_at DESC, id DESC
-	`, projectID)
+		LIMIT $2 OFFSET $3
+	`, projectID, limit, offset)
 	if err != nil {
 		return nil, err
 	}
