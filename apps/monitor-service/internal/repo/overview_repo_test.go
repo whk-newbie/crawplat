@@ -33,9 +33,11 @@ func TestOverviewRepositoryOverviewAggregatesExecutionsAndNodes(t *testing.T) {
 		AddRow("running", 1).
 		AddRow("succeeded", 5).
 		AddRow("failed", 3)
-	mock.ExpectQuery(`SELECT status, COUNT\(\*\) FROM executions GROUP BY status`).
+		mock.ExpectQuery(`SELECT status, COUNT\(\*\) FROM executions WHERE \(\$1 = '' OR organization_id = \$1\) GROUP BY status`).
+			WithArgs("").
 		WillReturnRows(rows)
-	mock.ExpectQuery(`SELECT COUNT\(\*\) FROM nodes`).
+		mock.ExpectQuery(`SELECT COUNT\(\*\) FROM nodes WHERE \(\$1 = '' OR organization_id = \$1\)`).
+			WithArgs("").
 		WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(2))
 
 	if err := client.Set(context.Background(), "nodes:node-1", "ok", time.Minute).Err(); err != nil {
@@ -50,7 +52,7 @@ func TestOverviewRepositoryOverviewAggregatesExecutionsAndNodes(t *testing.T) {
 
 	repository := NewOverviewRepository(db, client)
 
-	overview, err := repository.Overview(context.Background())
+	overview, err := repository.Overview(context.Background(), "")
 	if err != nil {
 		t.Fatalf("Overview returned error: %v", err)
 	}
@@ -95,9 +97,11 @@ func TestOverviewRepositoryOverviewDoesNotReturnNegativeOfflineNodes(t *testing.
 	defer client.Close()
 
 	rows := sqlmock.NewRows([]string{"status", "count"}).AddRow("running", 1)
-	mock.ExpectQuery(`SELECT status, COUNT\(\*\) FROM executions GROUP BY status`).
+		mock.ExpectQuery(`SELECT status, COUNT\(\*\) FROM executions WHERE \(\$1 = '' OR organization_id = \$1\) GROUP BY status`).
+			WithArgs("").
 		WillReturnRows(rows)
-	mock.ExpectQuery(`SELECT COUNT\(\*\) FROM nodes`).
+		mock.ExpectQuery(`SELECT COUNT\(\*\) FROM nodes WHERE \(\$1 = '' OR organization_id = \$1\)`).
+			WithArgs("").
 		WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(1))
 
 	if err := client.Set(context.Background(), "nodes:node-1", "ok", time.Minute).Err(); err != nil {
@@ -111,7 +115,7 @@ func TestOverviewRepositoryOverviewDoesNotReturnNegativeOfflineNodes(t *testing.
 	}
 
 	repository := NewOverviewRepository(db, client)
-	overview, err := repository.Overview(context.Background())
+	overview, err := repository.Overview(context.Background(), "")
 	if err != nil {
 		t.Fatalf("Overview returned error: %v", err)
 	}

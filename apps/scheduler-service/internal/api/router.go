@@ -56,7 +56,8 @@ func NewRouter(schedulerService *service.SchedulerService) *gin.Engine {
 			return
 		}
 
-		schedule, err := schedulerService.Create(req.ProjectID, req.SpiderID, req.SpiderVersion, req.RegistryAuthRef, req.Name, req.CronExpr, req.Image, req.Command, req.Enabled, req.RetryLimit, req.RetryDelaySeconds)
+		orgID := c.GetHeader("X-Org-ID")
+		schedule, err := schedulerService.Create(orgID, req.ProjectID, req.SpiderID, req.SpiderVersion, req.RegistryAuthRef, req.Name, req.CronExpr, req.Image, req.Command, req.Enabled, req.RetryLimit, req.RetryDelaySeconds)
 		if err != nil {
 			if err == service.ErrInvalidSchedule {
 				c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
@@ -72,7 +73,8 @@ func NewRouter(schedulerService *service.SchedulerService) *gin.Engine {
 	router.GET("/api/v1/schedules", func(c *gin.Context) {
 		limit := parseQueryInt(c, "limit", 20)
 		offset := parseQueryInt(c, "offset", 0)
-		schedules, err := schedulerService.List(limit, offset)
+		orgID := c.GetHeader("X-Org-ID")
+		schedules, err := schedulerService.List(orgID, limit, offset)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return

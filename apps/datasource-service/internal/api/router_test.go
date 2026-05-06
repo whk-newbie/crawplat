@@ -48,7 +48,7 @@ func TestDatasourceLifecycleRoutesUseService(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
 	svc := service.NewDatasourceService()
-	created, err := svc.Create("p1", "main", "redis", map[string]string{"db": "0"})
+	created, err := svc.Create("", "p1", "main", "redis", map[string]string{"db": "0"})
 	if err != nil {
 		t.Fatalf("Create returned error: %v", err)
 	}

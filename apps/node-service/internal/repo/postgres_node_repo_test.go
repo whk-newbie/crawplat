@@ -36,7 +36,7 @@ func TestPostgresNodeRepositoryUpsertAndListCatalog(t *testing.T) {
 		WithArgs("node-1", seenAt, `["docker","python"]`).
 		WillReturnResult(sqlmock.NewResult(1, 1))
 
-	node, err := repo.UpsertCatalog(context.Background(), "node-1", []string{"docker", "python"}, seenAt)
+	node, err := repo.UpsertCatalog(context.Background(), "", "node-1", []string{"docker", "python"}, seenAt)
 	if err != nil {
 		t.Fatalf("UpsertCatalog returned error: %v", err)
 	}
@@ -44,12 +44,13 @@ func TestPostgresNodeRepositoryUpsertAndListCatalog(t *testing.T) {
 		t.Fatalf("unexpected node: %#v", node)
 	}
 
-	rows := sqlmock.NewRows([]string{"id", "name", "capabilities_json", "last_seen_at"}).
-		AddRow("node-1", "node-1", `["docker","python"]`, seenAt)
-	mock.ExpectQuery(`SELECT id, name, capabilities_json, last_seen_at FROM nodes ORDER BY name ASC`).
+	rows := sqlmock.NewRows([]string{"id", "name", "capabilities_json", "last_seen_at", "organization_id"}).
+		AddRow("node-1", "node-1", `["docker","python"]`, seenAt, "")
+	mock.ExpectQuery(`SELECT id, name, capabilities_json, last_seen_at, organization_id FROM nodes WHERE \(\$1 = '' OR organization_id = \$1\) ORDER BY name ASC`).
+			WithArgs("").
 		WillReturnRows(rows)
 
-	nodes, err := repo.ListCatalog(context.Background())
+	nodes, err := repo.ListCatalog(context.Background(), "")
 	if err != nil {
 		t.Fatalf("ListCatalog returned error: %v", err)
 	}
@@ -57,12 +58,12 @@ func TestPostgresNodeRepositoryUpsertAndListCatalog(t *testing.T) {
 		t.Fatalf("unexpected nodes: %#v", nodes)
 	}
 
-	mock.ExpectQuery(`SELECT id, name, capabilities_json, last_seen_at FROM nodes WHERE id = \$1`).
+	mock.ExpectQuery(`SELECT id, name, capabilities_json, last_seen_at, organization_id FROM nodes WHERE id = \$1`).
 		WithArgs("node-1").
-		WillReturnRows(sqlmock.NewRows([]string{"id", "name", "capabilities_json", "last_seen_at"}).
-			AddRow("node-1", "node-1", `["docker","python"]`, seenAt))
+		WillReturnRows(sqlmock.NewRows([]string{"id", "name", "capabilities_json", "last_seen_at", "organization_id"}).
+			AddRow("node-1", "node-1", `["docker","python"]`, seenAt, ""))
 
-	detailNode, err := repo.GetByID(context.Background(), "node-1")
+	detailNode, err := repo.GetByID(context.Background(), "", "node-1")
 	if err != nil {
 		t.Fatalf("GetByID returned error: %v", err)
 	}
@@ -92,7 +93,7 @@ func TestPostgresNodeRepositoryUpsertAndListCatalog(t *testing.T) {
 			AddRow("exec-1", "project-1", "spider-1", "succeeded", "manual", seenAt, startedAt, finishedAt).
 			AddRow("exec-2", "project-1", "spider-2", "failed", "scheduled", seenAt.Add(-time.Minute), nil, nil))
 
-	executions, err := repo.ListRecentExecutions(context.Background(), "node-1", service.ExecutionQuery{
+	executions, err := repo.ListRecentExecutions(context.Background(), "", "node-1", service.ExecutionQuery{
 		Limit:  3,
 		Offset: 0,
 	})
@@ -113,7 +114,7 @@ func TestPostgresNodeRepositoryUpsertAndListCatalog(t *testing.T) {
 		WithArgs("node-1", "failed", 5, 10).
 		WillReturnRows(sqlmock.NewRows([]string{"id", "project_id", "spider_id", "status", "trigger_source", "created_at", "started_at", "finished_at"}))
 
-	_, err = repo.ListRecentExecutions(context.Background(), "node-1", service.ExecutionQuery{
+	_, err = repo.ListRecentExecutions(context.Background(), "", "node-1", service.ExecutionQuery{
 		Limit:  5,
 		Offset: 10,
 		Status: "failed",
@@ -128,7 +129,7 @@ func TestPostgresNodeRepositoryUpsertAndListCatalog(t *testing.T) {
 		WithArgs("node-1", "succeeded", from, to, 20, 2).
 		WillReturnRows(sqlmock.NewRows([]string{"id", "project_id", "spider_id", "status", "trigger_source", "created_at", "started_at", "finished_at"}))
 
-	_, err = repo.ListRecentExecutions(context.Background(), "node-1", service.ExecutionQuery{
+	_, err = repo.ListRecentExecutions(context.Background(), "", "node-1", service.ExecutionQuery{
 		Limit:  20,
 		Offset: 2,
 		Status: "succeeded",
@@ -152,11 +153,11 @@ func TestPostgresNodeRepositoryGetByIDNotFound(t *testing.T) {
 	defer db.Close()
 
 	repo := NewPostgresNodeRepository(db)
-	mock.ExpectQuery(`SELECT id, name, capabilities_json, last_seen_at FROM nodes WHERE id = \$1`).
+	mock.ExpectQuery(`SELECT id, name, capabilities_json, last_seen_at, organization_id FROM nodes WHERE id = \$1`).
 		WithArgs("missing").
 		WillReturnError(sql.ErrNoRows)
 
-	_, err = repo.GetByID(context.Background(), "missing")
+	_, err = repo.GetByID(context.Background(), "", "missing")
 	if !errors.Is(err, service.ErrNodeNotFound) {
 		t.Fatalf("expected ErrNodeNotFound, got %v", err)
 	}

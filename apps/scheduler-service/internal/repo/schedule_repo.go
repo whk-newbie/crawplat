@@ -50,23 +50,23 @@ func (r *PostgresRepository) Create(ctx context.Context, schedule model.Schedule
 	}
 
 	_, err = r.db.ExecContext(ctx, `
-		INSERT INTO scheduled_tasks (id, project_id, spider_id, spider_version, registry_auth_ref, name, cron_expr, enabled, image, command, retry_limit, retry_delay_seconds, created_at, last_materialized_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11::jsonb, $12, $13, $14, $15)
-	`, schedule.ID, schedule.ProjectID, schedule.SpiderID, nullableString(schedule.SpiderVersion), nullableString(schedule.RegistryAuthRef), schedule.Name, schedule.CronExpr, schedule.Enabled, schedule.Image, string(commandJSON), schedule.RetryLimit, schedule.RetryDelaySeconds, schedule.CreatedAt, lastMaterializedAt)
+		INSERT INTO scheduled_tasks (id, project_id, organization_id, spider_id, spider_version, registry_auth_ref, name, cron_expr, enabled, image, command, retry_limit, retry_delay_seconds, created_at, last_materialized_at)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11::jsonb, $12, $13, $14, $15, $16)
+	`, schedule.ID, schedule.ProjectID, nullableString(schedule.OrganizationID), schedule.SpiderID, nullableString(schedule.SpiderVersion), nullableString(schedule.RegistryAuthRef), schedule.Name, schedule.CronExpr, schedule.Enabled, schedule.Image, string(commandJSON), schedule.RetryLimit, schedule.RetryDelaySeconds, schedule.CreatedAt, lastMaterializedAt)
 	return err
 }
 
 // List 分页查询 Schedule 记录，按创建时间降序排列。limit <= 0 时默认返回 20 条。
-func (r *PostgresRepository) List(ctx context.Context, limit, offset int) ([]model.Schedule, error) {
+func (r *PostgresRepository) List(ctx context.Context, orgID string, limit, offset int) ([]model.Schedule, error) {
 	if limit <= 0 {
 		limit = 20
 	}
 	rows, err := r.db.QueryContext(ctx, `
-		SELECT id, project_id, spider_id, spider_version, registry_auth_ref, name, cron_expr, enabled, image, command, retry_limit, retry_delay_seconds, created_at, last_materialized_at
-		FROM scheduled_tasks
+		SELECT id, project_id, organization_id, spider_id, spider_version, registry_auth_ref, name, cron_expr, enabled, image, command, retry_limit, retry_delay_seconds, created_at, last_materialized_at
+		FROM scheduled_tasks		WHERE ($1 = '' OR organization_id = $1)
 		ORDER BY created_at DESC, id DESC
-		LIMIT $1 OFFSET $2
-	`, limit, offset)
+		LIMIT $2 OFFSET $3
+	`, orgID, limit, offset)
 	if err != nil {
 		return nil, err
 	}
@@ -78,7 +78,7 @@ func (r *PostgresRepository) List(ctx context.Context, limit, offset int) ([]mod
 		var commandJSON string
 		var spiderVersion, registryAuthRef sql.NullString
 		var lastMaterializedAt sql.NullTime
-		if err := rows.Scan(&schedule.ID, &schedule.ProjectID, &schedule.SpiderID, &spiderVersion, &registryAuthRef, &schedule.Name, &schedule.CronExpr, &schedule.Enabled, &schedule.Image, &commandJSON, &schedule.RetryLimit, &schedule.RetryDelaySeconds, &schedule.CreatedAt, &lastMaterializedAt); err != nil {
+		if err := rows.Scan(&schedule.ID, &schedule.ProjectID, &schedule.OrganizationID, &schedule.SpiderID, &spiderVersion, &registryAuthRef, &schedule.Name, &schedule.CronExpr, &schedule.Enabled, &schedule.Image, &commandJSON, &schedule.RetryLimit, &schedule.RetryDelaySeconds, &schedule.CreatedAt, &lastMaterializedAt); err != nil {
 			return nil, err
 		}
 		if err := json.Unmarshal([]byte(commandJSON), &schedule.Command); err != nil {

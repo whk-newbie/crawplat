@@ -106,6 +106,10 @@ func (r *apiFakeExecutionRepo) ClaimNextRetryCandidate(_ context.Context, _ time
 	return exec, true, nil
 }
 
+func (r *apiFakeExecutionRepo) List(_ context.Context, _ string, _, _ int, _ string) (*service.ListResult, error) {
+	return &service.ListResult{}, nil
+}
+
 func (r *apiFakeExecutionRepo) ResetRetryClaim(_ context.Context, _ string) error {
 	return nil
 }

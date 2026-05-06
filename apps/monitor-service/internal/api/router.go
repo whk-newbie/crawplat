@@ -21,7 +21,8 @@ func NewRouter(monitorService *service.MonitorService) *gin.Engine {
 	router := gin.Default()
 
 	router.GET("/api/v1/monitor/overview", func(c *gin.Context) {
-		overview, err := monitorService.Overview()
+		orgID := c.GetHeader("X-Org-ID")
+			overview, err := monitorService.Overview(orgID)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
@@ -44,7 +45,8 @@ func NewRouter(monitorService *service.MonitorService) *gin.Engine {
 			return
 		}
 
-		rule, err := monitorService.CreateAlertRule(service.CreateAlertRuleInput{
+		orgID := c.GetHeader("X-Org-ID")
+			rule, err := monitorService.CreateAlertRule(orgID, service.CreateAlertRuleInput{
 			Name:                req.Name,
 			RuleType:            req.RuleType,
 			Enabled:             req.Enabled,
@@ -66,7 +68,8 @@ func NewRouter(monitorService *service.MonitorService) *gin.Engine {
 	})
 
 	router.GET("/api/v1/monitor/alerts/rules", func(c *gin.Context) {
-		rules, err := monitorService.ListAlertRules()
+		orgID := c.GetHeader("X-Org-ID")
+			rules, err := monitorService.ListAlertRules(orgID)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
@@ -88,7 +91,8 @@ func NewRouter(monitorService *service.MonitorService) *gin.Engine {
 			return
 		}
 
-		rule, err := monitorService.UpdateAlertRule(service.UpdateAlertRuleInput{
+		orgID := c.GetHeader("X-Org-ID")
+			rule, err := monitorService.UpdateAlertRule(orgID, service.UpdateAlertRuleInput{
 			ID:                  c.Param("id"),
 			Name:                req.Name,
 			Enabled:             req.Enabled,
@@ -113,7 +117,8 @@ func NewRouter(monitorService *service.MonitorService) *gin.Engine {
 	router.GET("/api/v1/monitor/alerts/events", func(c *gin.Context) {
 		limit := parseQueryInt(c, "limit", 20)
 		offset := parseQueryInt(c, "offset", 0)
-		events, err := monitorService.ListAlertEvents(limit, offset)
+		orgID := c.GetHeader("X-Org-ID")
+			events, err := monitorService.ListAlertEvents(orgID, limit, offset)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return

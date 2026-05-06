@@ -23,7 +23,7 @@ func NewRedisRepository(client *redis.Client, ttl time.Duration) *RedisRepositor
 	return &RedisRepository{client: client, ttl: ttl}
 }
 
-func (r *RedisRepository) UpsertHeartbeat(ctx context.Context, name string, capabilities []string) (service.Node, error) {
+func (r *RedisRepository) UpsertHeartbeat(ctx context.Context, orgID, name string, capabilities []string) (service.Node, error) {
 	node := service.Node{
 		ID:           name,
 		Name:         name,
@@ -47,7 +47,7 @@ func (r *RedisRepository) UpsertHeartbeat(ctx context.Context, name string, capa
 	return node, nil
 }
 
-func (r *RedisRepository) ListOnline(ctx context.Context, limit, offset int) ([]service.Node, error) {
+func (r *RedisRepository) ListOnline(ctx context.Context, orgID string, limit, offset int) ([]service.Node, error) {
 	ids, err := r.client.SMembers(ctx, nodeIndexKey).Result()
 	if err != nil {
 		return nil, err
@@ -81,7 +81,7 @@ func (r *RedisRepository) ListOnline(ctx context.Context, limit, offset int) ([]
 	return nodes[offset:end], nil
 }
 
-func (r *RedisRepository) GetByID(ctx context.Context, nodeID string) (service.Node, error) {
+func (r *RedisRepository) GetByID(ctx context.Context, orgID, nodeID string) (service.Node, error) {
 	payload, err := r.client.Get(ctx, nodeKeyPrefix+nodeID).Result()
 	if err == redis.Nil {
 		return service.Node{}, service.ErrNodeNotFound
@@ -97,6 +97,6 @@ func (r *RedisRepository) GetByID(ctx context.Context, nodeID string) (service.N
 	return node, nil
 }
 
-func (r *RedisRepository) ListRecentExecutions(ctx context.Context, nodeID string, query service.ExecutionQuery) ([]service.NodeExecution, error) {
+func (r *RedisRepository) ListRecentExecutions(ctx context.Context, orgID, nodeID string, query service.ExecutionQuery) ([]service.NodeExecution, error) {
 	return []service.NodeExecution{}, nil
 }

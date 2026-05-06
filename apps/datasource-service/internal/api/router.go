@@ -32,7 +32,8 @@ func NewRouter(datasourceService *service.DatasourceService) *gin.Engine {
 			return
 		}
 
-		datasource, err := datasourceService.Create(req.ProjectID, req.Name, req.Type, req.Config)
+		orgID := c.GetHeader("X-Org-ID")
+			datasource, err := datasourceService.Create(orgID, req.ProjectID, req.Name, req.Type, req.Config)
 		if err != nil {
 			if err == service.ErrInvalidDatasourceType {
 				c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
@@ -48,7 +49,8 @@ func NewRouter(datasourceService *service.DatasourceService) *gin.Engine {
 	router.GET("/api/v1/datasources", func(c *gin.Context) {
 		limit := parseQueryInt(c, "limit", 20)
 		offset := parseQueryInt(c, "offset", 0)
-		datasources, err := datasourceService.List(c.Query("projectId"), limit, offset)
+		orgID := c.GetHeader("X-Org-ID")
+			datasources, err := datasourceService.List(orgID, c.Query("projectId"), limit, offset)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return

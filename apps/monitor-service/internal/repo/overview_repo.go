@@ -32,13 +32,13 @@ func NewOverviewRepository(db *sql.DB, client *redis.Client) *OverviewRepository
 }
 
 // Overview 返回聚合后的执行和节点统计概览。
-func (r *OverviewRepository) Overview(ctx context.Context) (model.Overview, error) {
-	executions, err := r.executionSummary(ctx)
+func (r *OverviewRepository) Overview(ctx context.Context, orgID string) (model.Overview, error) {
+	executions, err := r.executionSummary(ctx, orgID)
 	if err != nil {
 		return model.Overview{}, err
 	}
 
-	nodes, err := r.nodeSummary(ctx)
+	nodes, err := r.nodeSummary(ctx, orgID)
 	if err != nil {
 		return model.Overview{}, err
 	}
@@ -49,8 +49,8 @@ func (r *OverviewRepository) Overview(ctx context.Context) (model.Overview, erro
 	}, nil
 }
 
-func (r *OverviewRepository) executionSummary(ctx context.Context) (model.ExecutionSummary, error) {
-	rows, err := r.db.QueryContext(ctx, `SELECT status, COUNT(*) FROM executions GROUP BY status`)
+func (r *OverviewRepository) executionSummary(ctx context.Context, orgID string) (model.ExecutionSummary, error) {
+	rows, err := r.db.QueryContext(ctx, `SELECT status, COUNT(*) FROM executions WHERE ($1 = '' OR organization_id = $1) GROUP BY status`, orgID)
 	if err != nil {
 		return model.ExecutionSummary{}, err
 	}
@@ -86,9 +86,9 @@ func (r *OverviewRepository) executionSummary(ctx context.Context) (model.Execut
 	return summary, nil
 }
 
-func (r *OverviewRepository) nodeSummary(ctx context.Context) (model.NodeSummary, error) {
+func (r *OverviewRepository) nodeSummary(ctx context.Context, orgID string) (model.NodeSummary, error) {
 	var total int
-	if err := r.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM nodes`).Scan(&total); err != nil {
+	if err := r.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM nodes WHERE ($1 = '' OR organization_id = $1)`, orgID).Scan(&total); err != nil {
 		return model.NodeSummary{}, err
 	}
 
@@ -132,7 +132,7 @@ func (r *OverviewRepository) countOnlineNodes(ctx context.Context) (int, error) 
 	return online, nil
 }
 
-func (r *OverviewRepository) CreateAlertRule(ctx context.Context, rule model.AlertRule) (model.AlertRule, error) {
+func (r *OverviewRepository) CreateAlertRule(ctx context.Context, orgID string, rule model.AlertRule) (model.AlertRule, error) {
 	var created model.AlertRule
 	err := r.db.QueryRowContext(ctx, `
 		INSERT INTO alert_rules (
@@ -142,7 +142,7 @@ func (r *OverviewRepository) CreateAlertRule(ctx context.Context, rule model.Ale
 		RETURNING id, name, rule_type, enabled, webhook_url, cooldown_seconds, timeout_seconds, offline_grace_seconds, created_at, updated_at
 	`,
 		rule.ID, rule.Name, rule.RuleType, rule.Enabled, rule.WebhookURL, rule.CooldownSeconds,
-		rule.TimeoutSeconds, rule.OfflineGraceSeconds, rule.CreatedAt, rule.UpdatedAt,
+		rule.TimeoutSeconds, rule.OfflineGraceSeconds, nullableString(orgID), rule.CreatedAt, rule.UpdatedAt,
 	).Scan(
 		&created.ID,
 		&created.Name,
@@ -161,7 +161,7 @@ func (r *OverviewRepository) CreateAlertRule(ctx context.Context, rule model.Ale
 	return created, nil
 }
 
-func (r *OverviewRepository) UpdateAlertRule(ctx context.Context, id string, patch model.AlertRulePatch) (model.AlertRule, bool, error) {
+func (r *OverviewRepository) UpdateAlertRule(ctx context.Context, orgID, id string, patch model.AlertRulePatch) (model.AlertRule, bool, error) {
 	setParts := make([]string, 0, 8)
 	args := make([]any, 0, 10)
 	argPos := 1
@@ -206,7 +206,7 @@ func (r *OverviewRepository) UpdateAlertRule(ctx context.Context, id string, pat
 		UPDATE alert_rules
 		SET %s
 		WHERE id = $%d
-		RETURNING id, name, rule_type, enabled, webhook_url, cooldown_seconds, timeout_seconds, offline_grace_seconds, created_at, updated_at
+		RETURNING id, name, rule_type, enabled, webhook_url, cooldown_seconds, timeout_seconds, offline_grace_seconds, organization_id, created_at, updated_at
 	`, strings.Join(setParts, ", "), argPos)
 
 	var updated model.AlertRule
@@ -231,7 +231,7 @@ func (r *OverviewRepository) UpdateAlertRule(ctx context.Context, id string, pat
 	return updated, true, nil
 }
 
-func (r *OverviewRepository) ListAlertRules(ctx context.Context) ([]model.AlertRule, error) {
+func (r *OverviewRepository) ListAlertRules(ctx context.Context, orgID string) ([]model.AlertRule, error) {
 	rows, err := r.db.QueryContext(ctx, `
 		SELECT id, name, rule_type, enabled, webhook_url, cooldown_seconds, timeout_seconds, offline_grace_seconds, created_at, updated_at
 		FROM alert_rules
@@ -267,7 +267,7 @@ func (r *OverviewRepository) ListAlertRules(ctx context.Context) ([]model.AlertR
 	return rules, nil
 }
 
-func (r *OverviewRepository) ListAlertEvents(ctx context.Context, limit, offset int) ([]model.AlertEvent, error) {
+func (r *OverviewRepository) ListAlertEvents(ctx context.Context, orgID string, limit, offset int) ([]model.AlertEvent, error) {
 	rows, err := r.db.QueryContext(ctx, `
 		SELECT id, rule_id, rule_type, entity_type, entity_id, dedupe_key, payload_json::text, delivery_status, COALESCE(webhook_status_code, 0), COALESCE(error_message, ''), created_at
 		FROM alert_events
@@ -305,15 +305,15 @@ func (r *OverviewRepository) ListAlertEvents(ctx context.Context, limit, offset 
 	return events, nil
 }
 
-func (r *OverviewRepository) CountAlertEvents(ctx context.Context) (int64, error) {
+func (r *OverviewRepository) CountAlertEvents(ctx context.Context, orgID string) (int64, error) {
 	var total int64
-	if err := r.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM alert_events`).Scan(&total); err != nil {
+	if err := r.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM alert_events ae LEFT JOIN alert_rules ar ON ae.rule_id = ar.id WHERE ($1 = '' OR ar.organization_id = $1)`, orgID).Scan(&total); err != nil {
 		return 0, err
 	}
 	return total, nil
 }
 
-func (r *OverviewRepository) ListFailedExecutionsSince(ctx context.Context, since time.Time, limit int) ([]model.FailedExecutionCandidate, error) {
+func (r *OverviewRepository) ListFailedExecutionsSince(ctx context.Context, orgID string, since time.Time, limit int) ([]model.FailedExecutionCandidate, error) {
 	rows, err := r.db.QueryContext(ctx, `
 		SELECT id, project_id, spider_id, COALESCE(error_message, ''), COALESCE(finished_at, created_at) AS occurred_at
 		FROM executions
@@ -346,7 +346,7 @@ func (r *OverviewRepository) ListFailedExecutionsSince(ctx context.Context, sinc
 	return candidates, nil
 }
 
-func (r *OverviewRepository) ListOfflineNodes(ctx context.Context, before time.Time, limit int) ([]model.OfflineNodeCandidate, error) {
+func (r *OverviewRepository) ListOfflineNodes(ctx context.Context, orgID string, before time.Time, limit int) ([]model.OfflineNodeCandidate, error) {
 	rows, err := r.db.QueryContext(ctx, `
 		SELECT id, name, last_seen_at
 		FROM nodes

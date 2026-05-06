@@ -31,9 +31,18 @@ func (r *fakeScheduleRepo) Create(_ context.Context, schedule model.Schedule) er
 	return nil
 }
 
-func (r *fakeScheduleRepo) List(_ context.Context, limit, offset int) ([]model.Schedule, error) {
-	schedules := make([]model.Schedule, len(r.schedules))
-	copy(schedules, r.schedules)
+func (r *fakeScheduleRepo) List(_ context.Context, orgID string, limit, offset int) ([]model.Schedule, error) {
+	filtered := r.schedules
+	if orgID != "" {
+		filtered = nil
+		for _, s := range r.schedules {
+			if s.OrganizationID == orgID {
+				filtered = append(filtered, s)
+			}
+		}
+	}
+	schedules := make([]model.Schedule, len(filtered))
+	copy(schedules, filtered)
 	return schedules, nil
 }
 
@@ -98,7 +107,7 @@ func TestSchedulerServiceCreatePersistsThroughRepo(t *testing.T) {
 	repo := &fakeScheduleRepo{}
 	svc := NewSchedulerService(repo, nil)
 
-	schedule, err := svc.Create("project-1", "spider-1", "", "", "nightly", "0 * * * *", "crawler/go-echo:latest", []string{"./go-echo"}, true, 0, 0)
+	schedule, err := svc.Create("", "project-1", "spider-1", "", "", "nightly", "0 * * * *", "crawler/go-echo:latest", []string{"./go-echo"}, true, 0, 0)
 	if err != nil {
 		t.Fatalf("Create returned error: %v", err)
 	}
@@ -122,7 +131,7 @@ func TestSchedulerServiceCreatePersistsThroughRepo(t *testing.T) {
 func TestSchedulerServiceCreateRejectsMissingFields(t *testing.T) {
 	svc := NewSchedulerService(&fakeScheduleRepo{}, nil)
 
-	_, err := svc.Create("", "spider-1", "", "", "nightly", "0 * * * *", "crawler/go-echo:latest", nil, true, 0, 0)
+	_, err := svc.Create("", "", "spider-1", "", "", "nightly", "0 * * * *", "crawler/go-echo:latest", nil, true, 0, 0)
 	if err != ErrInvalidSchedule {
 		t.Fatalf("expected ErrInvalidSchedule, got %v", err)
 	}
@@ -133,12 +142,12 @@ func TestSchedulerServiceListReturnsRepoSchedules(t *testing.T) {
 	repo := &fakeScheduleRepo{}
 	svc := NewSchedulerService(repo, nil)
 
-	created, err := svc.Create("project-1", "spider-1", "", "", "nightly", "0 * * * *", "crawler/go-echo:latest", []string{"./go-echo"}, true, 0, 0)
+	created, err := svc.Create("", "project-1", "spider-1", "", "", "nightly", "0 * * * *", "crawler/go-echo:latest", []string{"./go-echo"}, true, 0, 0)
 	if err != nil {
 		t.Fatalf("Create returned error: %v", err)
 	}
 
-	schedules, err := svc.List(20, 0)
+	schedules, err := svc.List("", 20, 0)
 	if err != nil {
 		t.Fatalf("List returned error: %v", err)
 	}

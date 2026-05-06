@@ -1,6 +1,3 @@
-// 该文件为 Spider 的 PostgreSQL 持久化层，封装对 spiders、spider_versions 表的 CRUD 操作。
-// 因为 PostgreSQL 不支持直接存储 Go 切片，将 Command 字段序列化为 JSON 字节数组存入/读出。
-// 依赖 model.Spider 结构体，不包含业务校验逻辑（校验由 service 层负责）。
 package repo
 
 import (
@@ -11,18 +8,14 @@ import (
 	"crawler-platform/apps/spider-service/internal/model"
 )
 
-// PostgresRepository 封装 *sql.DB，实现 Repository 接口，提供对 spiders 表的数据库操作。
 type PostgresRepository struct {
 	db *sql.DB
 }
 
-// NewPostgresRepository 基于已有的数据库连接创建 PostgresRepository 实例。
 func NewPostgresRepository(db *sql.DB) *PostgresRepository {
 	return &PostgresRepository{db: db}
 }
 
-// Create 将一条 Spider 记录写入 spiders 表。Command 切片会被 JSON 序列化为字符串后存储。
-// 返回 error 表示数据库写入失败或 JSON 序列化失败。
 func (r *PostgresRepository) Create(ctx context.Context, spider model.Spider) error {
 	command, err := json.Marshal(spider.Command)
 	if err != nil {
@@ -30,25 +23,23 @@ func (r *PostgresRepository) Create(ctx context.Context, spider model.Spider) er
 	}
 
 	_, err = r.db.ExecContext(ctx, `
-		INSERT INTO spiders (id, project_id, name, language, runtime, image, command)
-		VALUES ($1, $2, $3, $4, $5, $6, $7)
-	`, spider.ID, spider.ProjectID, spider.Name, spider.Language, spider.Runtime, spider.Image, string(command))
+			INSERT INTO spiders (id, project_id, name, language, runtime, image, command, organization_id)
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+		`, spider.ID, spider.ProjectID, spider.Name, spider.Language, spider.Runtime, spider.Image, string(command), nullIfEmpty(spider.OrganizationID))
 	return err
 }
 
-// ListByProject 分页查询指定项目下的 Spider，按创建时间降序排列。
-// limit <= 0 时默认返回 20 条。
-func (r *PostgresRepository) ListByProject(ctx context.Context, projectID string, limit, offset int) ([]model.Spider, error) {
+func (r *PostgresRepository) ListByProject(ctx context.Context, orgID, projectID string, limit, offset int) ([]model.Spider, error) {
 	if limit <= 0 {
 		limit = 20
 	}
 	rows, err := r.db.QueryContext(ctx, `
-		SELECT id, project_id, name, language, runtime, image, command
-		FROM spiders
-		WHERE project_id = $1
-		ORDER BY created_at DESC, id DESC
-		LIMIT $2 OFFSET $3
-	`, projectID, limit, offset)
+			SELECT id, project_id, name, language, runtime, image, command
+			FROM spiders
+			WHERE ($1 = '' OR organization_id = $1) AND project_id = $2
+			ORDER BY created_at DESC, id DESC
+			LIMIT $3 OFFSET $4
+		`, orgID, projectID, limit, offset)
 	if err != nil {
 		return nil, err
 	}
@@ -72,16 +63,14 @@ func (r *PostgresRepository) ListByProject(ctx context.Context, projectID string
 	return spiders, nil
 }
 
-// Get 按主键 id 查询单条 Spider 记录。
-// 返回值：找到时返回 (spider, true, nil)；未找到时返回 (empty, false, nil)；数据库错误返回 (empty, false, error)。
 func (r *PostgresRepository) Get(ctx context.Context, id string) (model.Spider, bool, error) {
 	var spider model.Spider
 	var commandRaw []byte
 	err := r.db.QueryRowContext(ctx, `
-		SELECT id, project_id, name, language, runtime, image, command
-		FROM spiders
-		WHERE id = $1
-	`, id).Scan(&spider.ID, &spider.ProjectID, &spider.Name, &spider.Language, &spider.Runtime, &spider.Image, &commandRaw)
+			SELECT id, project_id, name, language, runtime, image, command
+			FROM spiders
+			WHERE id = $1
+		`, id).Scan(&spider.ID, &spider.ProjectID, &spider.Name, &spider.Language, &spider.Runtime, &spider.Image, &commandRaw)
 	if err == sql.ErrNoRows {
 		return model.Spider{}, false, nil
 	}
@@ -94,27 +83,25 @@ func (r *PostgresRepository) Get(ctx context.Context, id string) (model.Spider, 
 	return spider, true, nil
 }
 
-// CreateVersion 向 spider_versions 表插入一条版本记录。
 func (r *PostgresRepository) CreateVersion(ctx context.Context, version model.SpiderVersion) error {
 	command, err := json.Marshal(version.Command)
 	if err != nil {
 		return err
 	}
 	_, err = r.db.ExecContext(ctx, `
-		INSERT INTO spider_versions (id, spider_id, version, image, registry_auth_ref, command)
-		VALUES ($1, $2, $3, $4, $5, $6)
-	`, version.ID, version.SpiderID, version.Version, version.Image, version.RegistryAuthRef, string(command))
+			INSERT INTO spider_versions (id, spider_id, version, image, registry_auth_ref, command, organization_id)
+			VALUES ($1, $2, $3, $4, $5, $6, $7)
+		`, version.ID, version.SpiderID, version.Version, version.Image, version.RegistryAuthRef, string(command), nullIfEmpty(version.OrganizationID))
 	return err
 }
 
-// ListVersions 查询指定 Spider 的所有版本，按创建时间降序。
 func (r *PostgresRepository) ListVersions(ctx context.Context, spiderID string) ([]model.SpiderVersion, error) {
 	rows, err := r.db.QueryContext(ctx, `
-		SELECT id, spider_id, version, image, registry_auth_ref, command
-		FROM spider_versions
-		WHERE spider_id = $1
-		ORDER BY created_at DESC, id DESC
-	`, spiderID)
+			SELECT id, spider_id, version, image, registry_auth_ref, command
+			FROM spider_versions
+			WHERE spider_id = $1
+			ORDER BY created_at DESC, id DESC
+		`, spiderID)
 	if err != nil {
 		return nil, err
 	}
@@ -138,14 +125,13 @@ func (r *PostgresRepository) ListVersions(ctx context.Context, spiderID string) 
 	return versions, nil
 }
 
-// ListRegistryAuthRefs 查询项目下 Spider 版本中引用的所有镜像仓库认证引用（去重）。
 func (r *PostgresRepository) ListRegistryAuthRefs(ctx context.Context, projectID string) ([]model.RegistryAuthRef, error) {
 	rows, err := r.db.QueryContext(ctx, `
-		SELECT DISTINCT sv.registry_auth_ref, ''
-		FROM spider_versions sv
-		JOIN spiders s ON s.id = sv.spider_id
-		WHERE s.project_id = $1 AND sv.registry_auth_ref != ''
-	`, projectID)
+			SELECT DISTINCT sv.registry_auth_ref, ''
+			FROM spider_versions sv
+			JOIN spiders s ON s.id = sv.spider_id
+			WHERE s.project_id = $1 AND sv.registry_auth_ref != ''
+		`, projectID)
 	if err != nil {
 		return nil, err
 	}
@@ -163,4 +149,11 @@ func (r *PostgresRepository) ListRegistryAuthRefs(ctx context.Context, projectID
 		return nil, err
 	}
 	return refs, nil
+}
+
+func nullIfEmpty(s string) any {
+	if s == "" {
+		return nil
+	}
+	return s
 }

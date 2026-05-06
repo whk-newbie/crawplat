@@ -27,7 +27,8 @@ func NewRouter(projectService *service.ProjectService) *gin.Engine {
 			return
 		}
 
-		project, err := projectService.Create(req.Code, req.Name)
+		orgID := c.GetHeader("X-Org-ID")
+		project, err := projectService.Create(orgID, req.Code, req.Name)
 		if err != nil {
 			if err == service.ErrProjectCodeExists {
 				c.JSON(http.StatusConflict, gin.H{"error": err.Error()})
@@ -42,8 +43,9 @@ func NewRouter(projectService *service.ProjectService) *gin.Engine {
 	router.GET("/api/v1/projects", func(c *gin.Context) {
 		limit := parseQueryInt(c, "limit", 20)
 		offset := parseQueryInt(c, "offset", 0)
+		orgID := c.GetHeader("X-Org-ID")
 
-		projects, err := projectService.List(limit, offset)
+		projects, err := projectService.List(orgID, limit, offset)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return

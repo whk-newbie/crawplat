@@ -53,7 +53,7 @@ type SchedulerService struct {
 // Repository 定义调度持久化接口，支持 PostgresRepository 和 memoryRepository 两种实现。
 type Repository interface {
 	Create(ctx context.Context, schedule model.Schedule) error
-	List(ctx context.Context, limit, offset int) ([]model.Schedule, error)
+	List(ctx context.Context, orgID string, limit, offset int) ([]model.Schedule, error)
 	AdvanceLastMaterialized(ctx context.Context, id string, previous *time.Time, next time.Time) (bool, error)
 	RestoreLastMaterialized(ctx context.Context, id string, previous *time.Time, current time.Time) error
 }
@@ -112,23 +112,33 @@ func (r *memoryRepository) Create(_ context.Context, schedule model.Schedule) er
 }
 
 // List 分页返回内存中 Schedule 的副本（线程安全）。
-func (r *memoryRepository) List(_ context.Context, limit, offset int) ([]model.Schedule, error) {
+func (r *memoryRepository) List(_ context.Context, orgID string, limit, offset int) ([]model.Schedule, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
+
+	filtered := r.schedules
+	if orgID != "" {
+		filtered = nil
+		for _, s := range r.schedules {
+			if s.OrganizationID == orgID {
+				filtered = append(filtered, s)
+			}
+		}
+	}
 
 	if limit <= 0 {
 		limit = 20
 	}
-	if offset >= len(r.schedules) {
+	if offset >= len(filtered) {
 		return []model.Schedule{}, nil
 	}
 	end := offset + limit
-	if end > len(r.schedules) {
-		end = len(r.schedules)
+	if end > len(filtered) {
+		end = len(filtered)
 	}
 
 	schedules := make([]model.Schedule, end-offset)
-	copy(schedules, r.schedules[offset:end])
+	copy(schedules, filtered[offset:end])
 	return schedules, nil
 }
 
@@ -303,7 +313,7 @@ func NewSchedulerService(repo Repository, executionClient ExecutionClient, optio
 // 参数校验：projectID、spiderID、name、cronExpr、image 为必填字段，任缺其一返回 ErrInvalidSchedule。
 // 命令切片会深拷贝后存储，防止外部修改。LastMaterializedAt 初始为 nil，表示从未物化。
 // 调度 ID 通过 UUID v4 生成，创建时间取自 now() 时钟。
-func (s *SchedulerService) Create(projectID, spiderID, spiderVersion, registryAuthRef, name, cronExpr, image string, command []string, enabled bool, retryLimit, retryDelaySeconds int) (model.Schedule, error) {
+func (s *SchedulerService) Create(orgID, projectID, spiderID, spiderVersion, registryAuthRef, name, cronExpr, image string, command []string, enabled bool, retryLimit, retryDelaySeconds int) (model.Schedule, error) {
 	if projectID == "" || spiderID == "" || name == "" || cronExpr == "" || image == "" {
 		return model.Schedule{}, ErrInvalidSchedule
 	}
@@ -332,8 +342,8 @@ func (s *SchedulerService) Create(projectID, spiderID, spiderVersion, registryAu
 }
 
 // List 分页返回调度记录，limit <= 0 时由 repo 层使用默认值。
-func (s *SchedulerService) List(limit, offset int) ([]model.Schedule, error) {
-	return s.repo.List(context.Background(), limit, offset)
+func (s *SchedulerService) List(orgID string, limit, offset int) ([]model.Schedule, error) {
+	return s.repo.List(context.Background(), orgID, limit, offset)
 }
 
 // MaterializeDue 是调度物化的核心函数，扫描所有已启用调度并将到期时间点物化为执行记录。
@@ -356,7 +366,7 @@ func (s *SchedulerService) List(limit, offset int) ([]model.Schedule, error) {
 //
 // 返回值：本次物化生成的执行记录总数。
 func (s *SchedulerService) MaterializeDue(ctx context.Context) (int, error) {
-	schedules, err := s.repo.List(ctx, 0, 0)
+	schedules, err := s.repo.List(ctx, "", 0, 0)
 	if err != nil {
 		return 0, err
 	}

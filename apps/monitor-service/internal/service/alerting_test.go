@@ -24,42 +24,42 @@ type fakeAlertRepo struct {
 	saveEventErr       error
 }
 
-func (r *fakeAlertRepo) Overview(_ context.Context) (model.Overview, error) {
+func (r *fakeAlertRepo) Overview(_ context.Context, _ string) (model.Overview, error) {
 	return model.Overview{}, nil
 }
-func (r *fakeAlertRepo) CreateAlertRule(_ context.Context, rule model.AlertRule) (model.AlertRule, error) {
+func (r *fakeAlertRepo) CreateAlertRule(_ context.Context, _ string, rule model.AlertRule) (model.AlertRule, error) {
 	if r.createRuleErr != nil {
 		return model.AlertRule{}, r.createRuleErr
 	}
 	r.createdRules = append(r.createdRules, rule)
 	return rule, nil
 }
-func (r *fakeAlertRepo) UpdateAlertRule(_ context.Context, _ string, _ model.AlertRulePatch) (model.AlertRule, bool, error) {
+func (r *fakeAlertRepo) UpdateAlertRule(_ context.Context, _, _ string, _ model.AlertRulePatch) (model.AlertRule, bool, error) {
 	return model.AlertRule{}, false, nil
 }
-func (r *fakeAlertRepo) ListAlertRules(_ context.Context) ([]model.AlertRule, error) {
+func (r *fakeAlertRepo) ListAlertRules(_ context.Context, _ string) ([]model.AlertRule, error) {
 	if r.listAlertRulesErr != nil {
 		return nil, r.listAlertRulesErr
 	}
 	return append([]model.AlertRule(nil), r.rules...), nil
 }
-func (r *fakeAlertRepo) ListAlertEvents(_ context.Context, _, _ int) ([]model.AlertEvent, error) {
+func (r *fakeAlertRepo) ListAlertEvents(_ context.Context, _ string, _, _ int) ([]model.AlertEvent, error) {
 	return nil, nil
 }
-func (r *fakeAlertRepo) CountAlertEvents(_ context.Context) (int64, error) { return 0, nil }
-func (r *fakeAlertRepo) ListFailedExecutionsSince(_ context.Context, _ time.Time, _ int) ([]model.FailedExecutionCandidate, error) {
+func (r *fakeAlertRepo) CountAlertEvents(_ context.Context, _ string) (int64, error) { return 0, nil }
+func (r *fakeAlertRepo) ListFailedExecutionsSince(_ context.Context, _ string, _ time.Time, _ int) ([]model.FailedExecutionCandidate, error) {
 	if r.listFailedExecErr != nil {
 		return nil, r.listFailedExecErr
 	}
 	return append([]model.FailedExecutionCandidate(nil), r.failedExecutions...), nil
 }
-func (r *fakeAlertRepo) ListOfflineNodes(_ context.Context, _ time.Time, _ int) ([]model.OfflineNodeCandidate, error) {
+func (r *fakeAlertRepo) ListOfflineNodes(_ context.Context, _ string, _ time.Time, _ int) ([]model.OfflineNodeCandidate, error) {
 	if r.listOfflineNodeErr != nil {
 		return nil, r.listOfflineNodeErr
 	}
 	return append([]model.OfflineNodeCandidate(nil), r.offlineNodes...), nil
 }
-func (r *fakeAlertRepo) LastAlertEventAt(_ context.Context, ruleID, dedupeKey string) (*time.Time, error) {
+func (r *fakeAlertRepo) LastAlertEventAt(_ context.Context, _ string, ruleID, dedupeKey string) (*time.Time, error) {
 	if r.lastEventByDedupe == nil {
 		return nil, nil
 	}
@@ -70,7 +70,7 @@ func (r *fakeAlertRepo) LastAlertEventAt(_ context.Context, ruleID, dedupeKey st
 	}
 	return nil, nil
 }
-func (r *fakeAlertRepo) SaveAlertEvent(_ context.Context, event model.AlertEventRecord) error {
+func (r *fakeAlertRepo) SaveAlertEvent(_ context.Context, _ string, event model.AlertEventRecord) error {
 	if r.saveEventErr != nil {
 		return r.saveEventErr
 	}
@@ -97,7 +97,7 @@ func TestCreateAlertRuleDefaultsForNodeOffline(t *testing.T) {
 	repo := &fakeAlertRepo{}
 	svc := NewMonitorService(repo)
 
-	rule, err := svc.CreateAlertRule(CreateAlertRuleInput{
+	rule, err := svc.CreateAlertRule("", CreateAlertRuleInput{
 		Name:       "node offline",
 		RuleType:   model.AlertRuleTypeNodeOffline,
 		Enabled:    true,
@@ -248,7 +248,7 @@ func TestCreateAlertRuleRejectsInvalidInput(t *testing.T) {
 	repo := &fakeAlertRepo{}
 	svc := NewMonitorService(repo)
 
-	if _, err := svc.CreateAlertRule(CreateAlertRuleInput{}); !errors.Is(err, ErrInvalidRuleName) {
+	if _, err := svc.CreateAlertRule("", CreateAlertRuleInput{}); !errors.Is(err, ErrInvalidRuleName) {
 		t.Fatalf("expected ErrInvalidRuleName, got %v", err)
 	}
 }

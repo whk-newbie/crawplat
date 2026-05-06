@@ -19,48 +19,48 @@ type WebhookDeliverer interface {
 }
 
 type Repository interface {
-	Overview(ctx context.Context) (model.Overview, error)
-	CreateAlertRule(ctx context.Context, rule model.AlertRule) (model.AlertRule, error)
-	UpdateAlertRule(ctx context.Context, id string, patch model.AlertRulePatch) (model.AlertRule, bool, error)
-	ListAlertRules(ctx context.Context) ([]model.AlertRule, error)
-	ListAlertEvents(ctx context.Context, limit, offset int) ([]model.AlertEvent, error)
-	CountAlertEvents(ctx context.Context) (int64, error)
-	ListFailedExecutionsSince(ctx context.Context, since time.Time, limit int) ([]model.FailedExecutionCandidate, error)
-	ListOfflineNodes(ctx context.Context, threshold time.Time, limit int) ([]model.OfflineNodeCandidate, error)
-	LastAlertEventAt(ctx context.Context, ruleID, dedupeKey string) (*time.Time, error)
-	SaveAlertEvent(ctx context.Context, event model.AlertEventRecord) error
+	Overview(ctx context.Context, orgID string) (model.Overview, error)
+	CreateAlertRule(ctx context.Context, orgID string, rule model.AlertRule) (model.AlertRule, error)
+	UpdateAlertRule(ctx context.Context, orgID, id string, patch model.AlertRulePatch) (model.AlertRule, bool, error)
+	ListAlertRules(ctx context.Context, orgID string) ([]model.AlertRule, error)
+	ListAlertEvents(ctx context.Context, orgID string, limit, offset int) ([]model.AlertEvent, error)
+	CountAlertEvents(ctx context.Context, orgID string) (int64, error)
+	ListFailedExecutionsSince(ctx context.Context, orgID string, since time.Time, limit int) ([]model.FailedExecutionCandidate, error)
+	ListOfflineNodes(ctx context.Context, orgID string, threshold time.Time, limit int) ([]model.OfflineNodeCandidate, error)
+	LastAlertEventAt(ctx context.Context, orgID, ruleID, dedupeKey string) (*time.Time, error)
+	SaveAlertEvent(ctx context.Context, orgID string, event model.AlertEventRecord) error
 }
 
 type memoryRepository struct{}
 
-func (r *memoryRepository) Overview(_ context.Context) (model.Overview, error) {
+func (r *memoryRepository) Overview(_ context.Context, _ string) (model.Overview, error) {
 	return model.Overview{}, nil
 }
-func (r *memoryRepository) CreateAlertRule(_ context.Context, rule model.AlertRule) (model.AlertRule, error) {
+func (r *memoryRepository) CreateAlertRule(_ context.Context, _ string, rule model.AlertRule) (model.AlertRule, error) {
 	return rule, nil
 }
-func (r *memoryRepository) UpdateAlertRule(_ context.Context, _ string, patch model.AlertRulePatch) (model.AlertRule, bool, error) {
+func (r *memoryRepository) UpdateAlertRule(_ context.Context, _, _ string, patch model.AlertRulePatch) (model.AlertRule, bool, error) {
 	return model.AlertRule{}, false, nil
 }
-func (r *memoryRepository) ListAlertRules(_ context.Context) ([]model.AlertRule, error) {
+func (r *memoryRepository) ListAlertRules(_ context.Context, _ string) ([]model.AlertRule, error) {
 	return nil, nil
 }
-func (r *memoryRepository) ListAlertEvents(_ context.Context, _, _ int) ([]model.AlertEvent, error) {
+func (r *memoryRepository) ListAlertEvents(_ context.Context, _ string, _, _ int) ([]model.AlertEvent, error) {
 	return nil, nil
 }
-func (r *memoryRepository) CountAlertEvents(_ context.Context) (int64, error) {
+func (r *memoryRepository) CountAlertEvents(_ context.Context, _ string) (int64, error) {
 	return 0, nil
 }
-func (r *memoryRepository) ListFailedExecutionsSince(_ context.Context, _ time.Time, _ int) ([]model.FailedExecutionCandidate, error) {
+func (r *memoryRepository) ListFailedExecutionsSince(_ context.Context, _ string, _ time.Time, _ int) ([]model.FailedExecutionCandidate, error) {
 	return nil, nil
 }
-func (r *memoryRepository) ListOfflineNodes(_ context.Context, _ time.Time, _ int) ([]model.OfflineNodeCandidate, error) {
+func (r *memoryRepository) ListOfflineNodes(_ context.Context, _ string, _ time.Time, _ int) ([]model.OfflineNodeCandidate, error) {
 	return nil, nil
 }
-func (r *memoryRepository) LastAlertEventAt(_ context.Context, _, _ string) (*time.Time, error) {
+func (r *memoryRepository) LastAlertEventAt(_ context.Context, _, _, _ string) (*time.Time, error) {
 	return nil, nil
 }
-func (r *memoryRepository) SaveAlertEvent(_ context.Context, _ model.AlertEventRecord) error {
+func (r *memoryRepository) SaveAlertEvent(_ context.Context, _ string, _ model.AlertEventRecord) error {
 	return nil
 }
 
@@ -81,11 +81,11 @@ func (s *MonitorService) WithWebhookDeliverer(deliverer WebhookDeliverer) *Monit
 	return s
 }
 
-func (s *MonitorService) Overview() (model.Overview, error) {
-	return s.repo.Overview(context.Background())
+func (s *MonitorService) Overview(orgID string) (model.Overview, error) {
+	return s.repo.Overview(context.Background(), orgID)
 }
 
-func (s *MonitorService) UpdateAlertRule(input UpdateAlertRuleInput) (model.AlertRule, error) {
+func (s *MonitorService) UpdateAlertRule(orgID string, input UpdateAlertRuleInput) (model.AlertRule, error) {
 	if input.ID == "" {
 		return model.AlertRule{}, ErrInvalidRuleID
 	}
@@ -98,7 +98,7 @@ func (s *MonitorService) UpdateAlertRule(input UpdateAlertRuleInput) (model.Aler
 		OfflineGraceSeconds: input.OfflineGraceSeconds,
 		UpdatedAt:           time.Now().UTC(),
 	}
-	rule, found, err := s.repo.UpdateAlertRule(context.Background(), input.ID, patch)
+	rule, found, err := s.repo.UpdateAlertRule(context.Background(), orgID, input.ID, patch)
 	if err != nil {
 		return model.AlertRule{}, err
 	}
@@ -108,13 +108,13 @@ func (s *MonitorService) UpdateAlertRule(input UpdateAlertRuleInput) (model.Aler
 	return rule, nil
 }
 
-func (s *MonitorService) ListAlertRules() ([]model.AlertRule, error) {
-	return s.repo.ListAlertRules(context.Background())
+func (s *MonitorService) ListAlertRules(orgID string) ([]model.AlertRule, error) {
+	return s.repo.ListAlertRules(context.Background(), orgID)
 }
 
-func (s *MonitorService) ListAlertEvents(limit, offset int) ([]model.AlertEvent, error) {
+func (s *MonitorService) ListAlertEvents(orgID string, limit, offset int) ([]model.AlertEvent, error) {
 	if limit <= 0 {
 		limit = 20
 	}
-	return s.repo.ListAlertEvents(context.Background(), limit, offset)
+	return s.repo.ListAlertEvents(context.Background(), orgID, limit, offset)
 }

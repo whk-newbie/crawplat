@@ -1,6 +1,3 @@
-// 该文件为 Service 层的单元测试，使用 fakeSpiderRepo 替代真实数据库，
-// 验证业务校验逻辑（language/runtime/image）、ID 生成、分页、版本管理和 registry auth ref 行为。
-// 不依赖数据库或 HTTP 层。
 package service
 
 import (
@@ -21,12 +18,15 @@ func (r *fakeSpiderRepo) Create(_ context.Context, spider model.Spider) error {
 	return nil
 }
 
-func (r *fakeSpiderRepo) ListByProject(_ context.Context, projectID string, limit, offset int) ([]model.Spider, error) {
+func (r *fakeSpiderRepo) ListByProject(_ context.Context, orgID, projectID string, limit, offset int) ([]model.Spider, error) {
 	if limit <= 0 {
 		limit = 20
 	}
 	var spiders []model.Spider
 	for _, spider := range r.spiders {
+		if orgID != "" && spider.OrganizationID != orgID {
+			continue
+		}
 		if spider.ProjectID == projectID {
 			spiders = append(spiders, spider)
 		}
@@ -71,7 +71,7 @@ func (r *fakeSpiderRepo) ListRegistryAuthRefs(_ context.Context, _ string) ([]mo
 
 func TestCreateSpiderRejectsUnknownLanguage(t *testing.T) {
 	svc := NewSpiderService(&fakeSpiderRepo{})
-	_, err := svc.Create("p1", "bad", "ruby", "docker", "crawler/go:latest", []string{"./crawler"})
+	_, err := svc.Create("", "p1", "bad", "ruby", "docker", "crawler/go:latest", []string{"./crawler"})
 	if err == nil {
 		t.Fatal("expected validation error")
 	}
@@ -82,7 +82,7 @@ func TestCreateSpiderRejectsUnknownLanguage(t *testing.T) {
 
 func TestCreateSpiderRejectsInvalidRuntime(t *testing.T) {
 	svc := NewSpiderService(&fakeSpiderRepo{})
-	_, err := svc.Create("p1", "bad", "go", "vm", "crawler/go:latest", []string{"./crawler"})
+	_, err := svc.Create("", "p1", "bad", "go", "vm", "crawler/go:latest", []string{"./crawler"})
 	if err == nil {
 		t.Fatal("expected validation error")
 	}
@@ -93,7 +93,7 @@ func TestCreateSpiderRejectsInvalidRuntime(t *testing.T) {
 
 func TestCreateSpiderRequiresImageForDockerRuntime(t *testing.T) {
 	svc := NewSpiderService(&fakeSpiderRepo{})
-	_, err := svc.Create("p1", "crawler", "go", "docker", "", []string{"./crawler"})
+	_, err := svc.Create("", "p1", "crawler", "go", "docker", "", []string{"./crawler"})
 	if err == nil {
 		t.Fatal("expected missing image to fail")
 	}
@@ -106,12 +106,15 @@ func TestCreateSpiderAssignsIDAndPersistsSpider(t *testing.T) {
 	repo := &fakeSpiderRepo{}
 	svc := NewSpiderService(repo)
 
-	spider, err := svc.Create("p1", "crawler", "python", "docker", "crawler/python:latest", []string{"python", "main.py"})
+	spider, err := svc.Create("org-1", "p1", "crawler", "python", "docker", "crawler/python:latest", []string{"python", "main.py"})
 	if err != nil {
 		t.Fatalf("expected create success, got error: %v", err)
 	}
 	if spider.ID == "" {
 		t.Fatal("expected generated id")
+	}
+	if spider.OrganizationID != "org-1" {
+		t.Fatalf("expected OrganizationID org-1, got %s", spider.OrganizationID)
 	}
 	if spider.ProjectID != "p1" || spider.Name != "crawler" || spider.Language != "python" || spider.Runtime != "docker" {
 		t.Fatalf("unexpected spider contents: %+v", spider)
@@ -123,7 +126,7 @@ func TestCreateSpiderAssignsIDAndPersistsSpider(t *testing.T) {
 		t.Fatalf("expected command to persist, got %#v", spider.Command)
 	}
 
-	listed, err := svc.List("p1", 20, 0)
+	listed, err := svc.List("org-1", "p1", 20, 0)
 	if err != nil {
 		t.Fatalf("List returned error: %v", err)
 	}
@@ -138,16 +141,16 @@ func TestCreateSpiderAssignsIDAndPersistsSpider(t *testing.T) {
 func TestListFiltersByProjectID(t *testing.T) {
 	svc := NewSpiderService(&fakeSpiderRepo{})
 
-	spiderA, err := svc.Create("p1", "crawler-a", "go", "docker", "crawler/go-a:latest", []string{"./crawler-a"})
+	spiderA, err := svc.Create("", "p1", "crawler-a", "go", "docker", "crawler/go-a:latest", []string{"./crawler-a"})
 	if err != nil {
 		t.Fatalf("expected create success, got error: %v", err)
 	}
-	spiderB, err := svc.Create("p2", "crawler-b", "python", "host", "", []string{"python", "main.py"})
+	spiderB, err := svc.Create("", "p2", "crawler-b", "python", "host", "", []string{"python", "main.py"})
 	if err != nil {
 		t.Fatalf("expected create success, got error: %v", err)
 	}
 
-	listedP1, err := svc.List("p1", 20, 0)
+	listedP1, err := svc.List("", "p1", 20, 0)
 	if err != nil {
 		t.Fatalf("List returned error: %v", err)
 	}
@@ -158,7 +161,7 @@ func TestListFiltersByProjectID(t *testing.T) {
 		t.Fatalf("expected p1 spider %+v, got %+v", spiderA, listedP1[0])
 	}
 
-	listedP2, err := svc.List("p2", 20, 0)
+	listedP2, err := svc.List("", "p2", 20, 0)
 	if err != nil {
 		t.Fatalf("List returned error: %v", err)
 	}
@@ -184,7 +187,7 @@ func TestCreateVersionAndList(t *testing.T) {
 	repo := &fakeSpiderRepo{}
 	svc := NewSpiderService(repo)
 
-	spider, err := svc.Create("p1", "crawler", "go", "docker", "img:latest", nil)
+	spider, err := svc.Create("org-1", "p1", "crawler", "go", "docker", "img:latest", nil)
 	if err != nil {
 		t.Fatalf("Create returned error: %v", err)
 	}
@@ -198,6 +201,9 @@ func TestCreateVersionAndList(t *testing.T) {
 	}
 	if v.SpiderID != spider.ID {
 		t.Fatalf("expected spiderID %s, got %s", spider.ID, v.SpiderID)
+	}
+	if v.OrganizationID != "org-1" {
+		t.Fatalf("expected OrganizationID org-1 on version, got %s", v.OrganizationID)
 	}
 	if v.RegistryAuthRef != "my-registry" {
 		t.Fatalf("expected registryAuthRef my-registry, got %s", v.RegistryAuthRef)
@@ -222,5 +228,54 @@ func TestListRegistryAuthRefs(t *testing.T) {
 	}
 	if refs == nil {
 		t.Fatal("expected non-nil slice, got nil")
+	}
+}
+
+func TestSpiderServiceListFiltersByOrg(t *testing.T) {
+	repo := &fakeSpiderRepo{}
+	svc := NewSpiderService(repo)
+
+	if _, err := svc.Create("org-a", "p1", "spider-org-a", "go", "host", "", nil); err != nil {
+		t.Fatalf("Create returned error: %v", err)
+	}
+	if _, err := svc.Create("org-b", "p1", "spider-org-b", "go", "host", "", nil); err != nil {
+		t.Fatalf("Create returned error: %v", err)
+	}
+
+	listed, err := svc.List("org-a", "p1", 20, 0)
+	if err != nil {
+		t.Fatalf("List returned error: %v", err)
+	}
+	if len(listed) != 1 {
+		t.Fatalf("expected 1 spider for org-a, got %d", len(listed))
+	}
+	if listed[0].Name != "spider-org-a" {
+		t.Fatalf("expected spider-org-a, got %s", listed[0].Name)
+	}
+}
+
+func TestSpiderServiceCreateAllowsSameNameInDifferentOrgs(t *testing.T) {
+	repo := &fakeSpiderRepo{}
+	svc := NewSpiderService(repo)
+
+	s1, err := svc.Create("org-a", "p1", "crawler", "go", "host", "", nil)
+	if err != nil {
+		t.Fatalf("Create returned error: %v", err)
+	}
+	s2, err := svc.Create("org-b", "p1", "crawler", "go", "host", "", nil)
+	if err != nil {
+		t.Fatalf("Create returned error: %v", err)
+	}
+	if s1.ID == s2.ID {
+		t.Fatal("expected different IDs for different orgs")
+	}
+
+	listedA, _ := svc.List("org-a", "p1", 20, 0)
+	listedB, _ := svc.List("org-b", "p1", 20, 0)
+	if len(listedA) != 1 || listedA[0].OrganizationID != "org-a" {
+		t.Fatalf("org-a should see 1 spider, got %d", len(listedA))
+	}
+	if len(listedB) != 1 || listedB[0].OrganizationID != "org-b" {
+		t.Fatalf("org-b should see 1 spider, got %d", len(listedB))
 	}
 }

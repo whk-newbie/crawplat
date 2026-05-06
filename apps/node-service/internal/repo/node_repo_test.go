@@ -33,7 +33,7 @@ func newRedisNodeRepo(t *testing.T) *RedisRepository {
 
 func TestNodeRepoStoresHeartbeatWithTTL(t *testing.T) {
 	repo := newRedisNodeRepo(t)
-	node, err := repo.UpsertHeartbeat(context.Background(), "node-1", []string{"docker", "go"})
+	node, err := repo.UpsertHeartbeat(context.Background(), "", "node-1", []string{"docker", "go"})
 	if err != nil {
 		t.Fatalf("UpsertHeartbeat returned error: %v", err)
 	}
@@ -41,7 +41,7 @@ func TestNodeRepoStoresHeartbeatWithTTL(t *testing.T) {
 		t.Fatalf("unexpected node: %#v", node)
 	}
 
-	nodes, err := repo.ListOnline(context.Background(), 20, 0)
+	nodes, err := repo.ListOnline(context.Background(), "", 20, 0)
 	if err != nil {
 		t.Fatalf("ListOnline returned error: %v", err)
 	}
@@ -52,11 +52,11 @@ func TestNodeRepoStoresHeartbeatWithTTL(t *testing.T) {
 
 func TestNodeRepoGetByID(t *testing.T) {
 	repo := newRedisNodeRepo(t)
-	if _, err := repo.UpsertHeartbeat(context.Background(), "node-1", []string{"docker", "go"}); err != nil {
+	if _, err := repo.UpsertHeartbeat(context.Background(), "", "node-1", []string{"docker", "go"}); err != nil {
 		t.Fatalf("UpsertHeartbeat returned error: %v", err)
 	}
 
-	node, err := repo.GetByID(context.Background(), "node-1")
+	node, err := repo.GetByID(context.Background(), "", "node-1")
 	if err != nil {
 		t.Fatalf("GetByID returned error: %v", err)
 	}
@@ -67,7 +67,7 @@ func TestNodeRepoGetByID(t *testing.T) {
 
 func TestNodeRepoGetByIDNotFound(t *testing.T) {
 	repo := newRedisNodeRepo(t)
-	_, err := repo.GetByID(context.Background(), "missing")
+	_, err := repo.GetByID(context.Background(), "", "missing")
 	if err != service.ErrNodeNotFound {
 		t.Fatalf("expected ErrNodeNotFound, got %v", err)
 	}

@@ -86,11 +86,11 @@ func TestListSpidersReturnsOnlyRequestedProject(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
 	svc := service.NewSpiderService()
-	spiderP1, err := svc.Create("p1", "crawler-a", "go", "docker", "crawler/go-a:latest", []string{"./crawler-a"})
+	spiderP1, err := svc.Create("", "p1", "crawler-a", "go", "docker", "crawler/go-a:latest", []string{"./crawler-a"})
 	if err != nil {
 		t.Fatalf("expected create success, got error: %v", err)
 	}
-	spiderP2, err := svc.Create("p2", "crawler-b", "python", "host", "", []string{"python", "main.py"})
+	spiderP2, err := svc.Create("", "p2", "crawler-b", "python", "host", "", []string{"python", "main.py"})
 	if err != nil {
 		t.Fatalf("expected create success, got error: %v", err)
 	}
@@ -148,7 +148,7 @@ func TestListSpidersWithPagination(t *testing.T) {
 	svc := service.NewSpiderService()
 	for i := 0; i < 5; i++ {
 		code := "spider-" + string(rune('a'+i))
-		if _, err := svc.Create("p1", code, "go", "host", "", nil); err != nil {
+		if _, err := svc.Create("", "p1", code, "go", "host", "", nil); err != nil {
 			t.Fatalf("Create returned error: %v", err)
 		}
 	}
@@ -175,7 +175,7 @@ func TestCreateVersionAndListVersions(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
 	svc := service.NewSpiderService()
-	spider, err := svc.Create("p1", "crawler", "go", "docker", "img:latest", nil)
+	spider, err := svc.Create("", "p1", "crawler", "go", "docker", "img:latest", nil)
 	if err != nil {
 		t.Fatalf("Create returned error: %v", err)
 	}

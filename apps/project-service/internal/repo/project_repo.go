@@ -21,26 +21,29 @@ func NewPostgresRepository(db *sql.DB) *PostgresRepository {
 }
 
 // Create 向 projects 表插入一条记录。
+// orgID 为空时插入 NULL（向后兼容），Phase 4 加固时改为必填。
 func (r *PostgresRepository) Create(ctx context.Context, project model.Project) error {
 	_, err := r.db.ExecContext(ctx, `
-		INSERT INTO projects (id, code, name)
-		VALUES ($1, $2, $3)
-	`, project.ID, project.Code, project.Name)
+		INSERT INTO projects (id, code, name, organization_id)
+		VALUES ($1, $2, $3, $4)
+	`, project.ID, project.Code, project.Name, nullIfEmpty(project.OrganizationID))
 	return err
 }
 
 // List 分页查询项目，按 created_at DESC, id DESC 排序。
+// orgID 非空时仅返回该组织的项目，为空时返回全部（向后兼容）。
 // limit <= 0 时默认返回 20 条。
-func (r *PostgresRepository) List(ctx context.Context, limit, offset int) ([]model.Project, error) {
+func (r *PostgresRepository) List(ctx context.Context, orgID string, limit, offset int) ([]model.Project, error) {
 	if limit <= 0 {
 		limit = 20
 	}
 	rows, err := r.db.QueryContext(ctx, `
 		SELECT id, code, name
 		FROM projects
+		WHERE ($1 = '' OR organization_id = $1)
 		ORDER BY created_at DESC, id DESC
-		LIMIT $1 OFFSET $2
-	`, limit, offset)
+		LIMIT $2 OFFSET $3
+	`, orgID, limit, offset)
 	if err != nil {
 		return nil, err
 	}
@@ -61,10 +64,19 @@ func (r *PostgresRepository) List(ctx context.Context, limit, offset int) ([]mod
 }
 
 // ExistsByCode 检查指定 code 的项目是否已存在。
-func (r *PostgresRepository) ExistsByCode(ctx context.Context, code string) (bool, error) {
+// orgID 非空时仅在组织范围内检查唯一性。
+func (r *PostgresRepository) ExistsByCode(ctx context.Context, orgID, code string) (bool, error) {
 	var exists bool
 	err := r.db.QueryRowContext(ctx, `
-		SELECT EXISTS(SELECT 1 FROM projects WHERE code = $1)
-	`, code).Scan(&exists)
+		SELECT EXISTS(SELECT 1 FROM projects WHERE ($1 = '' OR organization_id = $1) AND code = $2)
+	`, orgID, code).Scan(&exists)
 	return exists, err
+}
+
+// nullIfEmpty 将空字符串转为 nil，用于 SQL NULLABLE 参数。
+func nullIfEmpty(s string) any {
+	if s == "" {
+		return nil
+	}
+	return s
 }

@@ -39,7 +39,7 @@ type ExecutionService struct {
 type ExecutionRepository interface {
 	Create(ctx context.Context, exec model.Execution) (model.Execution, error)
 	Get(ctx context.Context, id string) (model.Execution, error)
-	List(ctx context.Context, limit, offset int, status string) (*ListResult, error)
+	List(ctx context.Context, orgID string, limit, offset int, status string) (*ListResult, error)
 	MarkRunning(ctx context.Context, id, nodeID string, startedAt time.Time) (model.Execution, error)
 	Complete(ctx context.Context, id string, finishedAt time.Time) (model.Execution, error)
 	Fail(ctx context.Context, id, errorMessage string, finishedAt time.Time) (model.Execution, error)
@@ -88,6 +88,7 @@ type CreateExecutionInput struct {
 	Image              string
 	Command            []string
 	TriggerSource      string
+	OrgID              string
 	CpuCores           float64
 	MemoryMB           int
 	TimeoutSeconds     int
@@ -137,6 +138,7 @@ func (s *ExecutionService) Create(ctx context.Context, input CreateExecutionInpu
 	exec := model.Execution{
 		ID:                uuid.NewString(),
 		ProjectID:         input.ProjectID,
+		OrganizationID:    input.OrgID,
 		SpiderID:          input.SpiderID,
 		SpiderVersion:     input.SpiderVersion,
 		RegistryAuthRef:   input.RegistryAuthRef,
@@ -237,8 +239,8 @@ func (s *ExecutionService) Get(ctx context.Context, id string) (model.Execution,
 }
 
 // ListExecutions 分页查询执行记录，支持按 status 过滤。
-func (s *ExecutionService) ListExecutions(ctx context.Context, limit, offset int, status string) (*ListResult, error) {
-	return s.execRepo.List(ctx, limit, offset, status)
+func (s *ExecutionService) ListExecutions(ctx context.Context, orgID string, limit, offset int, status string) (*ListResult, error) {
+	return s.execRepo.List(ctx, orgID, limit, offset, status)
 }
 
 // AppendLog 向指定执行追加一条日志。

@@ -47,16 +47,16 @@ type NodeService struct {
 }
 
 type Repository interface {
-	UpsertHeartbeat(ctx context.Context, name string, capabilities []string) (Node, error)
-	ListOnline(ctx context.Context, limit, offset int) ([]Node, error)
-	GetByID(ctx context.Context, nodeID string) (Node, error)
-	ListRecentExecutions(ctx context.Context, nodeID string, query ExecutionQuery) ([]NodeExecution, error)
+	UpsertHeartbeat(ctx context.Context, orgID, name string, capabilities []string) (Node, error)
+	ListOnline(ctx context.Context, orgID string, limit, offset int) ([]Node, error)
+	GetByID(ctx context.Context, orgID, nodeID string) (Node, error)
+	ListRecentExecutions(ctx context.Context, orgID, nodeID string, query ExecutionQuery) ([]NodeExecution, error)
 }
 
 type CatalogRepository interface {
 	Repository
-	UpsertCatalog(ctx context.Context, name string, capabilities []string, seenAt time.Time) (Node, error)
-	ListCatalog(ctx context.Context) ([]Node, error)
+	UpsertCatalog(ctx context.Context, orgID, name string, capabilities []string, seenAt time.Time) (Node, error)
+	ListCatalog(ctx context.Context, orgID string) ([]Node, error)
 	ListHeartbeatHistory(ctx context.Context, nodeID string, limit int) ([]NodeHeartbeat, error)
 }
 
@@ -65,11 +65,12 @@ type memoryRepository struct {
 	nodes map[string]Node
 }
 
-func (r *memoryRepository) UpsertHeartbeat(_ context.Context, name string, capabilities []string) (Node, error) {
+func (r *memoryRepository) UpsertHeartbeat(_ context.Context, orgID, name string, capabilities []string) (Node, error) {
 	node := Node{
-		ID:           name,
-		Name:         name,
-		Status:       "online",
+		ID:             name,
+		Name:           name,
+		OrganizationID: orgID,
+		Status:         "online",
 		Capabilities: append([]string(nil), capabilities...),
 		LastSeenAt:   time.Now(),
 	}
@@ -84,12 +85,15 @@ func (r *memoryRepository) UpsertHeartbeat(_ context.Context, name string, capab
 	return node, nil
 }
 
-func (r *memoryRepository) ListOnline(_ context.Context, limit, offset int) ([]Node, error) {
+func (r *memoryRepository) ListOnline(_ context.Context, orgID string, limit, offset int) ([]Node, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
 	nodes := make([]Node, 0, len(r.nodes))
 	for _, node := range r.nodes {
+		if orgID != "" && node.OrganizationID != orgID {
+			continue
+		}
 		nodes = append(nodes, node)
 	}
 	if offset >= len(nodes) {
@@ -102,7 +106,7 @@ func (r *memoryRepository) ListOnline(_ context.Context, limit, offset int) ([]N
 	return nodes[offset:end], nil
 }
 
-func (r *memoryRepository) GetByID(_ context.Context, nodeID string) (Node, error) {
+func (r *memoryRepository) GetByID(_ context.Context, orgID, nodeID string) (Node, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
@@ -110,10 +114,13 @@ func (r *memoryRepository) GetByID(_ context.Context, nodeID string) (Node, erro
 	if !ok {
 		return Node{}, ErrNodeNotFound
 	}
+	if orgID != "" && node.OrganizationID != orgID {
+		return Node{}, ErrNodeNotFound
+	}
 	return node, nil
 }
 
-func (r *memoryRepository) ListRecentExecutions(_ context.Context, nodeID string, query ExecutionQuery) ([]NodeExecution, error) {
+func (r *memoryRepository) ListRecentExecutions(_ context.Context, orgID, nodeID string, query ExecutionQuery) ([]NodeExecution, error) {
 	return []NodeExecution{}, nil
 }
 
@@ -124,21 +131,21 @@ func NewNodeService(repos ...Repository) *NodeService {
 	return &NodeService{repo: &memoryRepository{nodes: make(map[string]Node)}}
 }
 
-func (s *NodeService) Heartbeat(name string, capabilities []string) (Node, error) {
-	return s.repo.UpsertHeartbeat(context.Background(), name, capabilities)
+func (s *NodeService) Heartbeat(orgID, name string, capabilities []string) (Node, error) {
+	return s.repo.UpsertHeartbeat(context.Background(), orgID, name, capabilities)
 }
 
-func (s *NodeService) List(limit, offset int) ([]Node, error) {
-	return s.repo.ListOnline(context.Background(), limit, offset)
+func (s *NodeService) List(orgID string, limit, offset int) ([]Node, error) {
+	return s.repo.ListOnline(context.Background(), orgID, limit, offset)
 }
 
-func (s *NodeService) GetByID(nodeID string) (Node, error) {
-	return s.repo.GetByID(context.Background(), nodeID)
+func (s *NodeService) GetByID(orgID, nodeID string) (Node, error) {
+	return s.repo.GetByID(context.Background(), orgID, nodeID)
 }
 
-func (s *NodeService) ListRecentExecutions(nodeID string, query ExecutionQuery) ([]NodeExecution, error) {
+func (s *NodeService) ListRecentExecutions(orgID, nodeID string, query ExecutionQuery) ([]NodeExecution, error) {
 	if query.Limit <= 0 {
 		query.Limit = 20
 	}
-	return s.repo.ListRecentExecutions(context.Background(), nodeID, query)
+	return s.repo.ListRecentExecutions(context.Background(), orgID, nodeID, query)
 }

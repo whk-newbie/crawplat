@@ -39,7 +39,8 @@ func NewRouter(spiderService *service.SpiderService) *gin.Engine {
 			return
 		}
 
-		spider, err := spiderService.Create(c.Param("projectId"), req.Name, req.Language, req.Runtime, req.Image, req.Command)
+		orgID := c.GetHeader("X-Org-ID")
+		spider, err := spiderService.Create(orgID, c.Param("projectId"), req.Name, req.Language, req.Runtime, req.Image, req.Command)
 		if err != nil {
 			switch err {
 			case service.ErrInvalidLanguage, service.ErrInvalidRuntime, service.ErrImageRequired:
@@ -57,7 +58,8 @@ func NewRouter(spiderService *service.SpiderService) *gin.Engine {
 		limit := parseQueryInt(c, "limit", 20)
 		offset := parseQueryInt(c, "offset", 0)
 
-		spiders, err := spiderService.List(c.Param("projectId"), limit, offset)
+		orgID := c.GetHeader("X-Org-ID")
+		spiders, err := spiderService.List(orgID, c.Param("projectId"), limit, offset)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return

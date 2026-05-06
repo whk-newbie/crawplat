@@ -35,9 +35,9 @@ func (r *ExecutionRepository) Create(ctx context.Context, exec model.Execution) 
 	}
 
 	_, err = r.db.ExecContext(ctx, `
-		INSERT INTO executions (id, project_id, spider_id, spider_version, registry_auth_ref, cpu_cores, memory_mb, timeout_seconds, node_id, status, trigger_source, image, command, retry_limit, retry_count, retry_delay_seconds, retry_of_execution_id, started_at, finished_at, error_message, retried_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21)
-	`, exec.ID, exec.ProjectID, exec.SpiderID, nullableString(exec.SpiderVersion), nullableString(exec.RegistryAuthRef), exec.CpuCores, exec.MemoryMB, exec.TimeoutSeconds, nullableString(exec.NodeID), exec.Status, exec.TriggerSource, exec.Image, string(command), exec.RetryLimit, exec.RetryCount, exec.RetryDelaySeconds, nullableString(exec.RetryOfExecutionID), exec.StartedAt, exec.FinishedAt, nullableString(exec.ErrorMessage), exec.RetriedAt)
+		INSERT INTO executions (id, project_id, spider_id, spider_version, registry_auth_ref, cpu_cores, memory_mb, timeout_seconds, node_id, status, trigger_source, image, command, retry_limit, retry_count, retry_delay_seconds, retry_of_execution_id, organization_id, started_at, finished_at, error_message, retried_at)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22)
+	`, exec.ID, exec.ProjectID, exec.SpiderID, nullableString(exec.SpiderVersion), nullableString(exec.RegistryAuthRef), exec.CpuCores, exec.MemoryMB, exec.TimeoutSeconds, nullableString(exec.NodeID), exec.Status, exec.TriggerSource, exec.Image, string(command), exec.RetryLimit, exec.RetryCount, exec.RetryDelaySeconds, nullableString(exec.RetryOfExecutionID), nullableString(exec.OrganizationID), exec.StartedAt, exec.FinishedAt, nullableString(exec.ErrorMessage), exec.RetriedAt)
 	if err != nil {
 		return model.Execution{}, err
 	}
@@ -63,12 +63,13 @@ func (r *ExecutionRepository) Get(ctx context.Context, id string) (model.Executi
 	)
 
 	err := r.db.QueryRowContext(ctx, `
-		SELECT id, project_id, spider_id, spider_version, registry_auth_ref, cpu_cores, memory_mb, timeout_seconds, node_id, status, trigger_source, image, command, error_message, created_at, started_at, finished_at, retry_limit, retry_count, retry_delay_seconds, retry_of_execution_id, retried_at
+		SELECT id, project_id, organization_id, spider_id, spider_version, registry_auth_ref, cpu_cores, memory_mb, timeout_seconds, node_id, status, trigger_source, image, command, error_message, created_at, started_at, finished_at, retry_limit, retry_count, retry_delay_seconds, retry_of_execution_id, retried_at
 		FROM executions
 		WHERE id = $1
 	`, id).Scan(
 		&exec.ID,
 		&exec.ProjectID,
+			&exec.OrganizationID,
 		&exec.SpiderID,
 		&spiderVersion,
 		&registryAuthRef,
@@ -133,12 +134,14 @@ func (r *ExecutionRepository) Get(ctx context.Context, id string) (model.Executi
 
 // List 分页查询执行记录，支持按 status 过滤。
 // limit 和 offset 控制分页；status 为空时返回所有状态。
-func (r *ExecutionRepository) List(ctx context.Context, limit, offset int, status string) (*service.ListResult, error) {
+func (r *ExecutionRepository) List(ctx context.Context, orgID string, limit, offset int, status string) (*service.ListResult, error) {
 	var total int64
 	countQuery := `SELECT COUNT(*) FROM executions`
 	args := []any{}
+	countQuery += ` WHERE ($1 = '' OR organization_id = $1)`
+	args = append(args, orgID)
 	if status != "" {
-		countQuery += ` WHERE status = $1`
+		countQuery += ` AND status = $2`
 		args = append(args, status)
 	}
 	if err := r.db.QueryRowContext(ctx, countQuery, args...).Scan(&total); err != nil {
@@ -148,14 +151,15 @@ func (r *ExecutionRepository) List(ctx context.Context, limit, offset int, statu
 	query := `
 		SELECT id, project_id, spider_id, spider_version, registry_auth_ref, cpu_cores, memory_mb, timeout_seconds, node_id, status, trigger_source, image, command, error_message, created_at, started_at, finished_at, retry_limit, retry_count, retry_delay_seconds, retry_of_execution_id, retried_at
 		FROM executions
+		WHERE ($1 = '' OR organization_id = $1)
 	`
-	queryArgs := []any{}
+	queryArgs := []any{orgID}
 	if status != "" {
-		query += ` WHERE status = $3`
+		query += ` AND status = $2`
 		queryArgs = append(queryArgs, status)
 	}
-	query += ` ORDER BY created_at DESC LIMIT $1 OFFSET $2`
-	queryArgs = append([]any{limit, offset}, queryArgs...)
+	query += ` ORDER BY created_at DESC LIMIT $3 OFFSET $4`
+	queryArgs = append(queryArgs, limit, offset)
 
 	rows, err := r.db.QueryContext(ctx, query, queryArgs...)
 	if err != nil {
@@ -334,10 +338,11 @@ func (r *ExecutionRepository) ClaimNextRetryCandidate(ctx context.Context, now t
 			ORDER BY finished_at ASC, id ASC
 			LIMIT 1
 		)
-		RETURNING id, project_id, spider_id, spider_version, registry_auth_ref, cpu_cores, memory_mb, timeout_seconds, node_id, status, trigger_source, image, command, error_message, created_at, started_at, finished_at, retry_limit, retry_count, retry_delay_seconds, retry_of_execution_id, retried_at
+		RETURNING id, project_id, organization_id, spider_id, spider_version, registry_auth_ref, cpu_cores, memory_mb, timeout_seconds, node_id, status, trigger_source, image, command, error_message, created_at, started_at, finished_at, retry_limit, retry_count, retry_delay_seconds, retry_of_execution_id, retried_at
 	`, now, now).Scan(
 		&exec.ID,
 		&exec.ProjectID,
+			&exec.OrganizationID,
 		&exec.SpiderID,
 		&spiderVersion,
 		&registryAuthRef,

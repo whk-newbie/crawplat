@@ -21,46 +21,46 @@ type fakeSummaryRepository struct {
 	err      error
 }
 
-func (r *fakeSummaryRepository) Overview(_ context.Context) (model.Overview, error) {
+func (r *fakeSummaryRepository) Overview(_ context.Context, _ string) (model.Overview, error) {
 	if r.err != nil {
 		return model.Overview{}, r.err
 	}
 	return r.overview, nil
 }
 
-func (r *fakeSummaryRepository) CreateAlertRule(_ context.Context, rule model.AlertRule) (model.AlertRule, error) {
+func (r *fakeSummaryRepository) CreateAlertRule(_ context.Context, _ string, rule model.AlertRule) (model.AlertRule, error) {
 	return rule, nil
 }
 
-func (r *fakeSummaryRepository) UpdateAlertRule(_ context.Context, _ string, _ model.AlertRulePatch) (model.AlertRule, bool, error) {
+func (r *fakeSummaryRepository) UpdateAlertRule(_ context.Context, _, _ string, _ model.AlertRulePatch) (model.AlertRule, bool, error) {
 	return model.AlertRule{}, false, nil
 }
 
-func (r *fakeSummaryRepository) ListAlertRules(_ context.Context) ([]model.AlertRule, error) {
+func (r *fakeSummaryRepository) ListAlertRules(_ context.Context, _ string) ([]model.AlertRule, error) {
 	return nil, nil
 }
 
-func (r *fakeSummaryRepository) ListAlertEvents(_ context.Context, _, _ int) ([]model.AlertEvent, error) {
+func (r *fakeSummaryRepository) ListAlertEvents(_ context.Context, _ string, _, _ int) ([]model.AlertEvent, error) {
 	return nil, nil
 }
 
-func (r *fakeSummaryRepository) CountAlertEvents(_ context.Context) (int64, error) {
+func (r *fakeSummaryRepository) CountAlertEvents(_ context.Context, _ string) (int64, error) {
 	return 0, nil
 }
 
-func (r *fakeSummaryRepository) ListFailedExecutionsSince(_ context.Context, _ time.Time, _ int) ([]model.FailedExecutionCandidate, error) {
+func (r *fakeSummaryRepository) ListFailedExecutionsSince(_ context.Context, _ string, _ time.Time, _ int) ([]model.FailedExecutionCandidate, error) {
 	return nil, nil
 }
 
-func (r *fakeSummaryRepository) ListOfflineNodes(_ context.Context, _ time.Time, _ int) ([]model.OfflineNodeCandidate, error) {
+func (r *fakeSummaryRepository) ListOfflineNodes(_ context.Context, _ string, _ time.Time, _ int) ([]model.OfflineNodeCandidate, error) {
 	return nil, nil
 }
 
-func (r *fakeSummaryRepository) LastAlertEventAt(_ context.Context, _, _ string) (*time.Time, error) {
+func (r *fakeSummaryRepository) LastAlertEventAt(_ context.Context, _, _, _ string) (*time.Time, error) {
 	return nil, nil
 }
 
-func (r *fakeSummaryRepository) SaveAlertEvent(_ context.Context, _ model.AlertEventRecord) error {
+func (r *fakeSummaryRepository) SaveAlertEvent(_ context.Context, _ string, _ model.AlertEventRecord) error {
 	return nil
 }
 

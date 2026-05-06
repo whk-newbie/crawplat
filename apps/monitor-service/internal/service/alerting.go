@@ -136,7 +136,7 @@ func (s *MonitorService) startAlertTicker(ctx context.Context, interval time.Dur
 
 // CreateAlertRule 校验并创建告警规则，对未设置的超时/冷却参数取默认值。
 // 节点离线类的默认超时 3s、冷却 60s；执行失败类默认超时 5s、冷却 120s。
-func (s *MonitorService) CreateAlertRule(input CreateAlertRuleInput) (model.AlertRule, error) {
+func (s *MonitorService) CreateAlertRule(orgID string, input CreateAlertRuleInput) (model.AlertRule, error) {
 	name := strings.TrimSpace(input.Name)
 	if name == "" {
 		return model.AlertRule{}, ErrInvalidRuleName
@@ -152,6 +152,7 @@ func (s *MonitorService) CreateAlertRule(input CreateAlertRuleInput) (model.Aler
 	now := time.Now().UTC()
 	rule := model.AlertRule{
 		ID:                  uuid.NewString(),
+		OrganizationID:      orgID,
 		Name:                name,
 		RuleType:            input.RuleType,
 		Enabled:             input.Enabled,
@@ -162,7 +163,7 @@ func (s *MonitorService) CreateAlertRule(input CreateAlertRuleInput) (model.Aler
 		CreatedAt:           now,
 		UpdatedAt:           now,
 	}
-	return s.repo.CreateAlertRule(context.Background(), rule)
+	return s.repo.CreateAlertRule(context.Background(), orgID, rule)
 }
 
 func (s *MonitorService) EvaluateAlerts(ctx context.Context) error {
@@ -172,7 +173,7 @@ func (s *MonitorService) EvaluateAlerts(ctx context.Context) error {
 // EvaluateAlertsByRuleTypes 遍历已启用告警规则，按类型分流评估。
 // 可选参数 ruleTypes 为空时评估所有类型。
 func (s *MonitorService) EvaluateAlertsByRuleTypes(ctx context.Context, ruleTypes ...string) error {
-	rules, err := s.repo.ListAlertRules(ctx)
+	rules, err := s.repo.ListAlertRules(ctx, "")
 	if err != nil {
 		return err
 	}
@@ -207,7 +208,7 @@ func (s *MonitorService) EvaluateAlertsByRuleTypes(ctx context.Context, ruleType
 }
 
 func (s *MonitorService) evaluateExecutionFailedRule(ctx context.Context, rule model.AlertRule, now time.Time) error {
-	candidates, err := s.repo.ListFailedExecutionsSince(ctx, rule.CreatedAt, alertBatchLimit)
+	candidates, err := s.repo.ListFailedExecutionsSince(ctx, "", rule.CreatedAt, alertBatchLimit)
 	if err != nil {
 		return err
 	}
@@ -238,7 +239,7 @@ func (s *MonitorService) evaluateExecutionFailedRule(ctx context.Context, rule m
 
 func (s *MonitorService) evaluateNodeOfflineRule(ctx context.Context, rule model.AlertRule, now time.Time) error {
 	threshold := now.Add(-time.Duration(rule.OfflineGraceSeconds) * time.Second)
-	candidates, err := s.repo.ListOfflineNodes(ctx, threshold, alertBatchLimit)
+	candidates, err := s.repo.ListOfflineNodes(ctx, "", threshold, alertBatchLimit)
 	if err != nil {
 		return err
 	}
@@ -268,7 +269,7 @@ func (s *MonitorService) evaluateNodeOfflineRule(ctx context.Context, rule model
 
 // shouldNotify 判断是否应发送告警：若无历史事件则发送；若上条事件在冷却期内则跳过。
 func (s *MonitorService) shouldNotify(ctx context.Context, rule model.AlertRule, dedupeKey string, now time.Time) bool {
-	last, err := s.repo.LastAlertEventAt(ctx, rule.ID, dedupeKey)
+	last, err := s.repo.LastAlertEventAt(ctx, "", rule.ID, dedupeKey)
 	if err != nil {
 		return false
 	}
@@ -307,7 +308,7 @@ func (s *MonitorService) emitEvent(ctx context.Context, rule model.AlertRule, de
 		ErrorMessage:      errMsg,
 		CreatedAt:         now,
 	}
-	if err := s.repo.SaveAlertEvent(ctx, record); err != nil {
+	if err := s.repo.SaveAlertEvent(ctx, "", record); err != nil {
 		return err
 	}
 	return nil

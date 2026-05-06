@@ -14,7 +14,7 @@ type fakeNodeRepo struct {
 	nodes map[string]Node
 }
 
-func (r *fakeNodeRepo) UpsertHeartbeat(_ context.Context, name string, capabilities []string) (Node, error) {
+func (r *fakeNodeRepo) UpsertHeartbeat(_ context.Context, orgID, name string, capabilities []string) (Node, error) {
 	node := Node{
 		ID:           name,
 		Name:         name,
@@ -28,7 +28,7 @@ func (r *fakeNodeRepo) UpsertHeartbeat(_ context.Context, name string, capabilit
 	return node, nil
 }
 
-func (r *fakeNodeRepo) ListOnline(_ context.Context, limit, offset int) ([]Node, error) {
+func (r *fakeNodeRepo) ListOnline(_ context.Context, orgID string, limit, offset int) ([]Node, error) {
 	nodes := make([]Node, 0, len(r.nodes))
 	for _, node := range r.nodes {
 		nodes = append(nodes, node)
@@ -43,7 +43,7 @@ func (r *fakeNodeRepo) ListOnline(_ context.Context, limit, offset int) ([]Node,
 	return nodes[offset:end], nil
 }
 
-func (r *fakeNodeRepo) GetByID(_ context.Context, nodeID string) (Node, error) {
+func (r *fakeNodeRepo) GetByID(_ context.Context, orgID, nodeID string) (Node, error) {
 	node, ok := r.nodes[nodeID]
 	if !ok {
 		return Node{}, ErrNodeNotFound
@@ -51,13 +51,13 @@ func (r *fakeNodeRepo) GetByID(_ context.Context, nodeID string) (Node, error) {
 	return node, nil
 }
 
-func (r *fakeNodeRepo) ListRecentExecutions(_ context.Context, nodeID string, query ExecutionQuery) ([]NodeExecution, error) {
+func (r *fakeNodeRepo) ListRecentExecutions(_ context.Context, orgID, nodeID string, query ExecutionQuery) ([]NodeExecution, error) {
 	return []NodeExecution{}, nil
 }
 
 func TestHeartbeatMarksNodeOnline(t *testing.T) {
 	svc := NewNodeService(&fakeNodeRepo{})
-	node, err := svc.Heartbeat("node-a", []string{"docker", "python", "go"})
+	node, err := svc.Heartbeat("", "node-a", []string{"docker", "python", "go"})
 	if err != nil {
 		t.Fatalf("Heartbeat returned error: %v", err)
 	}
@@ -69,11 +69,11 @@ func TestHeartbeatMarksNodeOnline(t *testing.T) {
 func TestListReturnsRepoNodes(t *testing.T) {
 	repo := &fakeNodeRepo{}
 	svc := NewNodeService(repo)
-	if _, err := svc.Heartbeat("node-a", []string{"docker", "go"}); err != nil {
+	if _, err := svc.Heartbeat("", "node-a", []string{"docker", "go"}); err != nil {
 		t.Fatalf("Heartbeat returned error: %v", err)
 	}
 
-	nodes, err := svc.List(20, 0)
+	nodes, err := svc.List("", 20, 0)
 	if err != nil {
 		t.Fatalf("List returned error: %v", err)
 	}
@@ -85,11 +85,11 @@ func TestListReturnsRepoNodes(t *testing.T) {
 func TestGetByIDReturnsNode(t *testing.T) {
 	repo := &fakeNodeRepo{}
 	svc := NewNodeService(repo)
-	if _, err := svc.Heartbeat("node-a", []string{"docker", "go"}); err != nil {
+	if _, err := svc.Heartbeat("", "node-a", []string{"docker", "go"}); err != nil {
 		t.Fatalf("Heartbeat returned error: %v", err)
 	}
 
-	node, err := svc.GetByID("node-a")
+	node, err := svc.GetByID("", "node-a")
 	if err != nil {
 		t.Fatalf("GetByID returned error: %v", err)
 	}
@@ -100,7 +100,7 @@ func TestGetByIDReturnsNode(t *testing.T) {
 
 func TestGetByIDReturnsNotFoundForUnknownNode(t *testing.T) {
 	svc := NewNodeService(&fakeNodeRepo{})
-	_, err := svc.GetByID("missing")
+	_, err := svc.GetByID("", "missing")
 	if err != ErrNodeNotFound {
 		t.Fatalf("expected ErrNodeNotFound, got %v", err)
 	}

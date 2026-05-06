@@ -23,20 +23,20 @@ func (r *PostgresRepository) Create(ctx context.Context, datasource model.Dataso
 	}
 
 	_, err = r.db.ExecContext(ctx, `
-		INSERT INTO datasources (id, project_id, name, type, readonly, config_json)
-		VALUES ($1, $2, $3, $4, $5, $6)
-	`, datasource.ID, datasource.ProjectID, datasource.Name, datasource.Type, datasource.Readonly, string(configJSON))
+		INSERT INTO datasources (id, project_id, name, type, readonly, config_json, organization_id)
+		VALUES ($1, $2, $3, $4, $5, $6, $7)
+	`, datasource.ID, datasource.ProjectID, datasource.Name, datasource.Type, datasource.Readonly, string(configJSON), nullIfEmpty(datasource.OrganizationID))
 	return err
 }
 
-func (r *PostgresRepository) ListByProject(ctx context.Context, projectID string, limit, offset int) ([]model.Datasource, error) {
+func (r *PostgresRepository) ListByProject(ctx context.Context, orgID, projectID string, limit, offset int) ([]model.Datasource, error) {
 	rows, err := r.db.QueryContext(ctx, `
 		SELECT id, project_id, name, type, readonly, config_json
 		FROM datasources
-		WHERE project_id = $1
+		WHERE ($1 = '' OR organization_id = $1) AND project_id = $2
 		ORDER BY created_at DESC, id DESC
-		LIMIT $2 OFFSET $3
-	`, projectID, limit, offset)
+		LIMIT $3 OFFSET $4
+	`, orgID, projectID, limit, offset)
 	if err != nil {
 		return nil, err
 	}
@@ -75,6 +75,13 @@ func (r *PostgresRepository) Get(ctx context.Context, id string) (model.Datasour
 
 type scanner interface {
 	Scan(dest ...any) error
+}
+
+func nullIfEmpty(s string) any {
+	if s == "" {
+		return nil
+	}
+	return s
 }
 
 func scanDatasource(scan scanner) (model.Datasource, error) {

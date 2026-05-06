@@ -50,7 +50,7 @@ func TestListProjectsReturnsLowerCaseJSON(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
 	svc := service.NewProjectService()
-	if _, err := svc.Create("core-crawlers", "Core Crawlers"); err != nil {
+	if _, err := svc.Create("", "core-crawlers", "Core Crawlers"); err != nil {
 		t.Fatalf("Create returned error: %v", err)
 	}
 	router := NewRouter(svc)
@@ -132,7 +132,7 @@ func TestListProjectsWithPagination(t *testing.T) {
 	// 创建 5 个项目
 	for i := 0; i < 5; i++ {
 		code := "code-" + string(rune('a'+i))
-		if _, err := svc.Create(code, "Project"); err != nil {
+		if _, err := svc.Create("", code, "Project"); err != nil {
 			t.Fatalf("Create returned error: %v", err)
 		}
 	}

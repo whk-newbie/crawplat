@@ -113,6 +113,10 @@ func (r *fakeExecutionRepo) ClaimNextRetryCandidate(_ context.Context, _ time.Ti
 	return exec, true, nil
 }
 
+func (r *fakeExecutionRepo) List(_ context.Context, _ string, _, _ int, _ string) (*ListResult, error) {
+	return &ListResult{}, nil
+}
+
 func (r *fakeExecutionRepo) ResetRetryClaim(_ context.Context, id string) error {
 	exec, ok := r.executions[id]
 	if !ok {

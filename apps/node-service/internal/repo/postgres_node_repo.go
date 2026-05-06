@@ -20,11 +20,11 @@ func NewPostgresNodeRepository(db *sql.DB) *PostgresNodeRepository {
 	return &PostgresNodeRepository{db: db}
 }
 
-func (r *PostgresNodeRepository) UpsertHeartbeat(ctx context.Context, name string, capabilities []string) (service.Node, error) {
-	return r.UpsertCatalog(ctx, name, capabilities, time.Now().UTC())
+func (r *PostgresNodeRepository) UpsertHeartbeat(ctx context.Context, orgID, name string, capabilities []string) (service.Node, error) {
+	return r.UpsertCatalog(ctx, orgID, name, capabilities, time.Now().UTC())
 }
 
-func (r *PostgresNodeRepository) UpsertCatalog(ctx context.Context, name string, capabilities []string, seenAt time.Time) (service.Node, error) {
+func (r *PostgresNodeRepository) UpsertCatalog(ctx context.Context, orgID, name string, capabilities []string, seenAt time.Time) (service.Node, error) {
 	capabilitiesJSON, err := json.Marshal(capabilities)
 	if err != nil {
 		return service.Node{}, err
@@ -59,12 +59,13 @@ func (r *PostgresNodeRepository) UpsertCatalog(ctx context.Context, name string,
 	}, nil
 }
 
-func (r *PostgresNodeRepository) ListCatalog(ctx context.Context) ([]service.Node, error) {
+func (r *PostgresNodeRepository) ListCatalog(ctx context.Context, orgID string) ([]service.Node, error) {
 	rows, err := r.db.QueryContext(ctx, `
-		SELECT id, name, capabilities_json, last_seen_at
+		SELECT id, name, capabilities_json, last_seen_at, organization_id
 		FROM nodes
+			WHERE ($1 = '' OR organization_id = $1)
 		ORDER BY name ASC
-	`)
+	`, orgID)
 	if err != nil {
 		return nil, err
 	}
@@ -76,7 +77,7 @@ func (r *PostgresNodeRepository) ListCatalog(ctx context.Context) ([]service.Nod
 			node           service.Node
 			capabilitiesRaw []byte
 		)
-		if err := rows.Scan(&node.ID, &node.Name, &capabilitiesRaw, &node.LastSeenAt); err != nil {
+		if err := rows.Scan(&node.ID, &node.Name, &capabilitiesRaw, &node.LastSeenAt, &node.OrganizationID); err != nil {
 			return nil, err
 		}
 		if err := json.Unmarshal(capabilitiesRaw, &node.Capabilities); err != nil {
@@ -91,20 +92,20 @@ func (r *PostgresNodeRepository) ListCatalog(ctx context.Context) ([]service.Nod
 	return nodes, nil
 }
 
-func (r *PostgresNodeRepository) ListOnline(ctx context.Context, limit, offset int) ([]service.Node, error) {
-	return r.ListCatalog(ctx)
+func (r *PostgresNodeRepository) ListOnline(ctx context.Context, orgID string, limit, offset int) ([]service.Node, error) {
+	return r.ListCatalog(ctx, orgID)
 }
 
-func (r *PostgresNodeRepository) GetByID(ctx context.Context, nodeID string) (service.Node, error) {
+func (r *PostgresNodeRepository) GetByID(ctx context.Context, orgID, nodeID string) (service.Node, error) {
 	var (
 		node            service.Node
 		capabilitiesRaw []byte
 	)
 	err := r.db.QueryRowContext(ctx, `
-		SELECT id, name, capabilities_json, last_seen_at
+		SELECT id, name, capabilities_json, last_seen_at, organization_id
 		FROM nodes
 		WHERE id = $1
-	`, nodeID).Scan(&node.ID, &node.Name, &capabilitiesRaw, &node.LastSeenAt)
+	`, nodeID).Scan(&node.ID, &node.Name, &capabilitiesRaw, &node.LastSeenAt, &node.OrganizationID)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return service.Node{}, service.ErrNodeNotFound
@@ -150,7 +151,7 @@ func (r *PostgresNodeRepository) ListHeartbeatHistory(ctx context.Context, nodeI
 	return history, nil
 }
 
-func (r *PostgresNodeRepository) ListRecentExecutions(ctx context.Context, nodeID string, query service.ExecutionQuery) ([]service.NodeExecution, error) {
+func (r *PostgresNodeRepository) ListRecentExecutions(ctx context.Context, orgID, nodeID string, query service.ExecutionQuery) ([]service.NodeExecution, error) {
 	args := []any{nodeID}
 	where := []string{"node_id = $1"}
 	argPos := 2

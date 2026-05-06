@@ -21,10 +21,11 @@ type ProjectService struct {
 }
 
 // Repository 定义项目持久化接口，由 PostgreSQL 或内存实现满足。
+// orgID 参数用于多租户隔离，为空时表示不过滤（向后兼容）。
 type Repository interface {
 	Create(ctx context.Context, project model.Project) error
-	List(ctx context.Context, limit, offset int) ([]model.Project, error)
-	ExistsByCode(ctx context.Context, code string) (bool, error)
+	List(ctx context.Context, orgID string, limit, offset int) ([]model.Project, error)
+	ExistsByCode(ctx context.Context, orgID, code string) (bool, error)
 }
 
 // memoryRepository 基于内存切片的轻量实现，用于测试和 MVP 阶段。
@@ -42,32 +43,40 @@ func (r *memoryRepository) Create(_ context.Context, project model.Project) erro
 	return nil
 }
 
-func (r *memoryRepository) List(_ context.Context, limit, offset int) ([]model.Project, error) {
+func (r *memoryRepository) List(_ context.Context, orgID string, limit, offset int) ([]model.Project, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
 	if limit <= 0 {
 		limit = 20
 	}
-	if offset >= len(r.projects) {
+
+	var filtered []model.Project
+	for _, p := range r.projects {
+		if orgID == "" || p.OrganizationID == orgID {
+			filtered = append(filtered, p)
+		}
+	}
+
+	if offset >= len(filtered) {
 		return []model.Project{}, nil
 	}
 	end := offset + limit
-	if end > len(r.projects) {
-		end = len(r.projects)
+	if end > len(filtered) {
+		end = len(filtered)
 	}
 
 	projects := make([]model.Project, end-offset)
-	copy(projects, r.projects[offset:end])
+	copy(projects, filtered[offset:end])
 	return projects, nil
 }
 
-func (r *memoryRepository) ExistsByCode(_ context.Context, code string) (bool, error) {
+func (r *memoryRepository) ExistsByCode(_ context.Context, orgID, code string) (bool, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
 	for _, p := range r.projects {
-		if p.Code == code {
+		if (orgID == "" || p.OrganizationID == orgID) && p.Code == code {
 			return true, nil
 		}
 	}
@@ -84,9 +93,10 @@ func NewProjectService(repos ...Repository) *ProjectService {
 }
 
 // Create 创建项目：先检查 code 唯一性，再生成 UUID 并持久化。
+// orgID 非空时，唯一性检查仅限该组织范围内。
 // code 已存在时返回 ErrProjectCodeExists。
-func (s *ProjectService) Create(code, name string) (model.Project, error) {
-	exists, err := s.repo.ExistsByCode(context.Background(), code)
+func (s *ProjectService) Create(orgID, code, name string) (model.Project, error) {
+	exists, err := s.repo.ExistsByCode(context.Background(), orgID, code)
 	if err != nil {
 		return model.Project{}, err
 	}
@@ -95,9 +105,10 @@ func (s *ProjectService) Create(code, name string) (model.Project, error) {
 	}
 
 	project := model.Project{
-		ID:   uuid.NewString(),
-		Code: code,
-		Name: name,
+		ID:             uuid.NewString(),
+		Code:           code,
+		Name:           name,
+		OrganizationID: orgID,
 	}
 
 	if err := s.repo.Create(context.Background(), project); err != nil {
@@ -107,7 +118,8 @@ func (s *ProjectService) Create(code, name string) (model.Project, error) {
 }
 
 // List 分页返回项目列表，由 repo 层控制排序。
+// orgID 非空时仅返回该组织的项目。
 // limit <= 0 时由 repo 层使用默认值。
-func (s *ProjectService) List(limit, offset int) ([]model.Project, error) {
-	return s.repo.List(context.Background(), limit, offset)
+func (s *ProjectService) List(orgID string, limit, offset int) ([]model.Project, error) {
+	return s.repo.List(context.Background(), orgID, limit, offset)
 }

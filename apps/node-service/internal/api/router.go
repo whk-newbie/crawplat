@@ -37,7 +37,8 @@ func NewRouter(nodeService *service.NodeService) *gin.Engine {
 			return
 		}
 
-		node, err := nodeService.Heartbeat(id, req.Capabilities)
+		orgID := c.GetHeader("X-Org-ID")
+		node, err := nodeService.Heartbeat(orgID, id, req.Capabilities)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
@@ -48,7 +49,8 @@ func NewRouter(nodeService *service.NodeService) *gin.Engine {
 	router.GET("/api/v1/nodes", func(c *gin.Context) {
 		limit := parseQueryInt(c, "limit", 20)
 		offset := parseQueryInt(c, "offset", 0)
-		nodes, err := nodeService.List(limit, offset)
+		orgID := c.GetHeader("X-Org-ID")
+		nodes, err := nodeService.List(orgID, limit, offset)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
@@ -63,7 +65,8 @@ func NewRouter(nodeService *service.NodeService) *gin.Engine {
 			return
 		}
 
-		node, err := nodeService.GetByID(id)
+		orgID := c.GetHeader("X-Org-ID")
+		node, err := nodeService.GetByID(orgID, id)
 		if err != nil {
 			if err == service.ErrNodeNotFound {
 				c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
@@ -104,7 +107,8 @@ func NewRouter(nodeService *service.NodeService) *gin.Engine {
 			Limit:  limit,
 			Offset: executionOffset,
 		}
-		executions, err := nodeService.ListRecentExecutions(id, query)
+		orgID := c.GetHeader("X-Org-ID")
+		executions, err := nodeService.ListRecentExecutions(orgID, id, query)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return

@@ -58,7 +58,8 @@ func NewRouter(executionService *service.ExecutionService) *gin.Engine {
 			return
 		}
 
-		exec, err := executionService.Create(context.Background(), service.CreateExecutionInput{
+		orgID := c.GetHeader("X-Org-ID")
+	exec, err := executionService.Create(context.Background(), service.CreateExecutionInput{
 			ProjectID:          req.ProjectID,
 			SpiderID:           req.SpiderID,
 			SpiderVersion:      req.SpiderVersion,
@@ -66,6 +67,7 @@ func NewRouter(executionService *service.ExecutionService) *gin.Engine {
 			Image:              req.Image,
 			Command:            req.Command,
 			TriggerSource:      req.TriggerSource,
+			OrgID:              orgID,
 			CpuCores:           req.CpuCores,
 			MemoryMB:           req.MemoryMB,
 			TimeoutSeconds:     req.TimeoutSeconds,
@@ -137,7 +139,8 @@ func NewRouter(executionService *service.ExecutionService) *gin.Engine {
 		status := c.Query("status")
 		p := httpx.DefaultPagination(limit, offset)
 
-		result, err := executionService.ListExecutions(context.Background(), p.Limit, p.Offset, status)
+		orgID := c.GetHeader("X-Org-ID")
+	result, err := executionService.ListExecutions(context.Background(), orgID, p.Limit, p.Offset, status)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return

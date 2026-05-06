@@ -53,7 +53,7 @@ func TestListRouteReturnsPersistedNodes(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
 	svc := service.NewNodeService()
-	if _, err := svc.Heartbeat("node-a", []string{"docker", "python", "go"}); err != nil {
+	if _, err := svc.Heartbeat("", "node-a", []string{"docker", "python", "go"}); err != nil {
 		t.Fatalf("Heartbeat returned error: %v", err)
 	}
 	router := NewRouter(svc)

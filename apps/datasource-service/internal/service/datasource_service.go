@@ -25,7 +25,7 @@ type DatasourceService struct {
 
 type Repository interface {
 	Create(ctx context.Context, datasource model.Datasource) error
-	ListByProject(ctx context.Context, projectID string, limit, offset int) ([]model.Datasource, error)
+	ListByProject(ctx context.Context, orgID, projectID string, limit, offset int) ([]model.Datasource, error)
 	Get(ctx context.Context, id string) (model.Datasource, bool, error)
 }
 
@@ -42,7 +42,7 @@ func (r *memoryRepository) Create(_ context.Context, datasource model.Datasource
 	return nil
 }
 
-func (r *memoryRepository) ListByProject(_ context.Context, projectID string, limit, offset int) ([]model.Datasource, error) {
+func (r *memoryRepository) ListByProject(_ context.Context, orgID, projectID string, limit, offset int) ([]model.Datasource, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
@@ -83,7 +83,7 @@ func NewDatasourceService(repos ...Repository) *DatasourceService {
 	return &DatasourceService{repo: &memoryRepository{}}
 }
 
-func (s *DatasourceService) Create(projectID, name, typ string, cfg map[string]string) (Datasource, error) {
+func (s *DatasourceService) Create(orgID, projectID, name, typ string, cfg map[string]string) (Datasource, error) {
 	switch typ {
 	case "mongodb", "redis", "postgresql":
 	default:
@@ -91,12 +91,13 @@ func (s *DatasourceService) Create(projectID, name, typ string, cfg map[string]s
 	}
 
 	datasource := model.Datasource{
-		ID:        uuid.NewString(),
-		ProjectID: projectID,
-		Name:      name,
-		Type:      typ,
-		Readonly:  true,
-		Config:    cloneConfig(cfg),
+		ID:             uuid.NewString(),
+		ProjectID:      projectID,
+		OrganizationID: orgID,
+		Name:           name,
+		Type:           typ,
+		Readonly:       true,
+		Config:         cloneConfig(cfg),
 	}
 
 	if err := s.repo.Create(context.Background(), datasource); err != nil {
@@ -105,8 +106,8 @@ func (s *DatasourceService) Create(projectID, name, typ string, cfg map[string]s
 	return datasource, nil
 }
 
-func (s *DatasourceService) List(projectID string, limit, offset int) ([]Datasource, error) {
-	return s.repo.ListByProject(context.Background(), projectID, limit, offset)
+func (s *DatasourceService) List(orgID, projectID string, limit, offset int) ([]Datasource, error) {
+	return s.repo.ListByProject(context.Background(), orgID, projectID, limit, offset)
 }
 
 func (s *DatasourceService) Get(id string) (Datasource, bool, error) {
